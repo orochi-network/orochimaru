@@ -195,6 +195,9 @@ impl ECVRF<'_> {
         pub_affine.x.normalize();
         pub_affine.y.normalize();
 
+        assert!(pub_affine.is_valid_var());
+        assert!(vrf_proof.gamma.is_valid_var());
+
         // H = ECVRF_hash_to_curve(alpha, pk)
         let h = self.hash_to_curve(alpha, Option::from(&pub_affine));
         let mut jh = Jacobian::default();
