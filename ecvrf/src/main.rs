@@ -26,7 +26,7 @@ impl ToString for ECVRFProof {
         pub_affine.x.normalize();
         pub_affine.y.normalize();
         format!(
-            "gama:\n > x: 0x{}\n > y: 0x{}\nc: 0x{}\ns: 0x{}\ny: 0x{}\npublic key:\n > x: {}\n > y: {}\n",
+            "gamma:\n > x: 0x{}\n > y: 0x{}\nc: 0x{}\ns: 0x{}\ny: 0x{}\npublic key:\n > x: {}\n > y: {}\n",
             hex::encode(self.gamma.x.b32()),
             hex::encode(self.gamma.y.b32()),
             hex::encode(self.c.b32()),
@@ -64,26 +64,14 @@ fn jacobian_to_affine(j: &Jacobian) -> Affine {
     ra
 }
 
-/// Compute the Keccak-256 hash of input bytes.
-// Solidity Keccak256 variant
-pub fn keccak256<S>(bytes: S) -> [u8; 32]
-where
-    S: AsRef<[u8]>,
-{
+pub fn keccak256_affine(a: &Affine) -> Scalar {
+    let mut r = Scalar::default();
     let mut output = [0u8; 32];
     let mut hasher = Keccak::v256();
-    hasher.update(bytes.as_ref());
+    hasher.update(a.x.b32().as_ref());
+    hasher.update(a.y.b32().as_ref());
     hasher.finalize(&mut output);
-    output
-}
-
-pub fn keccak256_to_scala<S>(bytes: S) -> Scalar
-where
-    S: AsRef<[u8]>,
-{
-    let mut digest = keccak256(bytes);
-    let r = Scalar::default();
-    r.fill_b32(&mut digest);
+    r.set_b32(&output).unwrap_u8();
     r
 }
 
@@ -94,15 +82,6 @@ pub fn randomize() -> Scalar {
     let mut result = Scalar::default();
     result.set_b32(&random_bytes).unwrap_u8();
     result
-}
-
-// Field value to scalar with normalize
-fn field_to_scalar(f: &Field) -> Scalar {
-    let mut r = Scalar::default();
-    let mut tf = f.clone();
-    tf.normalize();
-    r.set_b32(&tf.b32()).unwrap_u8();
-    r
 }
 
 pub fn normalize_scalar(s: &Scalar) -> Scalar {
@@ -187,11 +166,6 @@ impl ECVRF<'_> {
         // gamma = H * secret_key
         let gamma = ecmult(self.ctx_mul, &h, &secret_key);
 
-        /*
-               println!("Gamma:\n > X: 0x{}", hex::encode(gamma.x.b32()));
-               println!(" > Y: 0x{}", hex::encode(gamma.y.b32()));
-        */
-
         // k = random()
         let k = randomize();
 
@@ -211,13 +185,7 @@ impl ECVRF<'_> {
         secret_key.clear();
 
         // y = keccak256(gama.encode())
-        let mut y = Scalar::default();
-        let mut output = [0u8; 32];
-        let mut hasher = Keccak::v256();
-        hasher.update(gamma.x.b32().as_ref());
-        hasher.update(gamma.y.b32().as_ref());
-        hasher.finalize(&mut output);
-        y.set_b32(&output).unwrap_u8();
+        let y = keccak256_affine(&gamma);
 
         ECVRFProof::new(gamma, c, s, y, self.public_key)
     }
@@ -258,28 +226,15 @@ impl ECVRF<'_> {
         );
 
         // y = keccak256(gama.encode())
-        let mut computed_y = Scalar::default();
-        let mut output = [0u8; 32];
-        let mut hasher = Keccak::v256();
-        hasher.update(vrf_proof.gamma.x.b32().as_ref());
-        hasher.update(vrf_proof.gamma.y.b32().as_ref());
-        hasher.finalize(&mut output);
-        computed_y.set_b32(&output).unwrap_u8();
+        let computed_y = keccak256_affine(&vrf_proof.gamma);
 
         computed_c.eq(&vrf_proof.c) && computed_y.eq(&vrf_proof.y)
     }
 }
 
 fn main() {
-    // let secret_key = SecretKey::random(&mut r);
-    let secret_key = SecretKey::parse(
-        hex::decode("cbc9d3dfb474233a148fba708e1b3683de8816fc7e35e28e96a831a117075f7a")
-            .unwrap()
-            .as_slice()
-            .try_into()
-            .unwrap(),
-    )
-    .unwrap();
+    let mut r = thread_rng();
+    let secret_key = SecretKey::random(&mut r);
 
     // Create new instance of ECVRF
     let ecvrf = ECVRF::new(secret_key);
