@@ -24,8 +24,28 @@ A Decentralized Random Number Generator by Orochi Network. Allowed randomness to
 
 - **Multi-chain:** All EVM compatible blockchains can be supported
 
+### Demo
+
+```
+~/GitHub/orochimaru/ecvrf $ cargo run
+   Compiling secp v0.1.0 (/Users/chiro/GitHub/orochimaru/ecvrf)
+    Finished dev [unoptimized + debuginfo] target(s) in 0.87s
+     Running `target/debug/secp`
+gamma:
+ > x: 0xaee4a6b5fcfa1094a80bb73b4e02e5a5d236b71c4563abda50b999ac8a095be1
+ > y: 0x149ed72cbdb6e7cad92c0ea0ed7d4512e2015ddf92482c3a75d325a4d4928b89
+c: 0xcf6df09d8cb1b2262ecf3c5527eb089dfcbf616f34fb608701ca90be006b4368
+s: 0xecbb41a7d6276dd3f8f52e61450a44dc9ac3b091462a3f47be69edb754635ae5
+y: 0x93500089dc9512508b2fbc91b9f1e15526f76d59fed1f180b21878449fe47e21
+public key:
+ > x: fb8881e4cc8225ed54f7473ab9c6bab9e7152e58c79517b48434466d6ab056a4
+ > y: 84ef2334b53ff8f499cb2134643984ef92e2ecec5635eb4c90adb8022f4d3ea7
+
+Verified: true
+```
+
 ## License
 
-Licensed under [Apache License 2.0](./LICENSE)
+Orochi Network's source code licensed under [Apache License 2.0](./LICENSE)
 
 _built with ❤️_
