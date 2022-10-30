@@ -1,13 +1,13 @@
 use libsecp256k1::{
     curve::{Affine, ECMultContext, ECMultGenContext, Field, Jacobian, Scalar, AFFINE_G},
-    sign, verify, PublicKey, SecretKey, ECMULT_CONTEXT, ECMULT_GEN_CONTEXT,
+    PublicKey, SecretKey, ECMULT_CONTEXT, ECMULT_GEN_CONTEXT,
 };
-use rand::{thread_rng, Rng, RngCore};
+use rand::{thread_rng, RngCore};
 use tiny_keccak::{Hasher, Keccak};
 
 #[derive(Clone, Copy, Debug)]
 pub struct ECVRFProof {
-    pub gamma: Jacobian,
+    pub gamma: Affine,
     pub c: Scalar,
     pub s: Scalar,
     pub y: Scalar,
@@ -15,9 +15,53 @@ pub struct ECVRFProof {
 }
 
 impl ECVRFProof {
-    pub fn new(gamma: Jacobian, c: Scalar, s: Scalar, y: Scalar, pk: PublicKey) -> Self {
+    pub fn new(gamma: Affine, c: Scalar, s: Scalar, y: Scalar, pk: PublicKey) -> Self {
         Self { gamma, c, s, y, pk }
     }
+}
+
+impl ToString for ECVRFProof {
+    fn to_string(&self) -> String {
+        let mut pub_affine: Affine = self.pk.into();
+        pub_affine.x.normalize();
+        pub_affine.y.normalize();
+        format!(
+            "gama:\n > x: 0x{}\n > y: 0x{}\nc: 0x{}\ns: 0x{}\ny: 0x{}\npublic key:\n > x: {}\n > y: {}\n",
+            hex::encode(self.gamma.x.b32()),
+            hex::encode(self.gamma.y.b32()),
+            hex::encode(self.c.b32()),
+            hex::encode(self.s.b32()),
+            hex::encode(self.y.b32()),
+            hex::encode(pub_affine.x.b32()),
+            hex::encode(pub_affine.y.b32())
+        )
+    }
+}
+
+fn ecmult(context: &ECMultContext, a: &Affine, na: &Scalar) -> Affine {
+    let mut rj = Jacobian::default();
+    let temp_aj = Jacobian::from_ge(a);
+    context.ecmult(&mut rj, &temp_aj, na, &Scalar::from_int(0));
+    let mut ra = Affine::from_gej(&rj);
+    ra.x.normalize();
+    ra.y.normalize();
+    ra
+}
+
+fn ecmult_gen(context: &ECMultGenContext, ng: &Scalar) -> Affine {
+    let mut r = Jacobian::default();
+    context.ecmult_gen(&mut r, &ng);
+    let mut ra = Affine::from_gej(&r);
+    ra.x.normalize();
+    ra.y.normalize();
+    ra
+}
+
+fn jacobian_to_affine(j: &Jacobian) -> Affine {
+    let mut ra = Affine::from_gej(j);
+    ra.x.normalize();
+    ra.y.normalize();
+    ra
 }
 
 /// Compute the Keccak-256 hash of input bytes.
@@ -53,7 +97,7 @@ pub fn randomize() -> Scalar {
 }
 
 // Field value to scalar with normalize
-pub fn field_to_scalar(f: &Field) -> Scalar {
+fn field_to_scalar(f: &Field) -> Scalar {
     let mut r = Scalar::default();
     let mut tf = f.clone();
     tf.normalize();
@@ -93,19 +137,18 @@ impl ECVRF<'_> {
     pub fn hash_to_curve(&self, alpha: &Scalar, y: Option<&Affine>) -> Affine {
         let mut r = Jacobian::default();
         self.ctx_gen.ecmult_gen(&mut r, alpha);
+        let mut p = Affine::default();
         match y {
             Some(v) => {
                 r = r.add_ge(v);
-                let mut p = Affine::default();
-                p.set_gej(&r);
-                p
+                r
             }
-            None => {
-                let mut p = Affine::default();
-                p.set_gej(&r);
-                p
-            }
-        }
+            None => r,
+        };
+        p.set_gej(&r);
+        p.x.normalize();
+        p.y.normalize();
+        p
     }
 
     // keccak256 cheaper on Ethereum
@@ -114,56 +157,17 @@ impl ECVRF<'_> {
         g: &Affine,
         h: &Affine,
         pk: &Affine,
-        gamma: &Jacobian,
-        kg: &Jacobian,
-        kh: &Jacobian,
+        gamma: &Affine,
+        kg: &Affine,
+        kh: &Affine,
     ) -> Scalar {
         let mut output = [0u8; 32];
         let mut hasher = Keccak::v256();
-        let mut buf_affine: Affine;
-        let mut buf_jacobian: Jacobian;
-
-        // G
-        buf_affine = g.clone();
-        buf_affine.x.normalize();
-        buf_affine.y.normalize();
-        hasher.update(buf_affine.x.b32().as_ref());
-        hasher.update(buf_affine.y.b32().as_ref());
-
-        // H
-        buf_affine = h.clone();
-        buf_affine.x.normalize();
-        buf_affine.y.normalize();
-        hasher.update(buf_affine.x.b32().as_ref());
-        hasher.update(buf_affine.y.b32().as_ref());
-
-        // pk
-        buf_affine = pk.clone();
-        buf_affine.x.normalize();
-        buf_affine.y.normalize();
-        hasher.update(buf_affine.x.b32().as_ref());
-        hasher.update(buf_affine.y.b32().as_ref());
-
-        // gamma
-        buf_jacobian = gamma.clone();
-        buf_jacobian.x.normalize();
-        buf_jacobian.y.normalize();
-        hasher.update(buf_jacobian.x.b32().as_ref());
-        hasher.update(buf_jacobian.y.b32().as_ref());
-
-        // k * G
-        buf_jacobian = kg.clone();
-        buf_jacobian.x.normalize();
-        buf_jacobian.y.normalize();
-        hasher.update(buf_jacobian.x.b32().as_ref());
-        hasher.update(buf_jacobian.y.b32().as_ref());
-
-        // k * H
-        buf_jacobian = kh.clone();
-        buf_jacobian.x.normalize();
-        buf_jacobian.y.normalize();
-        hasher.update(buf_jacobian.x.b32().as_ref());
-        hasher.update(buf_jacobian.y.b32().as_ref());
+        let all_points = [g, h, pk, gamma, kg, kh];
+        for point in all_points {
+            hasher.update(point.x.b32().as_ref());
+            hasher.update(point.y.b32().as_ref());
+        }
 
         hasher.finalize(&mut output);
         let mut r = Scalar::default();
@@ -171,28 +175,31 @@ impl ECVRF<'_> {
         r
     }
 
-    // @TODO i think we should remove secret key from the memory after do the calculation
     pub fn prove(&self, alpha: &Scalar) -> ECVRFProof {
-        let pub_affine: Affine = self.public_key.into();
+        let mut pub_affine: Affine = self.public_key.into();
+        let mut secret_key: Scalar = self.secret_key.into();
+        pub_affine.x.normalize();
+        pub_affine.y.normalize();
+
         let h = self.hash_to_curve(alpha, Option::from(&pub_affine));
-        let mut gamma = Jacobian::default();
-        let secret_key: Scalar = self.secret_key.into();
 
         // H = ECVRF_hash_to_curve(alpha, public_key)
         // gamma = H * secret_key
-        gamma.set_ge(&h);
-        self.ctx_gen.ecmult_gen(&mut gamma, &secret_key);
+        let gamma = ecmult(self.ctx_mul, &h, &secret_key);
+
+        /*
+               println!("Gamma:\n > X: 0x{}", hex::encode(gamma.x.b32()));
+               println!(" > Y: 0x{}", hex::encode(gamma.y.b32()));
+        */
 
         // k = random()
         let k = randomize();
 
         // Calculate k * G
-        let mut kg = Jacobian::default();
-        self.ctx_gen.ecmult_gen(&mut kg, &k);
+        let kg = ecmult_gen(self.ctx_gen, &k);
 
         // Calculate k * H
-        let mut kh = Jacobian::default();
-        self.ctx_gen.ecmult_gen(&mut kh, &k);
+        let kh = ecmult(self.ctx_mul, &h, &k);
 
         // c = ECVRF_hash_points(G, H, public_key, gamma, k * G, k * H)
         let c = self.hash_points(&AFFINE_G, &h, &pub_affine, &gamma, &kg, &kh);
@@ -201,62 +208,63 @@ impl ECVRF<'_> {
         let mut neg_c = c.clone();
         neg_c.cond_neg_assign(1.into());
         let s = normalize_scalar(&(k + neg_c * secret_key));
+        secret_key.clear();
 
         // y = keccak256(gama.encode())
         let mut y = Scalar::default();
         let mut output = [0u8; 32];
         let mut hasher = Keccak::v256();
-        let mut gama_mut = gamma.clone();
-        gama_mut.x.normalize();
-        gama_mut.y.normalize();
-        hasher.update(gama_mut.x.b32().as_ref());
-        hasher.update(gama_mut.y.b32().as_ref());
+        hasher.update(gamma.x.b32().as_ref());
+        hasher.update(gamma.y.b32().as_ref());
         hasher.finalize(&mut output);
         y.set_b32(&output).unwrap_u8();
 
         ECVRFProof::new(gamma, c, s, y, self.public_key)
     }
 
-    pub fn verify(self, alpha: &Scalar, vrf_proof: ECVRFProof) -> bool {
-        let pub_affine: Affine = self.public_key.into();
+    pub fn verify(self, alpha: &Scalar, vrf_proof: &ECVRFProof) -> bool {
+        let mut pub_affine: Affine = self.public_key.into();
+        pub_affine.x.normalize();
+        pub_affine.y.normalize();
 
         // H = ECVRF_hash_to_curve(alpha, pk)
-        let mut h = self.hash_to_curve(alpha, Option::from(&pub_affine));
-        h.x.normalize();
-        h.y.normalize();
+        let h = self.hash_to_curve(alpha, Option::from(&pub_affine));
         let mut jh = Jacobian::default();
         jh.set_ge(&h);
 
         // U = c * pk + s * G
         let mut u = Jacobian::default();
-        let mut pub_jacobian = Jacobian::default();
-        pub_jacobian.set_ge(&pub_affine);
+        let pub_jacobian = Jacobian::from_ge(&pub_affine);
         self.ctx_mul
             .ecmult(&mut u, &pub_jacobian, &vrf_proof.c, &vrf_proof.s);
 
         // V = c * gamma + s * H
         let mut v = Jacobian::default();
-        self.ctx_mul.ecmult(&mut v, &jh, &vrf_proof.s, &vrf_proof.c);
+        let c_gamma = ecmult(self.ctx_mul, &h, &vrf_proof.s);
+        let s_h = ecmult(self.ctx_mul, &vrf_proof.gamma, &vrf_proof.c);
+        v.set_ge(&c_gamma);
+        v = v.add_ge(&s_h);
+
+        // self.ctx_mul.ecmult(&mut v, &jh, &vrf_proof.s, &vrf_proof.c);
 
         // c_prime = ECVRF_hash_points(G, H, pk, gamma, U, V)
-        let computed_c = self.hash_points(&AFFINE_G, &h, &pub_affine, &vrf_proof.gamma, &u, &v);
+        let computed_c = self.hash_points(
+            &AFFINE_G,
+            &h,
+            &pub_affine,
+            &vrf_proof.gamma,
+            &jacobian_to_affine(&u),
+            &jacobian_to_affine(&v),
+        );
 
         // y = keccak256(gama.encode())
         let mut computed_y = Scalar::default();
         let mut output = [0u8; 32];
         let mut hasher = Keccak::v256();
-        let mut gama_mut = vrf_proof.gamma.clone();
-        gama_mut.x.normalize();
-        gama_mut.y.normalize();
-        hasher.update(gama_mut.x.b32().as_ref());
-        hasher.update(gama_mut.y.b32().as_ref());
+        hasher.update(vrf_proof.gamma.x.b32().as_ref());
+        hasher.update(vrf_proof.gamma.y.b32().as_ref());
         hasher.finalize(&mut output);
         computed_y.set_b32(&output).unwrap_u8();
-
-        println!("Computed C: {:?}", computed_c);
-        println!("Proof C: {:?}", vrf_proof.c);
-        println!("Is c the same? {:?}", computed_c.eq(&vrf_proof.c));
-        println!("Is y the same? {:?}", computed_y.eq(&vrf_proof.y));
 
         computed_c.eq(&vrf_proof.c) && computed_y.eq(&vrf_proof.y)
     }
@@ -273,18 +281,17 @@ fn main() {
     )
     .unwrap();
 
+    // Create new instance of ECVRF
     let ecvrf = ECVRF::new(secret_key);
-    /*
-    let r = ecvrf.hash_to_curve(
-        &Scalar::from_int(1),
-        Option::from(&Affine::new(Field::from_int(1), Field::from_int(2))),
-    ); */
 
-    let r1 = ecvrf.prove(&Scalar::from_int(1));
+    // Random an alpha value
+    let alpha = randomize();
 
-    println!("{:?}", r1);
+    //Prove
+    let r1 = ecvrf.prove(&alpha);
+    println!("{}", r1.to_string());
 
-    let r2 = ecvrf.verify(&Scalar::from_int(1), r1);
-
+    // Verify
+    let r2 = ecvrf.verify(&alpha, &r1);
     println!("Verified: {:?}", r2);
 }
