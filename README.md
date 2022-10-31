@@ -1,5 +1,10 @@
 # Orochimaru
 
+[![Lines of code][line-of-code]][loc-url]
+
+[line-of-code]: https://img.shields.io/tokei/lines/github/orochi-network/orochimaru
+[loc-url]: https://img.shields.io/tokei/lines/github/orochi-network/orochimaru
+
 Orochimaru is a full-node client of Orochi Network which was implemented pure in Rust programing language
 
 ## Components

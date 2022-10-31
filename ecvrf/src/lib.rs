@@ -1,99 +1,23 @@
 use libsecp256k1::{
-    curve::{Affine, ECMultContext, ECMultGenContext, Field, Jacobian, Scalar, AFFINE_G},
+    curve::{Affine, ECMultContext, ECMultGenContext, Jacobian, Scalar, AFFINE_G},
     PublicKey, SecretKey, ECMULT_CONTEXT, ECMULT_GEN_CONTEXT,
 };
-use rand::{thread_rng, RngCore};
 use tiny_keccak::{Hasher, Keccak};
 
-#[derive(Clone, Copy, Debug)]
-pub struct ECVRFProof {
-    pub gamma: Affine,
-    pub c: Scalar,
-    pub s: Scalar,
-    pub y: Scalar,
-    pub pk: PublicKey,
-}
+use crate::{
+    ecproof::ECVRFProof,
+    helper::{
+        ecmult, ecmult_gen, jacobian_to_affine, keccak256_affine, normalize_scalar, randomize,
+    },
+};
 
-impl ECVRFProof {
-    pub fn new(gamma: Affine, c: Scalar, s: Scalar, y: Scalar, pk: PublicKey) -> Self {
-        Self { gamma, c, s, y, pk }
-    }
+pub mod ecproof;
+pub mod helper;
+pub mod secp256k1 {
+    pub use libsecp256k1::*;
 }
-
-impl ToString for ECVRFProof {
-    fn to_string(&self) -> String {
-        let mut pub_affine: Affine = self.pk.into();
-        pub_affine.x.normalize();
-        pub_affine.y.normalize();
-        format!(
-            "gamma:\n > x: 0x{}\n > y: 0x{}\nc: 0x{}\ns: 0x{}\ny: 0x{}\npublic key:\n > x: {}\n > y: {}\n",
-            hex::encode(self.gamma.x.b32()),
-            hex::encode(self.gamma.y.b32()),
-            hex::encode(self.c.b32()),
-            hex::encode(self.s.b32()),
-            hex::encode(self.y.b32()),
-            hex::encode(pub_affine.x.b32()),
-            hex::encode(pub_affine.y.b32())
-        )
-    }
-}
-
-fn ecmult(context: &ECMultContext, a: &Affine, na: &Scalar) -> Affine {
-    let mut rj = Jacobian::default();
-    let temp_aj = Jacobian::from_ge(a);
-    context.ecmult(&mut rj, &temp_aj, na, &Scalar::from_int(0));
-    let mut ra = Affine::from_gej(&rj);
-    ra.x.normalize();
-    ra.y.normalize();
-    ra
-}
-
-fn ecmult_gen(context: &ECMultGenContext, ng: &Scalar) -> Affine {
-    let mut r = Jacobian::default();
-    context.ecmult_gen(&mut r, &ng);
-    let mut ra = Affine::from_gej(&r);
-    ra.x.normalize();
-    ra.y.normalize();
-    ra
-}
-
-fn jacobian_to_affine(j: &Jacobian) -> Affine {
-    let mut ra = Affine::from_gej(j);
-    ra.x.normalize();
-    ra.y.normalize();
-    ra
-}
-
-pub fn keccak256_affine(a: &Affine) -> Scalar {
-    let mut r = Scalar::default();
-    let mut output = [0u8; 32];
-    let mut hasher = Keccak::v256();
-    hasher.update(a.x.b32().as_ref());
-    hasher.update(a.y.b32().as_ref());
-    hasher.finalize(&mut output);
-    r.set_b32(&output).unwrap_u8();
-    r
-}
-
-pub fn randomize() -> Scalar {
-    let mut rng = thread_rng();
-    let mut random_bytes = [0u8; 32];
-    rng.fill_bytes(&mut random_bytes);
-    let mut result = Scalar::default();
-    result.set_b32(&random_bytes).unwrap_u8();
-    result
-}
-
-pub fn normalize_scalar(s: &Scalar) -> Scalar {
-    let mut f = Field::default();
-    let mut r = Scalar::default();
-    // @TODO: we should have better approach to handle this
-    if !f.set_b32(&s.b32()) {
-        panic!("Unable to set field with given bytes array");
-    }
-    f.normalize();
-    r.set_b32(&f.b32()).unwrap_u8();
-    r
+pub mod random {
+    pub use rand::thread_rng;
 }
 
 pub struct ECVRF<'a> {
@@ -235,21 +159,29 @@ impl ECVRF<'_> {
     }
 }
 
-fn main() {
-    let mut r = thread_rng();
-    let secret_key = SecretKey::random(&mut r);
+#[cfg(test)]
+mod tests {
+    use crate::{helper::randomize, ECVRF};
+    use libsecp256k1::SecretKey;
+    use rand::thread_rng;
 
-    // Create new instance of ECVRF
-    let ecvrf = ECVRF::new(secret_key);
+    #[test]
+    fn we_should_able_to_prove_and_verify() {
+        let mut r = thread_rng();
+        let secret_key = SecretKey::random(&mut r);
 
-    // Random an alpha value
-    let alpha = randomize();
+        // Create new instance of ECVRF
+        let ecvrf = ECVRF::new(secret_key);
 
-    //Prove
-    let r1 = ecvrf.prove(&alpha);
-    println!("{}", r1.to_string());
+        // Random an alpha value
+        let alpha = randomize();
 
-    // Verify
-    let r2 = ecvrf.verify(&alpha, &r1);
-    println!("Verified: {:?}", r2);
+        //Prove
+        let r1 = ecvrf.prove(&alpha);
+
+        // Verify
+        let r2 = ecvrf.verify(&alpha, &r1);
+
+        assert!(r2);
+    }
 }
