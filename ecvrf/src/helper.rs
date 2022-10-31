@@ -2,6 +2,7 @@ use libsecp256k1::curve::{Affine, ECMultContext, ECMultGenContext, Field, Jacobi
 use rand::{thread_rng, RngCore};
 use tiny_keccak::{Hasher, Keccak};
 
+// Perform multiplication between a point and a value: a*P
 pub fn ecmult(context: &ECMultContext, a: &Affine, na: &Scalar) -> Affine {
     let mut rj = Jacobian::default();
     let temp_aj = Jacobian::from_ge(a);
@@ -12,6 +13,7 @@ pub fn ecmult(context: &ECMultContext, a: &Affine, na: &Scalar) -> Affine {
     ra
 }
 
+// Perform multiplication between a value and G: a*G
 pub fn ecmult_gen(context: &ECMultGenContext, ng: &Scalar) -> Affine {
     let mut r = Jacobian::default();
     context.ecmult_gen(&mut r, &ng);
@@ -21,6 +23,7 @@ pub fn ecmult_gen(context: &ECMultGenContext, ng: &Scalar) -> Affine {
     ra
 }
 
+// Quick transform a Jacobian to Affine and also normalize it
 pub fn jacobian_to_affine(j: &Jacobian) -> Affine {
     let mut ra = Affine::from_gej(j);
     ra.x.normalize();
@@ -28,6 +31,7 @@ pub fn jacobian_to_affine(j: &Jacobian) -> Affine {
     ra
 }
 
+// Keccak a point
 pub fn keccak256_affine(a: &Affine) -> Scalar {
     let mut r = Scalar::default();
     let mut output = [0u8; 32];
@@ -39,6 +43,7 @@ pub fn keccak256_affine(a: &Affine) -> Scalar {
     r
 }
 
+// Random Scalar
 pub fn randomize() -> Scalar {
     let mut rng = thread_rng();
     let mut random_bytes = [0u8; 32];
@@ -48,6 +53,7 @@ pub fn randomize() -> Scalar {
     result
 }
 
+// Normalize a Scalar
 pub fn normalize_scalar(s: &Scalar) -> Scalar {
     let mut f = Field::default();
     let mut r = Scalar::default();
