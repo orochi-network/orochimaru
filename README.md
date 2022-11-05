@@ -7,6 +7,26 @@
 
 Orochimaru is a full-node client of Orochi Network which was implemented pure in Rust programing language
 
+## Installation
+
+You must install `sea-orm-cli` first:
+
+```
+cargo install sea-orm-cli
+```
+
+Generate entity for sqlite:
+
+```
+sea-orm-cli generate entity -o ./src/sqlite
+```
+
+Migrate database or init database for the first time:
+
+```
+sea-orm-cli migrate
+```
+
 ## Components
 
 ### Orand: Decentralized Random Number Generator

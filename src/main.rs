@@ -7,13 +7,14 @@ use hyper::body::Body;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{Method, Request, Response, StatusCode};
+use orochimaru::keyring::ActiveModel;
 use std::net::SocketAddr;
 use std::{env, result};
 use tokio::net::TcpListener;
 
 /// This is our service handler. It receives a Request, routes on its
 /// path, and returns a Future of a Response.
-async fn echo(
+async fn orand(
     req: Request<hyper::body::Incoming>,
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
     match (req.method(), req.uri().path()) {
@@ -91,7 +92,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
         tokio::task::spawn(async move {
             if let Err(err) = http1::Builder::new()
-                .serve_connection(stream, service_fn(echo))
+                .serve_connection(stream, service_fn(orand))
                 .await
             {
                 println!("Error serving connection: {:?}", err);
