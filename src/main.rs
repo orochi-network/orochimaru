@@ -1,12 +1,14 @@
-#![deny(warnings)]
-
-use std::net::SocketAddr;
+// #![deny(warnings)]
 
 use bytes::Bytes;
+use dotenv::dotenv;
 use http_body_util::{combinators::BoxBody, BodyExt, Empty, Full};
-use hyper::server::Builder;
+use hyper::body::Body;
+use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{Method, Request, Response, StatusCode};
+use std::net::SocketAddr;
+use std::{env, result};
 use tokio::net::TcpListener;
 
 /// This is our service handler. It receives a Request, routes on its
@@ -88,7 +90,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let (stream, _) = listener.accept().await?;
 
         tokio::task::spawn(async move {
-            if let Err(err) = Builder::new()
+            if let Err(err) = http1::Builder::new()
                 .serve_connection(stream, service_fn(echo))
                 .await
             {
