@@ -7,9 +7,10 @@ use hyper::body::Body;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{Method, Request, Response, StatusCode};
-use orochimaru::keyring::ActiveModel;
+use orochimaru::sqlitedb::SqliteDB;
+use serde_json::json;
+use std::env;
 use std::net::SocketAddr;
-use std::{env, result};
 use tokio::net::TcpListener;
 
 /// This is our service handler. It receives a Request, routes on its
@@ -83,9 +84,25 @@ fn full<T: Into<Bytes>>(chunk: T) -> BoxBody<Bytes, hyper::Error> {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    dotenv().ok();
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let database_url = env::var("DATABASE_URL").expect("Can not connect to the database");
+    let sqlite = SqliteDB::new(database_url).await;
+    println!(
+        "{:?}",
+        json!({"public_key": "Public key".to_string(), "secret_key":"Secret key".to_string()})
+    );
+    sqlite
+        .keyring_insert(
+            json!({"public_key": "Public key".to_string(), "secret_key":"Secret key".to_string()}),
+        )
+        .await
+        .unwrap();
+
+    println!("{:?}", sqlite.keyring_find_all().await?);
 
     let listener = TcpListener::bind(addr).await?;
+
     println!("Listening on http://{}", addr);
     loop {
         let (stream, _) = listener.accept().await?;
