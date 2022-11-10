@@ -1026,6 +1026,7 @@ dependencies = [
  "dotenv",
  "ecvrf",
  "env_logger",
+ "hex",
  "hmac 0.12.1",
  "http-body-util",
  "hyper 1.0.0-rc.1",
