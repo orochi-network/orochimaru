@@ -56,6 +56,13 @@ impl MigrationTrait for Migration {
                             .to_tbl(Keyring::Table)
                             .to_col(Keyring::Id),
                     )
+                    .index(
+                        Index::create()
+                            .name("index_alpha")
+                            .unique()
+                            .col(Randomness::Alpha),
+                    )
+                    .index(Index::create().name("index_y").unique().col(Randomness::Y))
                     .to_owned(),
             )
             .await

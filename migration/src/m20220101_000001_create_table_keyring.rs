@@ -19,6 +19,8 @@ impl MigrationTrait for Migration {
                             .auto_increment()
                             .primary_key(),
                     )
+                    .col(ColumnDef::new(Keyring::Username).string().not_null())
+                    .col(ColumnDef::new(Keyring::HMACSecret).string().not_null())
                     .col(
                         ColumnDef::new(Keyring::PublicKey)
                             .string()
@@ -37,6 +39,12 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .extra("DEFAULT CURRENT_TIMESTAMP".to_string()),
                     )
+                    .index(
+                        Index::create()
+                            .name("index_username")
+                            .unique()
+                            .col(Keyring::Username),
+                    )
                     .to_owned(),
             )
             .await
@@ -54,6 +62,8 @@ impl MigrationTrait for Migration {
 pub enum Keyring {
     Table,
     Id,
+    Username,
+    HMACSecret,
     PublicKey,
     SecretKey,
     CreatedDate,
