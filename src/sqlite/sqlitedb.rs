@@ -9,10 +9,9 @@ use super::{
     },
 };
 
-use hmac::digest::Key;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, Database, DatabaseConnection, DbErr, EntityTrait, InsertResult,
-    QueryFilter,
+    sea_query::Query, ActiveModelTrait, ColumnTrait, Condition, Database, DatabaseConnection,
+    DbErr, EntityTrait, InsertResult, QueryFilter,
 };
 
 pub struct KeyringTable<'a> {
@@ -48,6 +47,17 @@ impl<'a> KeyringTable<'a> {
         let new_record = AModelKeyring::from_json(json_record)?;
         Keyring::insert(new_record).exec(self.connection).await
     }
+
+    // Insert data to keyring table
+    pub async fn insert_returning(
+        &self,
+        json_record: serde_json::Value,
+    ) -> Result<ModelKeyring, DbErr> {
+        let new_record = AModelKeyring::from_json(json_record)?;
+        Keyring::insert(new_record)
+            .exec_with_returning(self.connection)
+            .await
+    }
 }
 
 pub struct RandomnessTable<'a> {
@@ -59,10 +69,27 @@ impl<'a> RandomnessTable<'a> {
         Self { connection: conn }
     }
 
-    pub async fn find_by_epoch(&self, epoch: i32) -> Result<Vec<ModelRandomness>, DbErr> {
+    pub async fn find_recent_epoch(&self, epoch: u32) -> Result<Vec<ModelRandomness>, DbErr> {
         Randomness::find()
-            .filter(ColumnRandomness::Epoch.eq(epoch))
+            .filter(ColumnRandomness::Epoch.gte(epoch))
             .all(self.connection)
+            .await
+    }
+
+    pub async fn find_latest_epoch(&self, network: u32) -> Result<Option<ModelRandomness>, DbErr> {
+        Randomness::find()
+            .filter(ColumnRandomness::Network.eq(network))
+            .filter(
+                Condition::any().add(
+                    ColumnRandomness::Epoch.in_subquery(
+                        Query::select()
+                            .expr(ColumnRandomness::Epoch.max())
+                            .from(Randomness)
+                            .to_owned(),
+                    ),
+                ),
+            )
+            .one(self.connection)
             .await
     }
 
@@ -72,6 +99,16 @@ impl<'a> RandomnessTable<'a> {
     ) -> Result<InsertResult<AModelRandomness>, DbErr> {
         let new_record = AModelRandomness::from_json(json_record)?;
         Randomness::insert(new_record).exec(self.connection).await
+    }
+
+    pub async fn insert_returning(
+        &self,
+        json_record: serde_json::Value,
+    ) -> Result<ModelRandomness, DbErr> {
+        let new_record = AModelRandomness::from_json(json_record)?;
+        Randomness::insert(new_record)
+            .exec_with_returning(self.connection)
+            .await
     }
 }
 

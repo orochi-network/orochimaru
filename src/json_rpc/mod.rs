@@ -9,9 +9,9 @@ pub struct JSONRPCPayload {
 
 pub enum JSONRPCMethod {
     // Network, epoch
-    OrandGetPublicEpoch(i32, i32),
+    OrandGetPublicEpoch(u32, u32),
     // New epoch of given network
-    OrandNewEpoch(i32),
+    OrandNewEpoch(u32),
 }
 
 impl JSONRPCMethod {

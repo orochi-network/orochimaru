@@ -1,8 +1,10 @@
-// #![deny(warnings)]
+#![deny(warnings)]
 
 use bytes::Bytes;
 use dotenv::dotenv;
 use ecvrf::helper::{generate_raw_keypair, random_bytes};
+use ecvrf::secp256k1::{curve, SecretKey};
+use ecvrf::ECVRF;
 use http_body_util::{combinators::BoxBody, BodyExt, Empty, Full};
 use hyper::body::Body;
 use hyper::server::conn::http1;
@@ -17,6 +19,8 @@ use std::net::SocketAddr;
 use std::str::from_utf8;
 use tokio::net::TcpListener;
 
+const CHAIN_ID_BNB: u32 = 56;
+
 /// This is our service handler. It receives a Request, routes on its
 /// path, and returns a Future of a Response.
 async fn orand(
@@ -28,6 +32,24 @@ async fn orand(
     let keyring = sqlite.table_keyring().await;
     let randomness = sqlite.table_randomness().await;
 
+    // Reconstruct secret key from database
+    let keyring_record = keyring
+        .find_by_name("chiro".to_string())
+        .await
+        .expect("Can not query our database")
+        .expect("Chiro not found");
+
+    let secret_key = SecretKey::parse(
+        hex::decode(keyring_record.secret_key)
+            .unwrap()
+            .as_slice()
+            .try_into()
+            .unwrap(),
+    )
+    .expect("Can not reconstruct secret key");
+
+    let vrf = ECVRF::new(secret_key);
+
     match (req.method(), req.uri().path()) {
         // Serve some instructions at /
         (&Method::GET, "/") => Ok(Response::new(full("Wrong method, you know!."))),
@@ -36,7 +58,7 @@ async fn orand(
         (&Method::POST, "/") => {
             let max = req.body().size_hint().upper().unwrap_or(u64::MAX);
             if max > 1024 * 64 {
-                let mut resp = Response::new(full("Body too big"));
+                let mut resp = Response::new(full("Your body too big, can not fit the body bag"));
                 *resp.status_mut() = hyper::StatusCode::PAYLOAD_TOO_LARGE;
                 return Ok(resp);
             }
@@ -44,12 +66,85 @@ async fn orand(
             let whole_body = req.collect().await?.to_bytes();
             let json_string = from_utf8(whole_body.borrow()).unwrap();
             let json_rpc_payload = JSONRPCMethod::from_json_string(json_string);
+
             match json_rpc_payload {
-                JSONRPCMethod::OrandGetPublicEpoch(network, epoch) => {}
-                JSONRPCMethod::OrandNewEpoch(network) => {}
+                // We ignore network param right now, support BNB chain first
+                JSONRPCMethod::OrandGetPublicEpoch(_, epoch) => {
+                    let recent_epochs = randomness
+                        .find_recent_epoch(epoch)
+                        .await
+                        .expect("Can not get recent epoch");
+
+                    let serialized_result =
+                        serde_json::to_string(&recent_epochs).expect("Can not serialize data");
+                    Ok(Response::new(full(serialized_result)))
+                }
+                JSONRPCMethod::OrandNewEpoch(_) => {
+                    let latest_epoch_record =
+                        randomness.find_latest_epoch(CHAIN_ID_BNB).await.unwrap();
+
+                    let r = match latest_epoch_record {
+                        Some(latest_epoch) => {
+                            // Alpha of current epoch is previous
+                            let mut alpha = curve::Scalar::default();
+                            alpha
+                                .set_b32(
+                                    &hex::decode(latest_epoch.y)
+                                        .unwrap()
+                                        .as_slice()
+                                        .try_into()
+                                        .unwrap(),
+                                )
+                                .unwrap_u8();
+                            let proof = vrf.prove(&alpha);
+                            let gamma = [proof.gamma.x.b32(), proof.gamma.y.b32()].concat();
+
+                            let insert_result = randomness
+                                .insert_returning(json!({
+                                    "network": CHAIN_ID_BNB,
+                                    "keyring_id": keyring_record.id,
+                                    "epoch": latest_epoch.epoch + 1,
+                                    "alpha":hex::encode(alpha.b32()),
+                                    "gamma":hex::encode(&gamma),
+                                    "c":hex::encode(&proof.c.b32()),
+                                    "s":hex::encode(&proof.s.b32()),
+                                    "y":hex::encode(&proof.y.b32())
+                                }))
+                                .await
+                                .unwrap();
+                            let serialized_result = serde_json::to_string(&insert_result).unwrap();
+                            Ok(Response::new(full(serialized_result)))
+                        }
+                        // There is no record that meant we are in the genesis epoch
+                        None => {
+                            // Get alpha from random entropy
+                            let mut buf = [0u8; 32];
+                            random_bytes(&mut buf);
+                            let mut alpha = curve::Scalar::default();
+                            alpha.set_b32(&buf).unwrap_u8();
+                            let proof = vrf.prove(&alpha);
+                            let gamma = [proof.gamma.x.b32(), proof.gamma.y.b32()].concat();
+                            let insert_result = randomness
+                                .insert_returning(json!({
+                                    "network": CHAIN_ID_BNB,
+                                    "keyring_id": keyring_record.id,
+                                    "epoch": 0,
+                                    "alpha":hex::encode(&buf),
+                                    "gamma":hex::encode(&gamma),
+                                    "c":hex::encode(&proof.c.b32()),
+                                    "s":hex::encode(&proof.s.b32()),
+                                    "y":hex::encode(&proof.y.b32())
+                                }))
+                                .await
+                                .unwrap();
+                            let serialized_result = serde_json::to_string(&insert_result).unwrap();
+                            Ok(Response::new(full(serialized_result)))
+                        }
+                    };
+                    r
+                }
             }
-            // serde_json::to_string(value)
-            Ok(Response::new(full(whole_body)))
+            // Ok(Response::new(full(whole_body)))
         }
 
         // Return the 403 Forbidden for other routes.

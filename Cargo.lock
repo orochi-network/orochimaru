@@ -1034,6 +1034,7 @@ dependencies = [
  "sea-orm",
  "serde",
  "serde_json",
+ "tiny-keccak",
  "tokio",
 ]
 
