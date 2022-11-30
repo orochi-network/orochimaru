@@ -43,6 +43,14 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Randomness::S).string().not_null())
                     .col(ColumnDef::new(Randomness::Y).string().not_null())
                     .col(
+                        ColumnDef::new(Randomness::WitnessAddress)
+                            .string()
+                            .not_null(),
+                    )
+                    .col(ColumnDef::new(Randomness::WitnessGamma).string().not_null())
+                    .col(ColumnDef::new(Randomness::WitnessHash).string().not_null())
+                    .col(ColumnDef::new(Randomness::InvertZ).string().not_null())
+                    .col(
                         ColumnDef::new(Randomness::CreatedDate)
                             .timestamp()
                             .extra("DEFAULT CURRENT_TIMESTAMP".to_string())
@@ -88,5 +96,9 @@ enum Randomness {
     C,
     S,
     Y,
+    WitnessAddress,
+    WitnessGamma,
+    WitnessHash,
+    InvertZ,
     CreatedDate,
 }

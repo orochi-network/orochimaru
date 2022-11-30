@@ -2,8 +2,8 @@
 
 use bytes::Bytes;
 use dotenv::dotenv;
-use ecvrf::helper::{generate_raw_keypair, random_bytes};
-use ecvrf::secp256k1::{curve, SecretKey};
+use ecvrf::helper::{generate_raw_keypair, get_address, random_bytes};
+use ecvrf::secp256k1::{curve, PublicKey, SecretKey};
 use ecvrf::ECVRF;
 use http_body_util::{combinators::BoxBody, BodyExt, Empty, Full};
 use hyper::body::Body;
@@ -75,18 +75,18 @@ async fn orand(
                         .await
                         .expect("Can not get recent epoch");
 
-                    let serialized_result =
-                        serde_json::to_string(&recent_epochs).expect("Can not serialize data");
+                    let serialized_result = serde_json::to_string_pretty(&recent_epochs)
+                        .expect("Can not serialize data");
                     Ok(Response::new(full(serialized_result)))
                 }
                 JSONRPCMethod::OrandNewEpoch(_) => {
                     let latest_epoch_record =
                         randomness.find_latest_epoch(CHAIN_ID_BNB).await.unwrap();
 
-                    let r = match latest_epoch_record {
+                    let (current_alpha, next_epoch) = match latest_epoch_record {
                         Some(latest_epoch) => {
-                            // Alpha of current epoch is previous
                             let mut alpha = curve::Scalar::default();
+                            // Alpha of current epoch is previous randomness
                             alpha
                                 .set_b32(
                                     &hex::decode(latest_epoch.y)
@@ -96,55 +96,55 @@ async fn orand(
                                         .unwrap(),
                                 )
                                 .unwrap_u8();
-                            let proof = vrf.prove(&alpha);
-                            let gamma = [proof.gamma.x.b32(), proof.gamma.y.b32()].concat();
-
-                            let insert_result = randomness
-                                .insert_returning(json!({
-                                    "network": CHAIN_ID_BNB,
-                                    "keyring_id": keyring_record.id,
-                                    "epoch": latest_epoch.epoch + 1,
-                                    "alpha":hex::encode(alpha.b32()),
-                                    "gamma":hex::encode(&gamma),
-                                    "c":hex::encode(&proof.c.b32()),
-                                    "s":hex::encode(&proof.s.b32()),
-                                    "y":hex::encode(&proof.y.b32())
-                                }))
-                                .await
-                                .unwrap();
-                            let serialized_result = serde_json::to_string(&insert_result).unwrap();
-                            Ok(Response::new(full(serialized_result)))
+                            (alpha, latest_epoch.epoch + 1)
                         }
-                        // There is no record that meant we are in the genesis epoch
                         None => {
                             // Get alpha from random entropy
                             let mut buf = [0u8; 32];
                             random_bytes(&mut buf);
                             let mut alpha = curve::Scalar::default();
                             alpha.set_b32(&buf).unwrap_u8();
-                            let proof = vrf.prove(&alpha);
-                            let gamma = [proof.gamma.x.b32(), proof.gamma.y.b32()].concat();
-                            let insert_result = randomness
-                                .insert_returning(json!({
-                                    "network": CHAIN_ID_BNB,
-                                    "keyring_id": keyring_record.id,
-                                    "epoch": 0,
-                                    "alpha":hex::encode(&buf),
-                                    "gamma":hex::encode(&gamma),
-                                    "c":hex::encode(&proof.c.b32()),
-                                    "s":hex::encode(&proof.s.b32()),
-                                    "y":hex::encode(&proof.y.b32())
-                                }))
-                                .await
-                                .unwrap();
-                            let serialized_result = serde_json::to_string(&insert_result).unwrap();
-                            Ok(Response::new(full(serialized_result)))
+                            (alpha, 0)
                         }
                     };
-                    r
+
+                    let proof = vrf.prove(&current_alpha);
+                    let gamma = [proof.gamma.x.b32(), proof.gamma.y.b32()].concat();
+                    let contract_proof = vrf.proof_transform(&current_alpha, &proof);
+                    let witness_gamma = [
+                        contract_proof.witness_gamma.x.b32(),
+                        contract_proof.witness_gamma.y.b32(),
+                    ]
+                    .concat();
+
+                    let witness_hash = [
+                        contract_proof.witness_hash.x.b32(),
+                        contract_proof.witness_hash.y.b32(),
+                    ]
+                    .concat();
+
+                    // contract_proof.witness_gamma.
+                    let insert_result = randomness
+                        .insert_returning(json!({
+                            "network": CHAIN_ID_BNB,
+                            "keyring_id": keyring_record.id,
+                            "epoch": next_epoch,
+                            "alpha":hex::encode(current_alpha.b32()),
+                            "gamma":hex::encode(&gamma),
+                            "c":hex::encode(&proof.c.b32()),
+                            "s":hex::encode(&proof.s.b32()),
+                            "y":hex::encode(&proof.y.b32()),
+                            "witness_address": hex::encode(contract_proof.witness_address.b32())[24..64],
+                            "witness_gamma": hex::encode(&witness_gamma),
+                            "witness_hash": hex::encode(&witness_hash),
+                            "invert_z": hex::encode(contract_proof.invert_z.b32()),
+                        }))
+                        .await
+                        .unwrap();
+                    let serialized_result = serde_json::to_string_pretty(&insert_result).unwrap();
+                    Ok(Response::new(full(serialized_result)))
                 }
             }
-            // Ok(Response::new(full(whole_body)))
         }
 
         // Return the 403 Forbidden for other routes.
@@ -193,7 +193,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 .await
                 .unwrap();
         }
-        _ => {}
+        Some(k) => {
+            println!("Found chiro key!");
+            println!("Secret key: {}", k.secret_key);
+            println!("Public Key: {}", k.public_key);
+            let secret_key = SecretKey::parse(
+                hex::decode(k.secret_key)
+                    .unwrap()
+                    .as_slice()
+                    .try_into()
+                    .unwrap(),
+            )
+            .unwrap();
+            let public_key = PublicKey::from_secret_key(&secret_key);
+            println!("Address: {}", hex::encode(get_address(public_key)));
+        }
     };
 
     let listener = TcpListener::bind(addr).await?;

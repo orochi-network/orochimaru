@@ -57,6 +57,29 @@ pub fn keccak256_affine(a: &Affine) -> Scalar {
     r
 }
 
+pub fn get_address(pub_key: PublicKey) -> [u8; 20] {
+    let mut affine_pub: Affine = pub_key.into();
+    affine_pub.x.normalize();
+    affine_pub.y.normalize();
+    let mut output = [0u8; 32];
+    let mut hasher = Keccak::v256();
+    hasher.update(affine_pub.x.b32().as_ref());
+    hasher.update(affine_pub.y.b32().as_ref());
+    hasher.finalize(&mut output);
+    output[12..32].try_into().unwrap()
+}
+
+pub fn get_scalar_address(pub_key: PublicKey) -> Scalar {
+    let bytes = get_address(pub_key);
+    let mut temp_bytes = [0u8; 32];
+    let mut scalar_address = Scalar::default();
+    for i in 0..20 {
+        temp_bytes[12 + i] = bytes[i];
+    }
+    scalar_address.set_b32(&temp_bytes).unwrap_u8();
+    scalar_address
+}
+
 // Random Scalar
 pub fn randomize() -> Scalar {
     let mut rng = thread_rng();

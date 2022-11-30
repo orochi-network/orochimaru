@@ -7,16 +7,21 @@ use serde::{Deserialize, Serialize};
 #[sea_orm(table_name = "randomness")]
 pub struct Model {
     #[sea_orm(primary_key)]
-    #[serde(skip_deserializing)]
-    pub id: u32,
-    pub network: u32,
-    pub keyring_id: u32,
-    pub epoch: u32,
+    #[serde(skip_deserializing, skip_serializing)]
+    pub id: i32,
+    pub network: i32,
+    #[serde(skip_serializing)]
+    pub keyring_id: i32,
+    pub epoch: i32,
     pub alpha: String,
     pub gamma: String,
     pub c: String,
     pub s: String,
     pub y: String,
+    pub witness_address: String,
+    pub witness_gamma: String,
+    pub witness_hash: String,
+    pub invert_z: String,
     #[serde(skip_deserializing)]
     pub created_date: String,
 }

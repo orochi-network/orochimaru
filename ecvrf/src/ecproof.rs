@@ -12,6 +12,19 @@ pub struct ECVRFProof {
     pub pk: PublicKey,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct ECVRFContractProof {
+    pub pk: PublicKey,
+    pub gamma: Affine,
+    pub c: Scalar,
+    pub s: Scalar,
+    pub alpha: Scalar,
+    pub witness_address: Scalar,
+    pub witness_gamma: Affine,
+    pub witness_hash: Affine,
+    pub invert_z: Scalar,
+}
+
 impl ECVRFProof {
     pub fn new(gamma: Affine, c: Scalar, s: Scalar, y: Scalar, pk: PublicKey) -> Self {
         Self { gamma, c, s, y, pk }
@@ -24,7 +37,7 @@ impl ToString for ECVRFProof {
         pub_affine.x.normalize();
         pub_affine.y.normalize();
         format!(
-            "gamma:\n > x: 0x{}\n > y: 0x{}\nc: 0x{}\ns: 0x{}\ny: 0x{}\npublic key:\n > x: {}\n > y: {}\n",
+            "gamma: x: 0x{}\n > y: 0x{}\nc: 0x{}\ns: 0x{}\ny: 0x{}\npublic key:\n > x: {}\n > y: {}\n",
             hex::encode(self.gamma.x.b32()),
             hex::encode(self.gamma.y.b32()),
             hex::encode(self.c.b32()),

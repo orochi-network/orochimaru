@@ -28,6 +28,33 @@ sea-orm-cli migrate
 
 A Decentralized Random Number Generator by Orochi Network. Allowed randomness to be generated and fed to any smart contracts on EVM compatible blockchains.
 
+#### Request randomness
+
+```
+┌───────────┐         ┌─────┐      ┌──────────────┐
+│Application│         │Orand│      │Smart Contract│
+└─────┬─────┘         └──┬──┘      └──────┬───────┘
+      │                  │                │
+      │Request Randomness│                │
+      │─────────────────>│                │
+      │                  │                │
+      │                  │Get latest epoch│
+      │                  │───────────────>│
+      │                  │                │
+      │                  │  Latest epoch  │
+      │                  │<───────────────│
+      │                  │                │
+      │   ECVRF Proof    │                │
+      │<─────────────────│                │
+      │                  │                │
+      │            ECVRF Proof            │
+      │──────────────────────────────────>│
+┌─────┴─────┐         ┌──┴──┐      ┌──────┴───────┐
+│Application│         │Orand│      │Smart Contract│
+└───────────┘         └─────┘      └──────────────┘
+
+```
+
 #### Orand v1.0 is providing:
 
 - **Verifiable randomness:** We're using Elliptic Curve Verifiable Random Function (ECVRF) to generate randomness the process described here https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-vrf-05#section-5.3. Curve secp256k1 and keccak256 (Ethereum variant) was used to minimizing verification cost for smart contract.
