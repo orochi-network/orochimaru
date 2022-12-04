@@ -2,7 +2,8 @@
 
 use bytes::Bytes;
 use dotenv::dotenv;
-use ecvrf::helper::{generate_raw_keypair, get_address, random_bytes};
+use ecvrf::helper::{generate_raw_keypair, random_bytes};
+use ecvrf::secp256k1::curve::{Affine, Scalar};
 use ecvrf::secp256k1::{curve, PublicKey, SecretKey};
 use ecvrf::ECVRF;
 use http_body_util::{combinators::BoxBody, BodyExt, Empty, Full};
@@ -123,7 +124,6 @@ async fn orand(
                     ]
                     .concat();
 
-                    // contract_proof.witness_gamma.
                     let insert_result = randomness
                         .insert_returning(json!({
                             "network": CHAIN_ID_BNB,
@@ -142,6 +142,16 @@ async fn orand(
                         .await
                         .unwrap();
                     let serialized_result = serde_json::to_string_pretty(&insert_result).unwrap();
+                    Ok(Response::new(full(serialized_result)))
+                }
+                JSONRPCMethod::OrandGetPublicKey(key_name) => {
+                    let key_record = keyring
+                        .find_by_name(key_name)
+                        .await
+                        .expect("Can find the given key name");
+
+                    let serialized_result =
+                        serde_json::to_string_pretty(&key_record).expect("Can not serialize data");
                     Ok(Response::new(full(serialized_result)))
                 }
             }
@@ -206,13 +216,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             )
             .unwrap();
             let public_key = PublicKey::from_secret_key(&secret_key);
-            println!("Address: {}", hex::encode(get_address(public_key)));
+            let vrf = ECVRF::new(secret_key);
+            let pub_affine: Affine = public_key.into();
+            let point = vrf.hash_to_curve_prefix(&Scalar::from_int(1), pub_affine);
+            println!("x: {}", hex::encode(point.x.b32()));
+            println!("y: {}", hex::encode(point.y.b32()));
         }
     };
 
     let listener = TcpListener::bind(addr).await?;
 
     println!("Listening on http://{}", addr);
+
     loop {
         let (stream, _) = listener.accept().await?;
 

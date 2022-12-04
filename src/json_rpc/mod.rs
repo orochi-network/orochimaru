@@ -12,6 +12,8 @@ pub enum JSONRPCMethod {
     OrandGetPublicEpoch(u32, u32),
     // New epoch of given network
     OrandNewEpoch(u32),
+    // Get public key
+    OrandGetPublicKey(String),
 }
 
 impl JSONRPCMethod {
@@ -23,6 +25,7 @@ impl JSONRPCMethod {
                 json_rpc.params[1].as_str().parse().unwrap(),
             ),
             "orand_newEpoch" => Self::OrandNewEpoch(json_rpc.params[0].as_str().parse().unwrap()),
+            "orand_getPublicKey" => Self::OrandGetPublicKey(json_rpc.params[0].to_string()),
             _ => panic!("Unsupported method"),
         }
     }

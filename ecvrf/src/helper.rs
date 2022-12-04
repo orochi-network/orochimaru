@@ -16,6 +16,12 @@ pub struct RawKeyPair {
     pub secret_key: [u8; SECRET_KEY_SIZE],
 }
 
+const RAW_FIELD_SIZE: [u32; 8] = [
+    0xFFFFFC2F, 0xFFFFFFFE, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
+];
+
+const FIELD_SIZE: Scalar = Scalar(RAW_FIELD_SIZE);
+
 // Perform multiplication between a point and a value: a*P
 pub fn ecmult(context: &ECMultContext, a: &Affine, na: &Scalar) -> Affine {
     let mut rj = Jacobian::default();
@@ -45,6 +51,10 @@ pub fn jacobian_to_affine(j: &Jacobian) -> Affine {
     ra
 }
 
+pub fn is_on_curve(point: &Affine) -> bool {
+    y_squared(&point.y) == point.x * point.x
+}
+
 // Keccak a point
 pub fn keccak256_affine(a: &Affine) -> Scalar {
     let mut r = Scalar::default();
@@ -55,6 +65,26 @@ pub fn keccak256_affine(a: &Affine) -> Scalar {
     hasher.finalize(&mut output);
     r.set_b32(&output).unwrap_u8();
     r
+}
+
+pub fn calculate_witness_address(witness: &Affine) -> [u8; 20] {
+    let mut output = [0u8; 32];
+    let mut hasher = Keccak::v256();
+    hasher.update(witness.x.b32().as_ref());
+    hasher.update(witness.y.b32().as_ref());
+    hasher.finalize(&mut output);
+    output[12..32].try_into().unwrap()
+}
+
+pub fn calculate_witness_scalar(witness: &Affine) -> Scalar {
+    let bytes = calculate_witness_address(witness);
+    let mut temp_bytes = [0u8; 32];
+    let mut scalar_address = Scalar::default();
+    for i in 0..20 {
+        temp_bytes[12 + i] = bytes[i];
+    }
+    scalar_address.set_b32(&temp_bytes).unwrap_u8();
+    scalar_address
 }
 
 pub fn get_address(pub_key: PublicKey) -> [u8; 20] {
@@ -78,6 +108,83 @@ pub fn get_scalar_address(pub_key: PublicKey) -> Scalar {
     }
     scalar_address.set_b32(&temp_bytes).unwrap_u8();
     scalar_address
+}
+
+pub fn field_hash(b: &Vec<u8>) -> Field {
+    let mut s = Scalar::default();
+    let mut output = [0u8; 32];
+    let mut hasher = Keccak::v256();
+    hasher.update(b);
+    hasher.finalize(&mut output);
+    println!(
+        "hash_field(0) 0x{} 0x{}",
+        hex::encode(b),
+        hex::encode(output)
+    );
+    s.set_b32(&output).unwrap_u8();
+    if scalar_is_gt(&s, &FIELD_SIZE) {
+        let mut hasher = Keccak::v256();
+        hasher.update(&output);
+        hasher.finalize(&mut output);
+        s.set_b32(&output).unwrap_u8();
+        println!(
+            "hash_field(1) 0x{} 0x{}",
+            hex::encode(b),
+            hex::encode(s.b32())
+        );
+    }
+    let mut f = Field::default();
+    f.set_b32(&s.b32());
+    f.normalize();
+    f
+}
+
+pub fn scalar_is_gt(a: &Scalar, b: &Scalar) -> bool {
+    for i in (0..a.0.len()).rev() {
+        if a.0[i] > b.0[i] {
+            return true;
+        }
+    }
+    false
+}
+
+pub fn new_candidate_point(b: &Vec<u8>) -> Affine {
+    let mut x = field_hash(b);
+    let mut y = y_squared(&x);
+    x.normalize();
+    (y, _) = y.sqrt();
+    y.normalize();
+    let mut field_size = Field::default();
+
+    if !field_size.set_b32(&FIELD_SIZE.b32()) {
+        field_size.normalize();
+    }
+
+    if y.is_odd() {
+        // Negative of candidate.y
+        let mut invert_y = y.clone();
+        invert_y = invert_y.neg(1);
+        invert_y.normalize();
+        // candidate.y = FIELD_SIZE - candidate.y
+        y = invert_y + field_size;
+        y.normalize();
+        println!(
+            "new_candidate_point(1) {} {}",
+            hex::encode(x.b32()),
+            hex::encode(y.b32())
+        );
+    }
+    let mut r = Affine::default();
+    r.set_xy(&x, &y);
+    r
+}
+
+pub fn y_squared(x: &Field) -> Field {
+    let mut t = x.clone();
+    // y^2 = x^3 + 7
+    t = t * t * t + Field::from_int(7);
+    t.normalize();
+    t
 }
 
 // Random Scalar

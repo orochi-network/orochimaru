@@ -7,11 +7,13 @@ use serde::{Deserialize, Serialize};
 #[sea_orm(table_name = "keyring")]
 pub struct Model {
     #[sea_orm(primary_key)]
-    #[serde(skip_deserializing)]
+    #[serde(skip_deserializing, skip_serializing)]
     pub id: u32,
     pub username: String,
+    #[serde(skip_serializing)]
     pub hmac_secret: String,
     pub public_key: String,
+    #[serde(skip_serializing)]
     pub secret_key: String,
     #[serde(skip_deserializing)]
     pub created_date: String,
