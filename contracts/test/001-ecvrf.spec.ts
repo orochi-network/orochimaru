@@ -49,14 +49,14 @@ describe('Orochi ECVRF', function () {
     orochiECVRF = <OrochiECVRF>await instanceFactory.deploy();
   });
 
-  it('Hash to curve mut be on the curve', async () => {
+  it('HASH_TO_CURVE_PREFIX must be on the curve', async () => {
     const [x, y] = await orochiECVRF.hashToCurvePrefix(optimus.pk as any, optimus.seed);
     console.log(`\thashToCurvePrefix()\n \tx: ${x.toHexString()}\n \ty: ${y.toHexString()}`);
     expect(x.toHexString()).to.eq('0x8ea3616f712ed32f37c2f2a74d8af36f7d6bfd4c16a9d65d0aed5658ef42e68d');
     expect(y.toHexString()).to.eq('0x319dc9960a02cb1a61a6688daafd03db8ab4c9416d36aad721225671972c12b0');
   });
 
-  /*it('Hash to curve mut be on the curve', async () => {
+  /*it('Hash to curve must be on the curve', async () => {
     const output = await orochiECVRF.verifyProof(optimus as any, optimus.seed);
     console.log(`\tverifyProof()\n \toutput: ${await output.toHexString()}`);
   });*/
