@@ -52,7 +52,7 @@ pub fn jacobian_to_affine(j: &Jacobian) -> Affine {
 }
 
 pub fn is_on_curve(point: &Affine) -> bool {
-    y_squared(&point.y) == point.x * point.x
+    y_squared(&point.x) == point.y * point.y
 }
 
 // Keccak a point
