@@ -3,6 +3,10 @@ pragma solidity ^0.8.0;
 import './VRF.sol';
 
 contract OrochiECVRF is VRF {
+  function hashToCurvePrefix(uint256[2] memory pk, uint256 input) external view returns (uint256[2] memory) {
+    return hashToCurve(pk, input);
+  }
+
   function verifyProof(Proof memory proof, uint256 alpha) external view returns (uint256 output) {
     verifyVRFProof(
       proof.pk,
