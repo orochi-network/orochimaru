@@ -56,6 +56,11 @@ describe('Orochi ECVRF', function () {
     expect(y.toHexString()).to.eq('0x319dc9960a02cb1a61a6688daafd03db8ab4c9416d36aad721225671972c12b0');
   });
 
+  it('elliptic curve multiple must be correct', async () => {
+    const result = await orochiECVRF.ecmulVerifyWitness(optimus.gamma as any, optimus.c, optimus.cGammaWitness as any);
+    expect(result).to.eq(true);
+  });
+
   /*it('Hash to curve must be on the curve', async () => {
     const output = await orochiECVRF.verifyProof(optimus as any, optimus.seed);
     console.log(`\tverifyProof()\n \toutput: ${await output.toHexString()}`);

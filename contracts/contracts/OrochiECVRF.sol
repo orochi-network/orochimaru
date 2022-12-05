@@ -3,6 +3,14 @@ pragma solidity ^0.8.0;
 import './VRF.sol';
 
 contract OrochiECVRF is VRF {
+  function ecmulVerifyWitness(
+    uint256[2] memory multiplicand,
+    uint256 scalar,
+    uint256[2] memory product
+  ) external pure returns (bool verifies) {
+    return ecmulVerify(multiplicand, scalar, product);
+  }
+
   function hashToCurvePrefix(uint256[2] memory pk, uint256 input) external view returns (uint256[2] memory) {
     return hashToCurve(pk, input);
   }
