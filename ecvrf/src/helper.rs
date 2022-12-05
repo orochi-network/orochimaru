@@ -116,22 +116,12 @@ pub fn field_hash(b: &Vec<u8>) -> Field {
     let mut hasher = Keccak::v256();
     hasher.update(b);
     hasher.finalize(&mut output);
-    println!(
-        "hash_field(0) 0x{} 0x{}",
-        hex::encode(b),
-        hex::encode(output)
-    );
     s.set_b32(&output).unwrap_u8();
     if scalar_is_gt(&s, &FIELD_SIZE) {
         let mut hasher = Keccak::v256();
         hasher.update(&output);
         hasher.finalize(&mut output);
         s.set_b32(&output).unwrap_u8();
-        println!(
-            "hash_field(1) 0x{} 0x{}",
-            hex::encode(b),
-            hex::encode(s.b32())
-        );
     }
     let mut f = Field::default();
     if !f.set_b32(&s.b32()) {
@@ -152,29 +142,24 @@ pub fn scalar_is_gt(a: &Scalar, b: &Scalar) -> bool {
 pub fn new_candidate_point(b: &Vec<u8>) -> Affine {
     let mut x = field_hash(b);
     let mut y = y_squared(&x);
-    x.normalize();
-    (y, _) = y.sqrt();
-    y.normalize();
     let mut field_size = Field::default();
-
     if !field_size.set_b32(&FIELD_SIZE.b32()) {
         field_size.normalize();
     }
+    x.normalize();
+    (y, _) = y.sqrt();
+    y.normalize();
 
     if y.is_odd() {
-        // Negative of candidate.y
+        // Negative of y
         let mut invert_y = y.clone();
         invert_y = invert_y.neg(1);
         invert_y.normalize();
-        // candidate.y = FIELD_SIZE - candidate.y
+        // y = FIELD_SIZE - y
         y = invert_y + field_size;
         y.normalize();
-        println!(
-            "new_candidate_point(1) {} {}",
-            hex::encode(x.b32()),
-            hex::encode(y.b32())
-        );
     }
+
     let mut r = Affine::default();
     r.set_xy(&x, &y);
     r

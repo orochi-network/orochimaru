@@ -178,9 +178,6 @@ impl ECVRF<'_> {
         // We need to normalize it after we done the invert
         v.z.inv();
         v.z.normalize();
-        let bytes_invert_z = v.z.b32();
-        let mut invert_z = Scalar::default();
-        invert_z.set_b32(&bytes_invert_z).unwrap_u8();
 
         ECVRFContractProof {
             pk: self.public_key,
@@ -191,7 +188,7 @@ impl ECVRF<'_> {
             witness_address: calculate_witness_scalar(&jacobian_to_affine(&u)),
             witness_gamma,
             witness_hash,
-            invert_z,
+            invert_z: v.z,
         }
     }
 

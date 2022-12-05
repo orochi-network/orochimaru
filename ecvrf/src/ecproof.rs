@@ -1,5 +1,5 @@
 use libsecp256k1::{
-    curve::{Affine, Scalar},
+    curve::{Affine, Field, Scalar},
     PublicKey,
 };
 
@@ -22,7 +22,7 @@ pub struct ECVRFContractProof {
     pub witness_address: Scalar,
     pub witness_gamma: Affine,
     pub witness_hash: Affine,
-    pub invert_z: Scalar,
+    pub invert_z: Field,
 }
 
 impl ECVRFProof {
