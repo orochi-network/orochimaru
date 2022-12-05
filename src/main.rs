@@ -2,8 +2,7 @@
 
 use bytes::Bytes;
 use dotenv::dotenv;
-use ecvrf::helper::{generate_raw_keypair, random_bytes};
-use ecvrf::secp256k1::curve::{Affine, Scalar};
+use ecvrf::helper::{generate_raw_keypair, get_address, random_bytes};
 use ecvrf::secp256k1::{curve, PublicKey, SecretKey};
 use ecvrf::ECVRF;
 use http_body_util::{combinators::BoxBody, BodyExt, Empty, Full};
@@ -216,11 +215,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             )
             .unwrap();
             let public_key = PublicKey::from_secret_key(&secret_key);
-            let vrf = ECVRF::new(secret_key);
-            let pub_affine: Affine = public_key.into();
-            let point = vrf.hash_to_curve_prefix(&Scalar::from_int(1), pub_affine);
-            println!("x: {}", hex::encode(point.x.b32()));
-            println!("y: {}", hex::encode(point.y.b32()));
+            println!(
+                "Address of public key: {}",
+                hex::encode(get_address(public_key))
+            );
         }
     };
 

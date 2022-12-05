@@ -40,7 +40,7 @@ impl ECVRF<'_> {
         }
     }
 
-    pub fn hash_to_curve_prefix(&self, alpha: &Scalar, pk: Affine) -> Affine {
+    pub fn hash_to_curve_prefix(&self, alpha: &Scalar, pk: &Affine) -> Affine {
         let mut tpk = pk.clone();
         tpk.x.normalize();
         tpk.y.normalize();
@@ -55,20 +55,9 @@ impl ECVRF<'_> {
         ]
         .concat();
         let mut rv = new_candidate_point(&packed);
-        println!(
-            "hash_to_curve_prefix(0) 0x{} 0x{}",
-            hex::encode(rv.x.b32()),
-            hex::encode(rv.y.b32())
-        );
-
         while is_on_curve(&rv) {
             let bytes_rv = [rv.y.b32().to_vec(), rv.y.b32().to_vec()].concat();
             rv = new_candidate_point(&bytes_rv);
-            println!(
-                "hash_to_curve_prefix(1) 0x{} 0x{}",
-                hex::encode(rv.x.b32()),
-                hex::encode(rv.y.b32())
-            );
         }
         rv
     }
@@ -120,9 +109,11 @@ impl ECVRF<'_> {
         pub_affine.x.normalize();
         pub_affine.y.normalize();
 
-        let h = self.hash_to_curve(alpha, Option::from(&pub_affine));
+        // Old approach H = ECVRF_hash_to_curve(alpha, public_key)
+        // let h = self.hash_to_curve(alpha, Option::from(&pub_affine));
+        // On-chain compatible HASH_TO_CURVE
+        let h = self.hash_to_curve_prefix(alpha, &pub_affine);
 
-        // H = ECVRF_hash_to_curve(alpha, public_key)
         // gamma = H * secret_key
         let gamma = ecmult(self.ctx_mul, &h, &secret_key);
 
@@ -159,7 +150,11 @@ impl ECVRF<'_> {
         assert!(vrf_proof.gamma.is_valid_var());
 
         // H = ECVRF_hash_to_curve(alpha, pk)
-        let h = self.hash_to_curve(alpha, Option::from(&pub_affine));
+        // We disable the old hash to curve
+        // let h = self.hash_to_curve(alpha, Option::from(&pub_affine));
+
+        // We use new hash to curve function to make sure it's compatible with new on-chain verification
+        let h = self.hash_to_curve_prefix(alpha, &pub_affine);
         let mut jh = Jacobian::default();
         jh.set_ge(&h);
 
@@ -210,7 +205,8 @@ impl ECVRF<'_> {
         assert!(vrf_proof.gamma.is_valid_var());
 
         // H = ECVRF_hash_to_curve(alpha, pk)
-        let h = self.hash_to_curve(alpha, Option::from(&pub_affine));
+        // let h = self.hash_to_curve(alpha, Option::from(&pub_affine));
+        let h = self.hash_to_curve_prefix(alpha, &pub_affine);
         let mut jh = Jacobian::default();
         jh.set_ge(&h);
 

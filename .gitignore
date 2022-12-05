@@ -17,3 +17,7 @@ target
 .DS_store
 .env
 *.db
+node_modules/
+cache
+artifacts
+typechain-types

@@ -134,8 +134,9 @@ pub fn field_hash(b: &Vec<u8>) -> Field {
         );
     }
     let mut f = Field::default();
-    f.set_b32(&s.b32());
-    f.normalize();
+    if !f.set_b32(&s.b32()) {
+        f.normalize();
+    }
     f
 }
 
