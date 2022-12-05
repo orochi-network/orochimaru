@@ -174,10 +174,10 @@ impl ECVRF<'_> {
         v.x.normalize();
         v.y.normalize();
         v.z.normalize();
-        // Invert do not guarantee that z is normalized
-        // We need to normalize it after we done the invert
-        v.z.inv();
-        v.z.normalize();
+        // Inverse do not guarantee that z is normalized
+        // We need to normalize it after we done the inverse
+        let mut inverse_z = v.z.inv();
+        inverse_z.normalize();
 
         ECVRFContractProof {
             pk: self.public_key,
@@ -188,7 +188,7 @@ impl ECVRF<'_> {
             witness_address: calculate_witness_scalar(&jacobian_to_affine(&u)),
             witness_gamma,
             witness_hash,
-            invert_z: v.z,
+            inverse_z,
         }
     }
 

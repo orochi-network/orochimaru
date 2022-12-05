@@ -21,7 +21,7 @@ pub struct Model {
     pub witness_address: String,
     pub witness_gamma: String,
     pub witness_hash: String,
-    pub invert_z: String,
+    pub inverse_z: String,
     #[serde(skip_deserializing)]
     pub created_date: String,
 }

@@ -7,23 +7,23 @@ let deployerSigner: SignerWithAddress;
 let orochiECVRF: OrochiECVRF;
 
 const pk =
-  '0493294ac85bb373848df6f451f10a7c7f98001592c192e3436d3ad891c59a75db7439e95c7376ecdb6053b77c634829876ac7c0d13d067e0da45affb488e9cb55';
+  '0446b01e9550b56f3655dbca90cfe6b31dec3ff137f825561c563444096803531e9d4f6e8329d300483a919b63843174f1fca692fc6d2c07b985f72386e4edc846';
 const record = {
   network: 56,
-  epoch: 8,
-  alpha: '106a2627931e2befd150a5f18273513d7a6fcaab5628db3f6c418bf3214b67e4',
+  epoch: 0,
+  alpha: '5edbe535ac7de33f974d8e717e5ce590cb44000459a2785c57b533bbd5d2d20e',
   gamma:
-    '6c78a9a72b5a1e11c0215ee5505c35cf2f12aec60e39fdd744bd3facf756a2b22a95bba215983e8f06d2b334ac8d04164f0098c5b5a9ec0d938067c267231a80',
-  c: '3b30a9d94140ca6221f45e7b89288e384b1144ec5f03695e3a2e1e0098395447',
-  s: '5e550324818eddd9c4080850942b497f2bb5e01bc831de3340f61696ecb36f0c',
-  y: '966aa2eaf718fe794a3db4428b5b3a445cad91843267925992d11f5dd8500de2',
-  witness_address: '02357554c46646179abb8aa4767d21cf4ccb9338',
+    '2efb72bf04c24c82efe2a5dc277c4f5aad00342c55713ef77c8f6af08c65bbc3729e8c9bec201f51c5a00989d810731f86303d3ec6d123c9a428cdb24207dcf8',
+  c: 'a34bc311c42bc09c910cd36eb5f4acb6fdfd1202ac1f20c3a3a3f453c15972fd',
+  s: '9aa193c9a46ec021745898ebe6ab67f0c969ebf53575b12728598b1e9959f029',
+  y: 'b6b5c4f4b41d6d54fc1ca5d8e18032f5aab5bd3d04a2a60ba23398f239581f6d',
+  witness_address: '79f96b1c1a0def2f4f54687dfc4f4b762e5e69ae',
   witness_gamma:
-    'e59e2cc9f65c389257c08f329edc8f4805b4ffc19a7df5dfa56ee39ea87ff9ca32e559c051cfcb26e808b6f0474570216ea41a45fdf15b3af0f48efb7bfa8e41',
+    '899b0d0d55796359a66e86a3bc77b7d2abd7c16e15571c808e24c640150281a1f354b68f41abee30a7f6fc42c4db7d9beaf04005755ed8bffc6f69285acd88d8',
   witness_hash:
-    '67b36a0021b1228d02cd1eabca074d14317a15815bfbe64b5f888067b95525dbd907617e04a7da5bbfdc720d211299f4c97983a60ca554d1faadd4a78dfd2ebb',
-  invert_z: '17d9767cacef4b054fca51fad0b0142c703b3bd8152d6019d744c74813ef819a',
-  created_date: '2022-12-05 12:56:02',
+    'c8617c7eaf21cf012032bf816f6fb76743406c09d111c6e7af5da32201a54e961758440fb828be1615a5a3d3c39b72f461b8f148413606de55e719b1660efc7f',
+  inverse_z: '7b27aa7a893ac27bb732694a7b747f67101015c9ecc7eed47215882873738406',
+  created_date: '2022-12-05 13:28:44',
 };
 
 const optimus = ((e) => {
@@ -36,7 +36,7 @@ const optimus = ((e) => {
     uWitness: `0x${e.witness_address}`,
     cGammaWitness: [`0x${e.witness_gamma.substring(0, 64)}`, `0x${e.witness_gamma.substring(64, 128)}`],
     sHashWitness: [`0x${e.witness_hash.substring(0, 64)}`, `0x${e.witness_hash.substring(64, 128)}`],
-    zInv: `0x${e.invert_z}`,
+    zInv: `0x${e.inverse_z}`,
   };
 })(record);
 
@@ -52,8 +52,8 @@ describe('Orochi ECVRF', function () {
   it('HASH_TO_CURVE_PREFIX must be on the curve', async () => {
     const [x, y] = await orochiECVRF.hashToCurvePrefix(optimus.pk as any, optimus.seed);
     console.log(`\thashToCurvePrefix()\n \tx: ${x.toHexString()}\n \ty: ${y.toHexString()}`);
-    expect(x.toHexString()).to.eq('0x6eb6547c9ac3f1a2f821b026f07be611bc9aaa3a4e8b01288f0a527c6e0a0237');
-    expect(y.toHexString()).to.eq('0xd1ca711d58f789b646abe394117912d19c22ab159ee31854f6fcfef2449eff22');
+    expect(x.toHexString()).to.eq('0xf8beceefa45d296742a3aef516bbb7a4ffcaff61c13b4714aaba5e5a8df2826a');
+    expect(y.toHexString()).to.eq('0x34373f427e5888f49339beb583f5f320d1cda88b575db29681c90d3e934e081c');
   });
 
   it('elliptic curve multiple must be correct', async () => {
@@ -61,8 +61,7 @@ describe('Orochi ECVRF', function () {
     expect(result).to.eq(true);
   });
 
-  /*
-  it('should able to verify the proof', async () => {
+  /*it('should able to verify the proof', async () => {
     const output = await orochiECVRF.verifyProof(optimus as any, optimus.seed);
     console.log(`\tverifyProof()\n \toutput: ${await output.toHexString()}`);
   });*/

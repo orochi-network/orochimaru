@@ -49,7 +49,7 @@ impl MigrationTrait for Migration {
                     )
                     .col(ColumnDef::new(Randomness::WitnessGamma).string().not_null())
                     .col(ColumnDef::new(Randomness::WitnessHash).string().not_null())
-                    .col(ColumnDef::new(Randomness::InvertZ).string().not_null())
+                    .col(ColumnDef::new(Randomness::InverseZ).string().not_null())
                     .col(
                         ColumnDef::new(Randomness::CreatedDate)
                             .timestamp()
@@ -99,6 +99,6 @@ enum Randomness {
     WitnessAddress,
     WitnessGamma,
     WitnessHash,
-    InvertZ,
+    InverseZ,
     CreatedDate,
 }

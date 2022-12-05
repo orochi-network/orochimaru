@@ -136,7 +136,7 @@ async fn orand(
                             "witness_address": hex::encode(contract_proof.witness_address.b32())[24..64],
                             "witness_gamma": hex::encode(&witness_gamma),
                             "witness_hash": hex::encode(&witness_hash),
-                            "invert_z": hex::encode(contract_proof.invert_z.b32()),
+                            "inverse_z": hex::encode(contract_proof.inverse_z.b32()),
                         }))
                         .await
                         .unwrap();

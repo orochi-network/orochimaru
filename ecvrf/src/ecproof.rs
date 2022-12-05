@@ -22,7 +22,7 @@ pub struct ECVRFContractProof {
     pub witness_address: Scalar,
     pub witness_gamma: Affine,
     pub witness_hash: Affine,
-    pub invert_z: Field,
+    pub inverse_z: Field,
 }
 
 impl ECVRFProof {
