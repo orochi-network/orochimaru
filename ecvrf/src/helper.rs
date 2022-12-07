@@ -32,7 +32,7 @@ pub fn affine_composer(x: &Field, y: &Field) -> Affine {
 
 pub fn projective_sub(a: &Affine, b: &Affine) -> Affine {
     let mut c = Affine::default();
-    c.x = b.y * a.x + a.y * b.x.inv();
+    c.x = b.y * a.x + a.y * b.x.neg(1);
     c.y = a.y * b.y;
     c.x.normalize();
     c.y.normalize();
@@ -53,7 +53,7 @@ pub fn projective_add(a: &Affine, b: &Affine) -> Jacobian {
     let mut l = Affine::default();
     let (z1, z2) = (Field::from_int(1), Field::from_int(1));
 
-    l.set_xy(&(b.y + a.y.inv()), &(b.x + a.x.inv()));
+    l.set_xy(&(b.y + a.y.neg(1)), &(b.x + a.x.neg(1)));
 
     let s1 = projective_mul(&l, &l);
     let s1 = projective_sub(&s1, &affine_composer(&a.x, &z1));

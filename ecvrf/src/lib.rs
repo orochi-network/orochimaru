@@ -208,15 +208,13 @@ impl ECVRF<'_> {
         self.ctx_mul
             .ecmult(&mut u, &pub_jacobian, &vrf_proof.c, &vrf_proof.s);
 
-        // V = c * gamma + s * H = witness_gamma + witness_hash
-        let mut v = Jacobian::default();
         // Gamma witness
         let witness_gamma = ecmult(self.ctx_mul, &vrf_proof.gamma, &vrf_proof.c);
         // Hash witness
         let witness_hash = ecmult(self.ctx_mul, &h, &vrf_proof.s);
 
-        v.set_ge(&witness_gamma);
-        v = v.add_ge(&witness_hash);
+        // V = c * gamma + s * H = witness_gamma + witness_hash
+        let v = projective_add(&witness_gamma, &witness_hash);
 
         // c_prime = ECVRF_hash_points(G, H, pk, gamma, U, V)
         let computed_c = self.hash_points(

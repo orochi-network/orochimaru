@@ -10,20 +10,20 @@ const pk =
   '0446b01e9550b56f3655dbca90cfe6b31dec3ff137f825561c563444096803531e9d4f6e8329d300483a919b63843174f1fca692fc6d2c07b985f72386e4edc846';
 const record = {
   network: 56,
-  epoch: 7,
-  alpha: 'b3866212fe4b7e03b46c16c5b45f2d9a201cada6167e02f738831da21d895852',
+  epoch: 10,
+  alpha: '1fa113d5fda4935ae88a665d220e8483ad3303b860ba7e136cbcbf4fc5fcc865',
   gamma:
-    'e2041474892122489b637bb6c5a4a45d7fb1c3b198d314a4739f44894c4ddf2113df30cbe09df55ba1734216f0d0ee27dde8c41dae4407c5c1f6de2325ea1e01',
-  c: '9a4a7ba746b1e548d8990e7bb079e8ee93ce1ad580a23aed5a3e0c8cb5b236ec',
-  s: 'c66309a076e95afab55a993d136faeea123d93bc82f69789eb596d1909256215',
-  y: '216facfab1a89f21fec547b377d30b0ffda4e3833bb2d2fbe00a4f93be7f029e',
-  witness_address: 'fe1d94b5a77f022bcb71457b4b4f5feffb29685a',
+    '79f98a0e2293432b9706f33e5f21b1c656f2d6c447988efd25d8b056963354b52e7da559d4d3053ffe1d747e87b507d1b6717f26f255dd873285e7f089dcd721',
+  c: '20c2b975d232b886d7f5dfb4d51a1b18372656a856e79a9a32692265e4d708cd',
+  s: '69201e59f665a096c6cecde87e5b87fb1ccfb9dc5e6ec6469ac8c733cab2c891',
+  y: 'e96c662e45641b3ac9393fb5a7f95b726ee7c5a2619eb24e2bb53f05448317d5',
+  witness_address: 'a25a7fd42357658a32d473b4ae56f89ccabb3dfe',
   witness_gamma:
-    '925fb8d67437ead8a978c36d7639a9b5daf5b8ffe8ca40939e6d73a2ef6fc3c4d0ffa85e03d0915d2c0fcc5df74e1bf94a91819cb58bc00cf1e4fced8392f72f',
+    '15abbf759fd7f595ea4c0928092147b637a495b386aee5fbe345d7434ba81df8f49acc18297b7973ea785bb7a09f8266bdd243245c5bf34d7bab484b22cae430',
   witness_hash:
-    '99ba09f09318eaa79da47476f3ee6827f5c884acdf7549c5fd018dd0915d3fc08c05d64fa96d182d174ba4b7f200e9b76acb031dab44d945f8fd22c752ecef6a',
-  inverse_z: '352b54afe7151a188282104078ad2adfb0927fbc87b6a68d14096776ab782820',
-  created_date: '2022-12-07 08:40:28',
+    '753222d7bc194dcbc6d3cc401b73b37cd2873c45b1b7056c1803b55fa90357c3365e0d773267ce11f074b3af13da6b518b13def2217e46e3212a07de91106273',
+  inverse_z: 'bae37b5568bab9da66834e6145ae0680dfcfe01ea0f9899d584472d0beffaf10',
+  created_date: '2022-12-07 09:34:38',
 };
 
 const optimus = ((e) => {
@@ -52,8 +52,8 @@ describe('Orochi ECVRF', function () {
   it('HASH_TO_CURVE_PREFIX must be on the curve', async () => {
     const [x, y] = await orochiECVRF.hashToCurvePrefix(optimus.pk as any, optimus.seed);
     console.log(`\thashToCurvePrefix()\n \tx: ${x.toHexString()}\n \ty: ${y.toHexString()}`);
-    expect(x.toHexString()).to.eq('0x058e60df141811e2769ca6483891de63d70af76d388beac7f2cb0e38d4123d31');
-    expect(y.toHexString()).to.eq('0xb2db93da00609079acda30d69e620ec0b77471b1ccde2757fb99969ed64352d0');
+    expect(x.toHexString()).to.eq('0x1b4eb2b03b4f702b8d23ffca4c19ace1b389f95c5819a4678e5fea21bd73e393');
+    expect(y.toHexString()).to.eq('0x1b4eb2b03b4f702b8d23ffca4c19ace1b389f95c5819a4678e5fea21bd73e393');
   });
 
   it('elliptic curve multiple must be correct', async () => {
