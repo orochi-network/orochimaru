@@ -22,6 +22,63 @@ const RAW_FIELD_SIZE: [u32; 8] = [
 
 const FIELD_SIZE: Scalar = Scalar(RAW_FIELD_SIZE);
 
+pub fn affine_composer(x: &Field, y: &Field) -> Affine {
+    let mut r = Affine::default();
+    r.set_xy(x, y);
+    r.x.normalize();
+    r.y.normalize();
+    r
+}
+
+pub fn projective_sub(a: &Affine, b: &Affine) -> Affine {
+    let mut c = Affine::default();
+    c.x = b.y * a.x + a.y * b.x.inv();
+    c.y = a.y * b.y;
+    c.x.normalize();
+    c.y.normalize();
+    c
+}
+
+pub fn projective_mul(a: &Affine, b: &Affine) -> Affine {
+    let mut c = Affine::default();
+    c.x = a.x * b.x;
+    c.y = a.y * b.y;
+    c.x.normalize();
+    c.y.normalize();
+    c
+}
+
+pub fn projective_add(a: &Affine, b: &Affine) -> Jacobian {
+    let mut r = Jacobian::default();
+    let mut l = Affine::default();
+    let (z1, z2) = (Field::from_int(1), Field::from_int(1));
+
+    l.set_xy(&(b.y + a.y.inv()), &(b.x + a.x.inv()));
+
+    let s1 = projective_mul(&l, &l);
+    let s1 = projective_sub(&s1, &affine_composer(&a.x, &z1));
+    let s1 = projective_sub(&s1, &affine_composer(&b.x, &z2));
+
+    let s2 = projective_sub(&affine_composer(&a.x, &z1), &s1);
+    let s2 = projective_mul(&s2, &l);
+    let s2 = projective_sub(&s2, &affine_composer(&a.y, &z1));
+
+    if s1.y != s2.y {
+        r.x = s1.x * s2.y;
+        r.y = s2.x * s1.y;
+        r.z = s1.y * s2.y;
+    } else {
+        r.x = s1.x;
+        r.y = s2.x;
+        r.z = s1.y;
+    }
+
+    r.x.normalize();
+    r.y.normalize();
+    r.z.normalize();
+    r
+}
+
 // Perform multiplication between a point and a value: a*P
 pub fn ecmult(context: &ECMultContext, a: &Affine, na: &Scalar) -> Affine {
     let mut rj = Jacobian::default();

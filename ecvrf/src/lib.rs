@@ -10,7 +10,7 @@ use crate::{
     ecproof::ECVRFProof,
     helper::{
         calculate_witness_scalar, ecmult, ecmult_gen, jacobian_to_affine, keccak256_affine,
-        normalize_scalar, randomize,
+        normalize_scalar, projective_add, randomize,
     },
 };
 
@@ -163,17 +163,13 @@ impl ECVRF<'_> {
         self.ctx_mul
             .ecmult(&mut u, &pub_jacobian, &vrf_proof.c, &vrf_proof.s);
 
-        // V = c * gamma + s * H = witness_gamma + witness_hash
-        let mut v = Jacobian::default();
         // Gamma witness
         let witness_gamma = ecmult(self.ctx_mul, &vrf_proof.gamma, &vrf_proof.c);
         // Hash witness
         let witness_hash = ecmult(self.ctx_mul, &h, &vrf_proof.s);
-        v.set_ge(&witness_gamma);
-        v = v.add_ge(&witness_hash);
-        v.x.normalize();
-        v.y.normalize();
-        v.z.normalize();
+        // V = c * gamma + s * H = witness_gamma + witness_hash
+        let v = projective_add(&witness_gamma, &witness_hash);
+
         // Inverse do not guarantee that z is normalized
         // We need to normalize it after we done the inverse
         let mut inverse_z = v.z.inv();
