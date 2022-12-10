@@ -20,7 +20,7 @@ const RAW_FIELD_SIZE: [u32; 8] = [
     0xFFFFFC2F, 0xFFFFFFFE, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
 ];
 
-const FIELD_SIZE: Scalar = Scalar(RAW_FIELD_SIZE);
+pub const FIELD_SIZE: Scalar = Scalar(RAW_FIELD_SIZE);
 
 pub fn affine_composer(x: &Field, y: &Field) -> Affine {
     let mut r = Affine::default();
@@ -48,7 +48,7 @@ pub fn projective_mul(a: &Affine, b: &Affine) -> Affine {
     c
 }
 
-pub fn projective_add(a: &Affine, b: &Affine) -> Jacobian {
+pub fn projective_ec_add(a: &Affine, b: &Affine) -> Jacobian {
     let mut r = Jacobian::default();
     let mut l = Affine::default();
     let (z1, z2) = (Field::from_int(1), Field::from_int(1));
@@ -186,9 +186,20 @@ pub fn field_hash(b: &Vec<u8>) -> Field {
     f
 }
 
+// Return true if a > b
 pub fn scalar_is_gt(a: &Scalar, b: &Scalar) -> bool {
     for i in (0..a.0.len()).rev() {
         if a.0[i] > b.0[i] {
+            return true;
+        }
+    }
+    false
+}
+
+// Return true if a >= b
+pub fn scalar_is_gte(a: &Scalar, b: &Scalar) -> bool {
+    for i in (0..a.0.len()).rev() {
+        if a.0[i] >= b.0[i] {
             return true;
         }
     }

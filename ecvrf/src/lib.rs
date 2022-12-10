@@ -1,18 +1,16 @@
-use ecproof::ECVRFContractProof;
-use helper::{address_to_scalar, calculate_witness_address, is_on_curve, new_candidate_point};
+use crate::{
+    ecproof::{ECVRFContractProof, ECVRFProof},
+    helper::{
+        address_to_scalar, calculate_witness_address, ecmult, ecmult_gen, is_on_curve,
+        jacobian_to_affine, keccak256_affine, new_candidate_point, normalize_scalar,
+        projective_ec_add, randomize, scalar_is_gte, FIELD_SIZE,
+    },
+};
 use libsecp256k1::{
     curve::{Affine, ECMultContext, ECMultGenContext, Field, Jacobian, Scalar, AFFINE_G},
     PublicKey, SecretKey, ECMULT_CONTEXT, ECMULT_GEN_CONTEXT,
 };
 use tiny_keccak::{Hasher, Keccak};
-
-use crate::{
-    ecproof::ECVRFProof,
-    helper::{
-        ecmult, ecmult_gen, jacobian_to_affine, keccak256_affine, normalize_scalar, projective_add,
-        randomize,
-    },
-};
 
 pub mod ecproof;
 pub mod helper;
@@ -127,34 +125,46 @@ impl ECVRF<'_> {
         r
     }
 
+    // We use this method to prove a randomness for L1 smart contract
+    // This prover was optimized for on-chain verification
+    // u_witness is a represent of u, used ecrecover to minimize gas cost
+    // we're also add projective EC add to make the proof compatible with
+    // on-chain verifier.
     pub fn prove_contract(self, alpha: &Scalar) -> ECVRFContractProof {
         let mut pub_affine: Affine = self.public_key.into();
         let mut secret_key: Scalar = self.secret_key.into();
         pub_affine.x.normalize();
         pub_affine.y.normalize();
 
-        // Old approach H = ECVRF_hash_to_curve(alpha, public_key)
-        // let h = self.hash_to_curve(alpha, Option::from(&pub_affine));
-        // On-chain compatible HASH_TO_CURVE
+        // On-chain compatible HASH_TO_CURVE_PREFIX
         let h = self.hash_to_curve_prefix(alpha, &pub_affine);
 
-        // gamma = H * secret_key
+        // gamma = H * sk
         let gamma = ecmult(self.ctx_mul, &h, &secret_key);
 
         // k = random()
-        let k = randomize();
+        // We need to make sure that k < FIELD_SIZE
+        let mut k = randomize();
+        while scalar_is_gte(&k, &FIELD_SIZE) {
+            k = randomize();
+        }
 
         // Calculate k * G = u
         let kg = ecmult_gen(self.ctx_gen, &k);
+        // U = c * pk + s * G
+        // u_witness = ecrecover(c * pk + s * G)
+        // this value equal to address(keccak256(U))
+        // It's a gas optimization for EVM
+        // https://ethresear.ch/t/you-can-kinda-abuse-ecrecover-to-do-ecmul-in-secp256k1-today/2384
         let u_witness = calculate_witness_address(&kg);
 
         // Calculate k * H = v
         let kh = ecmult(self.ctx_mul, &h, &k);
 
-        // c = ECVRF_hash_points(G, H, public_key, gamma, k * G, k * H)
+        // c = ECVRF_hash_points_prefix(H, pk, gamma, u_witness, k * H)
         let c = self.hash_points_prefix(&h, &pub_affine, &gamma, &u_witness, &kh);
 
-        // s = (k - c * secret_key) mod p
+        // s = (k - c * sk)
         let mut neg_c = c.clone();
         neg_c.cond_neg_assign(1.into());
         let s = normalize_scalar(&(k + neg_c * secret_key));
@@ -163,6 +173,7 @@ impl ECVRF<'_> {
         // Gamma witness
         // witness_gamma = gamma * c
         let witness_gamma = ecmult(self.ctx_mul, &gamma, &c);
+
         // Hash witness
         // witness_hash = h * s
         let witness_hash = ecmult(self.ctx_mul, &h, &s);
@@ -171,7 +182,7 @@ impl ECVRF<'_> {
         //   = c * gamma + s * H
         //   = c * (sk * H) + (k - c * sk) * H
         //   = k * H
-        let v = projective_add(&witness_gamma, &witness_hash);
+        let v = projective_ec_add(&witness_gamma, &witness_hash);
 
         // Inverse do not guarantee that z is normalized
         // We need to normalize it after we done the inverse
@@ -198,21 +209,19 @@ impl ECVRF<'_> {
         pub_affine.x.normalize();
         pub_affine.y.normalize();
 
-        // Old approach H = ECVRF_hash_to_curve(alpha, public_key)
-        // let h = self.hash_to_curve(alpha, Option::from(&pub_affine));
-        // On-chain compatible HASH_TO_CURVE
-        let h = self.hash_to_curve_prefix(alpha, &pub_affine);
+        let h = self.hash_to_curve(alpha, Some(&pub_affine));
 
         // gamma = H * secret_key
         let gamma = ecmult(self.ctx_mul, &h, &secret_key);
 
         // k = random()
-        let k = randomize();
+        // We need to make sure that k < FIELD_SIZE
+        let mut k = randomize();
+        while scalar_is_gte(&k, &FIELD_SIZE) {
+            k = randomize();
+        }
 
         // Calculate k * G <=> u
-        // U = c * pk + s * G
-        //   = c * sk * G + (k - c * sk) * G
-        //   = k * G
         let kg = ecmult_gen(self.ctx_gen, &k);
 
         // Calculate k * H <=> v
@@ -242,12 +251,13 @@ impl ECVRF<'_> {
         assert!(vrf_proof.gamma.is_valid_var());
 
         // H = ECVRF_hash_to_curve(alpha, pk)
-        // let h = self.hash_to_curve(alpha, Option::from(&pub_affine));
-        let h = self.hash_to_curve_prefix(alpha, &pub_affine);
+        let h = self.hash_to_curve(alpha, Some(&pub_affine));
         let mut jh = Jacobian::default();
         jh.set_ge(&h);
 
         // U = c * pk + s * G
+        //   = c * sk * G + (k - c * sk) * G
+        //   = k * G
         let mut u = Jacobian::default();
         let pub_jacobian = Jacobian::from_ge(&pub_affine);
         self.ctx_mul
@@ -259,7 +269,9 @@ impl ECVRF<'_> {
         let witness_hash = ecmult(self.ctx_mul, &h, &vrf_proof.s);
 
         // V = c * gamma + s * H = witness_gamma + witness_hash
-        let v = projective_add(&witness_gamma, &witness_hash);
+        //   = c * sk * H + (k - c * sk) * H
+        //   = k *. H
+        let v = Jacobian::from_ge(&witness_gamma).add_ge(&witness_hash);
 
         // c_prime = ECVRF_hash_points(G, H, pk, gamma, U, V)
         let computed_c = self.hash_points(
@@ -274,6 +286,7 @@ impl ECVRF<'_> {
         // y = keccak256(gama.encode())
         let computed_y = keccak256_affine(&vrf_proof.gamma);
 
+        // computed values should equal to the real one
         computed_c.eq(&vrf_proof.c) && computed_y.eq(&vrf_proof.y)
     }
 }
