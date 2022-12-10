@@ -108,9 +108,10 @@ async fn orand(
                         }
                     };
 
-                    let proof = vrf.prove(&current_alpha);
-                    let gamma = [proof.gamma.x.b32(), proof.gamma.y.b32()].concat();
-                    let contract_proof = vrf.proof_transform(&current_alpha, &proof);
+                    let contract_proof = vrf.prove_contract(&current_alpha);
+
+                    let gamma =
+                        [contract_proof.gamma.x.b32(), contract_proof.gamma.y.b32()].concat();
                     let witness_gamma = [
                         contract_proof.witness_gamma.x.b32(),
                         contract_proof.witness_gamma.y.b32(),
@@ -130,9 +131,9 @@ async fn orand(
                             "epoch": next_epoch,
                             "alpha":hex::encode(current_alpha.b32()),
                             "gamma":hex::encode(&gamma),
-                            "c":hex::encode(&proof.c.b32()),
-                            "s":hex::encode(&proof.s.b32()),
-                            "y":hex::encode(&proof.y.b32()),
+                            "c":hex::encode(&contract_proof.c.b32()),
+                            "s":hex::encode(&contract_proof.s.b32()),
+                            "y":hex::encode(&contract_proof.y.b32()),
                             "witness_address": hex::encode(contract_proof.witness_address.b32())[24..64],
                             "witness_gamma": hex::encode(&witness_gamma),
                             "witness_hash": hex::encode(&witness_hash),

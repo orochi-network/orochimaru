@@ -133,12 +133,11 @@ pub fn calculate_witness_address(witness: &Affine) -> [u8; 20] {
     output[12..32].try_into().unwrap()
 }
 
-pub fn calculate_witness_scalar(witness: &Affine) -> Scalar {
-    let bytes = calculate_witness_address(witness);
+pub fn address_to_scalar(witness_address: &[u8; 20]) -> Scalar {
     let mut temp_bytes = [0u8; 32];
     let mut scalar_address = Scalar::default();
     for i in 0..20 {
-        temp_bytes[12 + i] = bytes[i];
+        temp_bytes[12 + i] = witness_address[i];
     }
     scalar_address.set_b32(&temp_bytes).unwrap_u8();
     scalar_address

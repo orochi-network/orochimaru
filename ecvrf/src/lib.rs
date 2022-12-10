@@ -1,5 +1,5 @@
 use ecproof::ECVRFContractProof;
-use helper::{is_on_curve, new_candidate_point};
+use helper::{address_to_scalar, calculate_witness_address, is_on_curve, new_candidate_point};
 use libsecp256k1::{
     curve::{Affine, ECMultContext, ECMultGenContext, Field, Jacobian, Scalar, AFFINE_G},
     PublicKey, SecretKey, ECMULT_CONTEXT, ECMULT_GEN_CONTEXT,
@@ -9,8 +9,8 @@ use tiny_keccak::{Hasher, Keccak};
 use crate::{
     ecproof::ECVRFProof,
     helper::{
-        calculate_witness_scalar, ecmult, ecmult_gen, jacobian_to_affine, keccak256_affine,
-        normalize_scalar, projective_add, randomize,
+        ecmult, ecmult_gen, jacobian_to_affine, keccak256_affine, normalize_scalar, projective_add,
+        randomize,
     },
 };
 
@@ -102,6 +102,96 @@ impl ECVRF<'_> {
         r
     }
 
+    // keccak256 cheaper on Ethereum
+    // SCALAR_FROM_CURVE_POINTS_HASH_PREFIX = 2
+    pub fn hash_points_prefix(
+        &self,
+        hash: &Affine,
+        pk: &Affine,
+        gamma: &Affine,
+        u_witness: &[u8; 20],
+        v: &Affine,
+    ) -> Scalar {
+        let mut output = [0u8; 32];
+        let mut hasher = Keccak::v256();
+        let all_points = [hash, pk, gamma, v];
+        hasher.update(Scalar::from_int(2).b32().as_ref());
+        for point in all_points {
+            hasher.update(point.x.b32().as_ref());
+            hasher.update(point.y.b32().as_ref());
+        }
+        hasher.update(u_witness);
+        hasher.finalize(&mut output);
+        let mut r = Scalar::default();
+        r.set_b32(&output).unwrap_u8();
+        r
+    }
+
+    pub fn prove_contract(self, alpha: &Scalar) -> ECVRFContractProof {
+        let mut pub_affine: Affine = self.public_key.into();
+        let mut secret_key: Scalar = self.secret_key.into();
+        pub_affine.x.normalize();
+        pub_affine.y.normalize();
+
+        // Old approach H = ECVRF_hash_to_curve(alpha, public_key)
+        // let h = self.hash_to_curve(alpha, Option::from(&pub_affine));
+        // On-chain compatible HASH_TO_CURVE
+        let h = self.hash_to_curve_prefix(alpha, &pub_affine);
+
+        // gamma = H * secret_key
+        let gamma = ecmult(self.ctx_mul, &h, &secret_key);
+
+        // k = random()
+        let k = randomize();
+
+        // Calculate k * G = u
+        let kg = ecmult_gen(self.ctx_gen, &k);
+        let u_witness = calculate_witness_address(&kg);
+
+        // Calculate k * H = v
+        let kh = ecmult(self.ctx_mul, &h, &k);
+
+        // c = ECVRF_hash_points(G, H, public_key, gamma, k * G, k * H)
+        let c = self.hash_points_prefix(&h, &pub_affine, &gamma, &u_witness, &kh);
+
+        // s = (k - c * secret_key) mod p
+        let mut neg_c = c.clone();
+        neg_c.cond_neg_assign(1.into());
+        let s = normalize_scalar(&(k + neg_c * secret_key));
+        secret_key.clear();
+
+        // Gamma witness
+        // witness_gamma = gamma * c
+        let witness_gamma = ecmult(self.ctx_mul, &gamma, &c);
+        // Hash witness
+        // witness_hash = h * s
+        let witness_hash = ecmult(self.ctx_mul, &h, &s);
+
+        // V = witness_gamma + witness_hash
+        //   = c * gamma + s * H
+        //   = c * (sk * H) + (k - c * sk) * H
+        //   = k * H
+        let v = projective_add(&witness_gamma, &witness_hash);
+
+        // Inverse do not guarantee that z is normalized
+        // We need to normalize it after we done the inverse
+        let mut inverse_z = v.z.inv();
+        inverse_z.normalize();
+
+        ECVRFContractProof {
+            pk: self.public_key,
+            gamma,
+            c,
+            s,
+            y: keccak256_affine(&gamma),
+            alpha: *alpha,
+            witness_address: address_to_scalar(&u_witness),
+            witness_gamma,
+            witness_hash,
+            inverse_z,
+        }
+    }
+
     pub fn prove(&self, alpha: &Scalar) -> ECVRFProof {
         let mut pub_affine: Affine = self.public_key.into();
         let mut secret_key: Scalar = self.secret_key.into();
@@ -119,10 +209,13 @@ impl ECVRF<'_> {
         // k = random()
         let k = randomize();
 
-        // Calculate k * G
+        // Calculate k * G <=> u
+        // U = c * pk + s * G
+        //   = c * sk * G + (k - c * sk) * G
+        //   = k * G
         let kg = ecmult_gen(self.ctx_gen, &k);
 
-        // Calculate k * H
+        // Calculate k * H <=> v
         let kh = ecmult(self.ctx_mul, &h, &k);
 
         // c = ECVRF_hash_points(G, H, public_key, gamma, k * G, k * H)
@@ -138,54 +231,6 @@ impl ECVRF<'_> {
         let y = keccak256_affine(&gamma);
 
         ECVRFProof::new(gamma, c, s, y, self.public_key)
-    }
-
-    pub fn proof_transform(self, alpha: &Scalar, vrf_proof: &ECVRFProof) -> ECVRFContractProof {
-        let mut pub_affine: Affine = self.public_key.into();
-        pub_affine.x.normalize();
-        pub_affine.y.normalize();
-
-        assert!(pub_affine.is_valid_var());
-        assert!(vrf_proof.gamma.is_valid_var());
-
-        // H = ECVRF_hash_to_curve(alpha, pk)
-        // We disable the old hash to curve
-        // let h = self.hash_to_curve(alpha, Option::from(&pub_affine));
-
-        // We use new hash to curve function to make sure it's compatible with new on-chain verification
-        let h = self.hash_to_curve_prefix(alpha, &pub_affine);
-        let mut jh = Jacobian::default();
-        jh.set_ge(&h);
-
-        // U = c * pk + s * G
-        let mut u = Jacobian::default();
-        let pub_jacobian = Jacobian::from_ge(&pub_affine);
-        self.ctx_mul
-            .ecmult(&mut u, &pub_jacobian, &vrf_proof.c, &vrf_proof.s);
-
-        // Gamma witness
-        let witness_gamma = ecmult(self.ctx_mul, &vrf_proof.gamma, &vrf_proof.c);
-        // Hash witness
-        let witness_hash = ecmult(self.ctx_mul, &h, &vrf_proof.s);
-        // V = c * gamma + s * H = witness_gamma + witness_hash
-        let v = projective_add(&witness_gamma, &witness_hash);
-
-        // Inverse do not guarantee that z is normalized
-        // We need to normalize it after we done the inverse
-        let mut inverse_z = v.z.inv();
-        inverse_z.normalize();
-
-        ECVRFContractProof {
-            pk: self.public_key,
-            gamma: vrf_proof.gamma,
-            c: vrf_proof.c,
-            s: vrf_proof.s,
-            alpha: *alpha,
-            witness_address: calculate_witness_scalar(&jacobian_to_affine(&u)),
-            witness_gamma,
-            witness_hash,
-            inverse_z,
-        }
     }
 
     pub fn verify(self, alpha: &Scalar, vrf_proof: &ECVRFProof) -> bool {

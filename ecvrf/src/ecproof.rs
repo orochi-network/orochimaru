@@ -18,6 +18,7 @@ pub struct ECVRFContractProof {
     pub gamma: Affine,
     pub c: Scalar,
     pub s: Scalar,
+    pub y: Scalar,
     pub alpha: Scalar,
     pub witness_address: Scalar,
     pub witness_gamma: Affine,
