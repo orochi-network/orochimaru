@@ -173,7 +173,7 @@ pub fn field_hash(b: &Vec<u8>) -> Field {
     hasher.update(b);
     hasher.finalize(&mut output);
     s.set_b32(&output).unwrap_u8();
-    if scalar_is_gt(&s, &FIELD_SIZE) {
+    if scalar_is_gte(&s, &FIELD_SIZE) {
         let mut hasher = Keccak::v256();
         hasher.update(&output);
         hasher.finalize(&mut output);

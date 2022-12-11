@@ -54,7 +54,7 @@ impl ECVRF<'_> {
         .concat();
         let mut rv = new_candidate_point(&packed);
         while !is_on_curve(&rv) {
-            rv = new_candidate_point(&[rv.y.b32().to_vec(), rv.y.b32().to_vec()].concat());
+            rv = new_candidate_point(&rv.x.b32().to_vec());
         }
         rv
     }
