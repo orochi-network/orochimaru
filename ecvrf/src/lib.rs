@@ -29,6 +29,7 @@ pub struct ECVRF<'a> {
 }
 
 impl ECVRF<'_> {
+    // Create new instance of ECVRF from a secret key
     pub fn new(secret_key: SecretKey) -> Self {
         ECVRF {
             secret_key: secret_key,
@@ -38,12 +39,13 @@ impl ECVRF<'_> {
         }
     }
 
+    // Hash to curve with prefix
+    // HASH_TO_CURVE_HASH_PREFIX = 1
     pub fn hash_to_curve_prefix(&self, alpha: &Scalar, pk: &Affine) -> Affine {
         let mut tpk = pk.clone();
         tpk.x.normalize();
         tpk.y.normalize();
         let packed = [
-            // HASH_TO_CURVE_HASH_PREFIX = 1
             Field::from_int(1).b32().to_vec(),
             // pk
             tpk.x.b32().to_vec(),
@@ -59,6 +61,7 @@ impl ECVRF<'_> {
         rv
     }
 
+    // Hash to curve
     pub fn hash_to_curve(&self, alpha: &Scalar, y: Option<&Affine>) -> Affine {
         let mut r = Jacobian::default();
         self.ctx_gen.ecmult_gen(&mut r, alpha);
@@ -76,7 +79,7 @@ impl ECVRF<'_> {
         p
     }
 
-    // keccak256 cheaper on Ethereum
+    // Hash point to Scalar
     pub fn hash_points(
         &self,
         g: &Affine,
@@ -100,7 +103,7 @@ impl ECVRF<'_> {
         r
     }
 
-    // keccak256 cheaper on Ethereum
+    // Hash points with prefix
     // SCALAR_FROM_CURVE_POINTS_HASH_PREFIX = 2
     pub fn hash_points_prefix(
         &self,
@@ -203,12 +206,14 @@ impl ECVRF<'_> {
         }
     }
 
+    // Ordinary prover
     pub fn prove(&self, alpha: &Scalar) -> ECVRFProof {
         let mut pub_affine: Affine = self.public_key.into();
         let mut secret_key: Scalar = self.secret_key.into();
         pub_affine.x.normalize();
         pub_affine.y.normalize();
 
+        // Hash to a point on curve
         let h = self.hash_to_curve(alpha, Some(&pub_affine));
 
         // gamma = H * secret_key
@@ -242,6 +247,7 @@ impl ECVRF<'_> {
         ECVRFProof::new(gamma, c, s, y, self.public_key)
     }
 
+    // Ordinary verifier
     pub fn verify(self, alpha: &Scalar, vrf_proof: &ECVRFProof) -> bool {
         let mut pub_affine: Affine = self.public_key.into();
         pub_affine.x.normalize();

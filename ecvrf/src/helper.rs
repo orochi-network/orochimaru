@@ -270,3 +270,22 @@ pub fn generate_raw_keypair() -> RawKeyPair {
         secret_key,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{helper::randomize, ECVRF};
+    use libsecp256k1::{curve::Affine, SecretKey};
+
+    use super::{is_on_curve, new_candidate_point, random_bytes};
+
+    #[test]
+    fn point_must_be_on_curve() {
+        let mut buf = [0u8; 32];
+        random_bytes(&mut buf);
+        let mut rv = new_candidate_point(buf.to_vec().as_ref());
+        while !is_on_curve(&rv) {
+            rv = new_candidate_point(&rv.x.b32().to_vec());
+        }
+        assert!(is_on_curve(&rv));
+    }
+}
