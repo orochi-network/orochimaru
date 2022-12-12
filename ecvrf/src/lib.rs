@@ -2,8 +2,8 @@ use crate::{
     ecproof::{ECVRFContractProof, ECVRFProof},
     helper::{
         address_to_scalar, calculate_witness_address, ecmult, ecmult_gen, is_on_curve,
-        jacobian_to_affine, keccak256_affine, new_candidate_point, normalize_scalar,
-        projective_ec_add, randomize, scalar_is_gte, FIELD_SIZE,
+        jacobian_to_affine, keccak256_affine_scalar, new_candidate_point, projective_ec_add,
+        randomize, scalar_is_gte, FIELD_SIZE,
     },
 };
 use libsecp256k1::{
@@ -167,7 +167,7 @@ impl ECVRF<'_> {
         // s = (k - c * sk)
         let mut neg_c = c.clone();
         neg_c.cond_neg_assign(1.into());
-        let s = normalize_scalar(&(k + neg_c * secret_key));
+        let s = k + neg_c * secret_key;
         secret_key.clear();
 
         // Gamma witness
@@ -194,7 +194,7 @@ impl ECVRF<'_> {
             gamma,
             c,
             s,
-            y: keccak256_affine(&gamma),
+            y: keccak256_affine_scalar(&gamma),
             alpha: *alpha,
             witness_address: address_to_scalar(&u_witness),
             witness_gamma,
@@ -233,11 +233,11 @@ impl ECVRF<'_> {
         // s = (k - c * secret_key) mod p
         let mut neg_c = c.clone();
         neg_c.cond_neg_assign(1.into());
-        let s = normalize_scalar(&(k + neg_c * secret_key));
+        let s = k + neg_c * secret_key;
         secret_key.clear();
 
         // y = keccak256(gama.encode())
-        let y = keccak256_affine(&gamma);
+        let y = keccak256_affine_scalar(&gamma);
 
         ECVRFProof::new(gamma, c, s, y, self.public_key)
     }
@@ -284,7 +284,7 @@ impl ECVRF<'_> {
         );
 
         // y = keccak256(gama.encode())
-        let computed_y = keccak256_affine(&vrf_proof.gamma);
+        let computed_y = keccak256_affine_scalar(&vrf_proof.gamma);
 
         // computed values should equal to the real one
         computed_c.eq(&vrf_proof.c) && computed_y.eq(&vrf_proof.y)

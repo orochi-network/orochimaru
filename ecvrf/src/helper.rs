@@ -22,6 +22,7 @@ const RAW_FIELD_SIZE: [u32; 8] = [
 
 pub const FIELD_SIZE: Scalar = Scalar(RAW_FIELD_SIZE);
 
+// Compose Affine for its coordinate X,Y
 pub fn affine_composer(x: &Field, y: &Field) -> Affine {
     let mut r = Affine::default();
     r.set_xy(x, y);
@@ -30,6 +31,7 @@ pub fn affine_composer(x: &Field, y: &Field) -> Affine {
     r
 }
 
+// Projective sub, cost optimization for EVM
 pub fn projective_sub(a: &Affine, b: &Affine) -> Affine {
     let mut c = Affine::default();
     c.x = b.y * a.x + a.y * b.x.neg(1);
@@ -39,6 +41,7 @@ pub fn projective_sub(a: &Affine, b: &Affine) -> Affine {
     c
 }
 
+// Projective mul, cost optimization of EVM
 pub fn projective_mul(a: &Affine, b: &Affine) -> Affine {
     let mut c = Affine::default();
     c.x = a.x * b.x;
@@ -48,6 +51,7 @@ pub fn projective_mul(a: &Affine, b: &Affine) -> Affine {
     c
 }
 
+// Projective EC add
 pub fn projective_ec_add(a: &Affine, b: &Affine) -> Jacobian {
     let mut r = Jacobian::default();
     let mut l = Affine::default();
@@ -79,27 +83,6 @@ pub fn projective_ec_add(a: &Affine, b: &Affine) -> Jacobian {
     r
 }
 
-// Perform multiplication between a point and a value: a*P
-pub fn ecmult(context: &ECMultContext, a: &Affine, na: &Scalar) -> Affine {
-    let mut rj = Jacobian::default();
-    let temp_aj = Jacobian::from_ge(a);
-    context.ecmult(&mut rj, &temp_aj, na, &Scalar::from_int(0));
-    let mut ra = Affine::from_gej(&rj);
-    ra.x.normalize();
-    ra.y.normalize();
-    ra
-}
-
-// Perform multiplication between a value and G: a*G
-pub fn ecmult_gen(context: &ECMultGenContext, ng: &Scalar) -> Affine {
-    let mut r = Jacobian::default();
-    context.ecmult_gen(&mut r, &ng);
-    let mut ra = Affine::from_gej(&r);
-    ra.x.normalize();
-    ra.y.normalize();
-    ra
-}
-
 // Quick transform a Jacobian to Affine and also normalize it
 pub fn jacobian_to_affine(j: &Jacobian) -> Affine {
     let mut ra = Affine::from_gej(j);
@@ -108,31 +91,47 @@ pub fn jacobian_to_affine(j: &Jacobian) -> Affine {
     ra
 }
 
+// Perform multiplication between a point and a scalar: a * P
+pub fn ecmult(context: &ECMultContext, a: &Affine, na: &Scalar) -> Affine {
+    let mut rj = Jacobian::default();
+    context.ecmult(&mut rj, &Jacobian::from_ge(a), na, &Scalar::from_int(0));
+    jacobian_to_affine(&rj)
+}
+
+// Perform multiplication between a value and G: a * G
+pub fn ecmult_gen(context: &ECMultGenContext, ng: &Scalar) -> Affine {
+    let mut rj = Jacobian::default();
+    context.ecmult_gen(&mut rj, &ng);
+    jacobian_to_affine(&rj)
+}
+
+// Check point is on curve or not
 pub fn is_on_curve(point: &Affine) -> bool {
     y_squared(&point.x) == point.y * point.y
 }
 
-// Keccak a point
-pub fn keccak256_affine(a: &Affine) -> Scalar {
-    let mut r = Scalar::default();
+pub fn keccak256_affine(a: &Affine) -> [u8; 32] {
     let mut output = [0u8; 32];
     let mut hasher = Keccak::v256();
     hasher.update(a.x.b32().as_ref());
     hasher.update(a.y.b32().as_ref());
     hasher.finalize(&mut output);
-    r.set_b32(&output).unwrap_u8();
+    output
+}
+
+// Keccak a point
+pub fn keccak256_affine_scalar(a: &Affine) -> Scalar {
+    let mut r = Scalar::default();
+    r.set_b32(&keccak256_affine(&a)).unwrap_u8();
     r
 }
 
+// Calculate witness address from a point
 pub fn calculate_witness_address(witness: &Affine) -> [u8; 20] {
-    let mut output = [0u8; 32];
-    let mut hasher = Keccak::v256();
-    hasher.update(witness.x.b32().as_ref());
-    hasher.update(witness.y.b32().as_ref());
-    hasher.finalize(&mut output);
-    output[12..32].try_into().unwrap()
+    keccak256_affine(witness)[12..32].try_into().unwrap()
 }
 
+// Convert address to Scalar type
 pub fn address_to_scalar(witness_address: &[u8; 20]) -> Scalar {
     let mut temp_bytes = [0u8; 32];
     let mut scalar_address = Scalar::default();
@@ -143,6 +142,7 @@ pub fn address_to_scalar(witness_address: &[u8; 20]) -> Scalar {
     scalar_address
 }
 
+// Has a Public Key and return a Ethereum address
 pub fn get_address(pub_key: PublicKey) -> [u8; 20] {
     let mut affine_pub: Affine = pub_key.into();
     affine_pub.x.normalize();
@@ -155,17 +155,7 @@ pub fn get_address(pub_key: PublicKey) -> [u8; 20] {
     output[12..32].try_into().unwrap()
 }
 
-pub fn get_scalar_address(pub_key: PublicKey) -> Scalar {
-    let bytes = get_address(pub_key);
-    let mut temp_bytes = [0u8; 32];
-    let mut scalar_address = Scalar::default();
-    for i in 0..20 {
-        temp_bytes[12 + i] = bytes[i];
-    }
-    scalar_address.set_b32(&temp_bytes).unwrap_u8();
-    scalar_address
-}
-
+// Hash bytes array to a field
 pub fn field_hash(b: &Vec<u8>) -> Field {
     let mut s = Scalar::default();
     let mut output = [0u8; 32];
@@ -206,32 +196,35 @@ pub fn scalar_is_gte(a: &Scalar, b: &Scalar) -> bool {
     false
 }
 
+// Try to generate a point on the curve based on hashes
 pub fn new_candidate_point(b: &Vec<u8>) -> Affine {
-    let mut x = field_hash(b);
-    let mut y = y_squared(&x);
+    let mut r = Affine::default();
+    // X is a digest of field
+    r.x = field_hash(b);
+    // Y is a coordinate point, corresponding to x
+    (r.y, _) = y_squared(&r.x).sqrt();
+    r.x.normalize();
+    r.y.normalize();
+
+    // Get field size from scalar value
     let mut field_size = Field::default();
     if !field_size.set_b32(&FIELD_SIZE.b32()) {
         field_size.normalize();
     }
-    x.normalize();
-    (y, _) = y.sqrt();
-    y.normalize();
 
-    if y.is_odd() {
+    if r.y.is_odd() {
         // Negative of y
-        let mut invert_y = y.clone();
+        let mut invert_y = r.y.clone();
         invert_y = invert_y.neg(1);
         invert_y.normalize();
         // y = FIELD_SIZE - y
-        y = invert_y + field_size;
-        y.normalize();
+        r.y = invert_y + field_size;
+        r.y.normalize();
     }
-
-    let mut r = Affine::default();
-    r.set_xy(&x, &y);
     r
 }
 
+// Y squared, it was calculate by evaluate X
 pub fn y_squared(x: &Field) -> Field {
     let mut t = x.clone();
     // y^2 = x^3 + 7
@@ -240,17 +233,22 @@ pub fn y_squared(x: &Field) -> Field {
     t
 }
 
+// Random bytes array
+pub fn random_bytes(buf: &mut [u8]) {
+    let mut rng = thread_rng();
+    rng.fill_bytes(buf);
+}
+
 // Random Scalar
 pub fn randomize() -> Scalar {
-    let mut rng = thread_rng();
-    let mut random_bytes = [0u8; 32];
-    rng.fill_bytes(&mut random_bytes);
     let mut result = Scalar::default();
-    result.set_b32(&random_bytes).unwrap_u8();
+    let mut buf = [0u8; 32];
+    random_bytes(&mut buf);
+    result.set_b32(&buf).unwrap_u8();
     result
 }
 
-// Generate a new key pair
+// Generate a new libsecp256k1 key pair
 pub fn generate_keypair() -> KeyPair {
     let mut rng = thread_rng();
     let secret_key = SecretKey::random(&mut rng);
@@ -261,6 +259,7 @@ pub fn generate_keypair() -> KeyPair {
     }
 }
 
+// Generate raw key pair in bytes array
 pub fn generate_raw_keypair() -> RawKeyPair {
     let mut rng = thread_rng();
     let secret = SecretKey::random(&mut rng);
@@ -270,23 +269,4 @@ pub fn generate_raw_keypair() -> RawKeyPair {
         public_key,
         secret_key,
     }
-}
-
-// Random bytes
-pub fn random_bytes(buf: &mut [u8]) {
-    let mut rng = thread_rng();
-    rng.fill_bytes(buf);
-}
-
-// Normalize a Scalar
-pub fn normalize_scalar(s: &Scalar) -> Scalar {
-    let mut f = Field::default();
-    let mut r = Scalar::default();
-    // @TODO: we should have better approach to handle this
-    if !f.set_b32(&s.b32()) {
-        panic!("Unable to set field with given bytes array");
-    }
-    f.normalize();
-    r.set_b32(&f.b32()).unwrap_u8();
-    r
 }
