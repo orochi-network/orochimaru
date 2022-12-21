@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
-import './VRF.sol';
+import '../debug/VRFDebug.sol';
 
-contract OrochiECVRF is VRF {
+contract OrochiECVRFDebug is VRFDebug {
   function ecmulVerifyWitness(
     uint256[2] memory multiplicand,
     uint256 scalar,
