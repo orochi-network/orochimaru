@@ -22,6 +22,8 @@ const RAW_FIELD_SIZE: [u32; 8] = [
 
 pub const FIELD_SIZE: Scalar = Scalar(RAW_FIELD_SIZE);
 
+pub const FIELD_FIELD_SIZE: Field = Field::new(0, 0, 0, 0, 0, 0, 0, 0);
+
 // Compose Affine for its coordinate X,Y
 pub fn affine_composer(x: &Field, y: &Field) -> Affine {
     let mut r = Affine::default();
@@ -206,19 +208,13 @@ pub fn new_candidate_point(b: &Vec<u8>) -> Affine {
     r.x.normalize();
     r.y.normalize();
 
-    // Get field size from scalar value
-    let mut field_size = Field::default();
-    if !field_size.set_b32(&FIELD_SIZE.b32()) {
-        field_size.normalize();
-    }
-
     if r.y.is_odd() {
         // Negative of y
         let mut invert_y = r.y.clone();
         invert_y = invert_y.neg(1);
         invert_y.normalize();
         // y = FIELD_SIZE - y
-        r.y = invert_y + field_size;
+        r.y = invert_y + FIELD_FIELD_SIZE;
         r.y.normalize();
     }
     r

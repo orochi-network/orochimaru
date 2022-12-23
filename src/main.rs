@@ -2,7 +2,8 @@
 
 use bytes::Bytes;
 use dotenv::dotenv;
-use ecvrf::helper::{generate_raw_keypair, get_address, random_bytes};
+use ecvrf::helper::{generate_raw_keypair, get_address, random_bytes, FIELD_SIZE};
+use ecvrf::secp256k1::curve::Field;
 use ecvrf::secp256k1::{curve, PublicKey, SecretKey};
 use ecvrf::ECVRF;
 use http_body_util::{combinators::BoxBody, BodyExt, Empty, Full};
@@ -220,6 +221,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 "Address of public key: {}",
                 hex::encode(get_address(public_key))
             );
+
+            // Get field size from scalar value
+            let mut field_size = Field::default();
+            if !field_size.set_b32(&FIELD_SIZE.b32()) {
+                println!("{:?}", field_size);
+                field_size.normalize();
+            }
+            println!("{}", hex::encode(field_size.b32()));
+            let e = Field::new(
+                0xFFFFFC2F, 0xFFFFFFFE, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
+                0xFFFFFFFF,
+            );
+            println!("{:?}", e);
+
+            println!("{}", hex::encode(e.b32()));
+
+            println!("{:?}", field_size);
         }
     };
 

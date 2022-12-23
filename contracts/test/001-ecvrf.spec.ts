@@ -1,30 +1,31 @@
 import hre from 'hardhat';
 import chai, { expect } from 'chai';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import { OrochiECVRF, OrochiECVRFDebug } from '../typechain-types';
+import { OrochiVRF, OrochiVRFDebug } from '../typechain-types';
+import { Axios } from 'axios';
 
 let deployerSigner: SignerWithAddress;
-let orochiECVRF: OrochiECVRF;
-let orochiECVRFDebug: OrochiECVRFDebug;
+let orochiECVRF: OrochiVRF;
+let orochiECVRFDebug: OrochiVRFDebug;
 
 const pk =
   '0446b01e9550b56f3655dbca90cfe6b31dec3ff137f825561c563444096803531e9d4f6e8329d300483a919b63843174f1fca692fc6d2c07b985f72386e4edc846';
 const record = {
   network: 56,
-  epoch: 15,
-  alpha: '7d11f00bc5755d11e1c5723bce00f99c642980e0f833fe6248db535bbcd680e9',
+  epoch: 18,
+  alpha: '4d90d759181a1a93785a1efbf24ac3bc6617fb8b7fe5f58841dc62547bd5fa3d',
   gamma:
-    'd7beec35aa6d51b913b6b7414025d589f3a24aff2cd6d17e7845dafa11f701e75c556d3a72691b4fff950c6ca6d8a1c3fa13b0840b647ec174a6c727cdcbbc54',
-  c: 'fcc536021c77170534ac8eb7fec865aa54bf31741ef47b4910ac1a09bb233927',
-  s: '4b4ffc25764295bfd6b9117a6a4edde71d04665864a6a690584c6a19efc10d51',
-  y: 'd7b732c99f5fb8314d20756a61e042d97da682a762eaed1b9a299f306e947e26',
-  witness_address: '13a201f9cf17adf23ea2add73ef03a82de91a1e9',
+    'ca16dc635f333f7cd442a10e3d86a37193f0b4025cdfe3c00fffc3adc3047bdec1ce89cac5b4df21b08356c1e063fbebd3298791267d7b4d47424a17b5a40909',
+  c: '4dffb09d535aafa0b7725c66d7d8e7dfa201d06dfcb2fdfc042076becb9ffa4d',
+  s: '0a1cc26240a88908a45e049d7a4151415961514dac8a9d7b61645202756724fd',
+  y: 'b62c15341e6d3223c5ac84e475a765a1fcb5ac122b834c2ef8ceb127142d7e85',
+  witness_address: '714f1ff81445e2a21eaa820494c47f2bd0e4a93e',
   witness_gamma:
-    'd7951c87051a699e3e05c84ccbe84bc2be8be01c240a74eaff55cfe845cd475df3db1885fc925e282c21cedee3557786270b4157b6ba13769e3af4c9b22bc786',
+    '15e6ab8312878300ca776d711935d83f6bfafdba1adc7f69bcd0c8f34e5d85bb9d3f1086e9045813f87cde2892053de66dae661bb20e96aa218c9e59711a72b7',
   witness_hash:
-    '2046f2961b2ac53c046d8cae1dbb38c94da3c7dbe9e94a09eec156815730ab97029afe2d28b82de403e2cfb1264d3f9de52ce70dc607626c47739053977c5d0f',
-  inverse_z: '281223608805e08ec737f88e24d1151ad55c0f3471f70001f83e0cf200d9f93f',
-  created_date: '2022-12-12 09:40:50',
+    '30b6f0dae6ab3985055cf33352c0b291eb754d791de5dbfc2e3e11182935645eeb1efad8d1651dfa5c0b9b295091ba8221347de66784ec340dfa7532b7343547',
+  inverse_z: 'ff174a57e0aa034c870ceaae3b06608fb543bec93e8dc3ca24d2e0beae3fcf0e',
+  created_date: '2022-12-13 02:35:25',
 };
 
 const optimus = ((e) => {
@@ -44,15 +45,15 @@ const optimus = ((e) => {
 describe('Orochi ECVRF', function () {
   it('Orochi ECVRF must be deployed correctly', async () => {
     [deployerSigner] = await hre.ethers.getSigners();
-    const instanceFactory = await hre.ethers.getContractFactory('OrochiECVRF', {
+    const instanceFactory = await hre.ethers.getContractFactory('OrochiVRF', {
       signer: deployerSigner,
     });
-    orochiECVRF = <OrochiECVRF>await instanceFactory.deploy();
+    orochiECVRF = <OrochiVRF>await instanceFactory.deploy();
 
-    const instanceFactoryDebug = await hre.ethers.getContractFactory('OrochiECVRFDebug', {
+    const instanceFactoryDebug = await hre.ethers.getContractFactory('OrochiVRFDebug', {
       signer: deployerSigner,
     });
-    orochiECVRFDebug = <OrochiECVRFDebug>await instanceFactoryDebug.deploy();
+    orochiECVRFDebug = <OrochiVRFDebug>await instanceFactoryDebug.deploy();
   });
 
   it('HASH_TO_CURVE_PREFIX must be on the curve', async () => {

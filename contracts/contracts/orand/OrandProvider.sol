@@ -14,7 +14,7 @@ contract OrandProviderV1 is OrandStorage, OrandManagement, OrandSignatureVerifie
   // Event: Set New ECVRF Verifier
   event SetNewECVRFVerifier(address indexed actor, address indexed ecvrfAddress);
 
-  // Provider V1 will support many consumer at once
+  // Provider V1 will support many consumers at once
   constructor(
     uint256[2] memory pk,
     address operator,
@@ -26,11 +26,13 @@ contract OrandProviderV1 is OrandStorage, OrandManagement, OrandSignatureVerifie
     ecvrf = IOrandECVRF(ecvrfAddress);
   }
 
+  //=======================[  Owner  ]====================
   function setNewECVRFVerifier(address ecvrfAddress) external onlyOwner {
     ecvrf = IOrandECVRF(ecvrfAddress);
     emit SetNewECVRFVerifier(msg.sender, ecvrfAddress);
   }
 
+  //=======================[  External  ]====================
   // Publish new epoch
   function publish(bytes memory proof, EpochProof memory newEpoch) external onlyReadyForPenalty returns (bool) {
     (bool verified, address verifierAddress, uint256 y) = _vefifyProof(proof);
@@ -41,11 +43,7 @@ contract OrandProviderV1 is OrandStorage, OrandManagement, OrandSignatureVerifie
     return true;
   }
 
-  function check() external view {}
-
-  /**
-   * @dev allow any account to sue Orochi Network and its alliance
-   */
+  // @dev allow any account to sue Orochi Network and its alliance
   function sue(address receiverAddress, uint256 epoch) external onlyValidEpoch(receiverAddress, epoch) {
     Epoch memory previousEpoch = storageEpoch[receiverAddress][epoch - 1];
     Epoch memory currentEpoch = storageEpoch[receiverAddress][epoch];
@@ -74,7 +72,21 @@ contract OrandProviderV1 is OrandStorage, OrandManagement, OrandSignatureVerifie
     _penaltyOrand(msg.sender);
   }
 
+  //=======================[  External View  ]====================
   function getECVRFVerifier() external view returns (address) {
     return address(ecvrf);
+  }
+
+  function check(
+    uint256[2] memory gamma,
+    uint256 c,
+    uint256 s,
+    uint256 alpha,
+    address uWitness,
+    uint256[2] memory cGammaWitness,
+    uint256[2] memory sHashWitness,
+    uint256 zInv
+  ) external view returns (uint256) {
+    return ecvrf.verifyProof(publicKey, gamma, c, s, alpha, uWitness, cGammaWitness, sHashWitness, zInv);
   }
 }

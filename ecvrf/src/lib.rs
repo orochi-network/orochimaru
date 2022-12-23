@@ -168,6 +168,7 @@ impl ECVRF<'_> {
         let c = self.hash_points_prefix(&h, &pub_affine, &gamma, &u_witness, &kh);
 
         // s = (k - c * sk)
+        // Based on Schnorr signature
         let mut neg_c = c.clone();
         neg_c.cond_neg_assign(1.into());
         let s = k + neg_c * secret_key;

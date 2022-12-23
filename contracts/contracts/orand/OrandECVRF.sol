@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 import '../libraries/VRF.sol';
 
 contract OrandECVRF is VRF {
+  //=======================[  External  ]====================
   function verifyProof(
     uint256[2] memory pk,
     uint256[2] memory gamma,

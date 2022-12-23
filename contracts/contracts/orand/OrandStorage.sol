@@ -43,7 +43,7 @@ contract OrandStorage {
     _;
   }
 
-  //=======================[  Public View  ]====================
+  //=======================[  Internal  ]====================
 
   function _addEpoch(address receiverAddress, EpochProof memory newEpoch) internal returns (bool) {
     uint256 receiverEpoch = totalEpoch[receiverAddress];

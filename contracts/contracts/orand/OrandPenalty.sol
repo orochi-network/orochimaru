@@ -29,6 +29,7 @@ contract OrandPenalty is Ownable {
     _setPenalty(vaultAddress, tokenAddress, tokenPenaltyAmount);
   }
 
+  //=======================[  Owner  ]====================
   // Set the penalty
   function setPenalty(
     address vaultAddress,
@@ -39,6 +40,7 @@ contract OrandPenalty is Ownable {
     return true;
   }
 
+  //=======================[  Internal  ]====================
   // Penaltiy participants in Orand
   function _penaltyOrand(address receiver) internal returns (bool) {
     require(_safeTransfer(receiver, penaltyAmount), 'OP: Can not perform transfer');
@@ -60,6 +62,7 @@ contract OrandPenalty is Ownable {
     return beforeBalance + value == token.balanceOf(to);
   }
 
+  //=======================[  External View  ]====================
   // Read the penalty information
   function getPenalty() external view returns (address vaultAddress, address tokenAddress, uint256 amount) {
     vaultAddress = vault;

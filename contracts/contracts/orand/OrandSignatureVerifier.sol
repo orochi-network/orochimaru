@@ -25,7 +25,7 @@ contract OrandSignatureVerifier is Ownable {
     _setOperator(operatorAddress);
   }
 
-  //=======================[  External  ]====================
+  //=======================[  Owner  ]====================
 
   // Set new operator to submit proof
   function setOperator(address operatorAddress) external onlyOwner returns (bool) {
