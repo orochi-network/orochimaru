@@ -49,27 +49,24 @@ contract OrandSignatureVerifier is Ownable {
 
   //=======================[  Internal View ]====================
 
-  function _getReceiverNonce(bytes memory proof) internal pure returns (uint256) {
-    return proof.readUint256(65) >> 160;
-  }
-
-  function _getReceiverAddress(bytes memory proof) internal pure returns (address) {
-    return address(uint160(proof.readUint256(65)));
-  }
-
-  function _decomposeProof(bytes memory proof) internal pure returns (uint256 receiverNonce, address receiverAddress) {
+  // Decompose nonce and receiver address in signed proof
+  function _decomposeProof(
+    bytes memory proof
+  ) internal pure returns (uint256 receiverNonce, address receiverAddress, uint256 y) {
     uint256 proofUint = proof.readUint256(65);
-    return (proofUint >> 160, address(uint160(proofUint)));
+    receiverNonce = proofUint >> 160;
+    receiverAddress = address(uint160(proofUint));
+    y = proof.readUint256(97);
   }
 
   // Verify proof of operator
-  function _vefifyProof(bytes memory proof) internal view returns (bool verified, address receiverAddress) {
-    require(proof.length == 97, 'OSV: Invalid proof.length');
+  function _vefifyProof(bytes memory proof) internal view returns (bool verified, address receiverAddress, uint256 y) {
+    require(proof.length == 129, 'OSV: Invalid proof.length');
     bytes memory signature = proof.readBytes(0, 65);
     bytes memory message = proof.readBytes(65, proof.length);
     uint256 receiverNonce;
-    // Proof Nonce || Receiver Address
-    (receiverNonce, receiverAddress) = _decomposeProof(proof);
+    // Receiver Nonce || Receiver Address || y
+    (receiverNonce, receiverAddress, y) = _decomposeProof(proof);
     require(nonce[receiverAddress] == receiverNonce, 'OSV: Invalid nonce');
     require(message.verifySerialized(signature) == operator, 'OSV: Invalid operator');
     verified = true;

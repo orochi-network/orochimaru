@@ -6,7 +6,6 @@ contract OrandStorage {
   struct Epoch {
     uint128 epoch;
     uint128 timestamp;
-    uint256 alpha;
     uint256 y;
     uint256[2] gamma;
     uint256 c;
@@ -29,6 +28,9 @@ contract OrandStorage {
     uint256 zInv;
   }
 
+  // Event: New Epoch
+  event NewEpoch(address indexed receiverAddress, uint256 indexed epoch, uint256 indexed randomness);
+
   // Storage of epoch
   mapping(address => mapping(uint256 => Epoch)) internal storageEpoch;
 
@@ -45,14 +47,12 @@ contract OrandStorage {
 
   function _addEpoch(address receiverAddress, EpochProof memory newEpoch) internal returns (bool) {
     uint256 receiverEpoch = totalEpoch[receiverAddress];
-    Epoch memory previousEpoch = storageEpoch[receiverAddress][receiverEpoch - 1];
     storageEpoch[receiverAddress][receiverEpoch] = Epoch({
       epoch: uint128(receiverEpoch),
       timestamp: uint128(block.timestamp),
       y: newEpoch.y,
       // Alpha of this epoch is the result of previous epoch
       // Alpha_i = Y_{i-1}
-      alpha: previousEpoch.y,
       gamma: newEpoch.gamma,
       c: newEpoch.c,
       s: newEpoch.s,
@@ -61,6 +61,7 @@ contract OrandStorage {
       sHashWitness: newEpoch.cGammaWitness,
       zInv: newEpoch.zInv
     });
+    emit NewEpoch(receiverAddress, receiverEpoch, newEpoch.y);
     totalEpoch[receiverAddress] += 1;
     return true;
   }

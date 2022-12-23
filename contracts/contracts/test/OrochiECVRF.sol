@@ -3,15 +3,6 @@ pragma solidity ^0.8.0;
 import '../libraries/VRF.sol';
 
 contract OrochiECVRF is VRF {
-  uint256 count;
-
-  event Test(address a, uint256 s);
-
-  function setCount() external returns (uint256) {
-    emit Test(address(this), count);
-    return ++count;
-  }
-
   function ecmulVerifyWitness(
     uint256[2] memory multiplicand,
     uint256 scalar,

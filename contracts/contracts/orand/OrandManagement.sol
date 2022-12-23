@@ -14,7 +14,7 @@ contract OrandManagement is Ownable {
     _setPublicKey(pk);
   }
 
-  //=======================[  External  ]====================
+  //=======================[  Owner  ]====================
 
   // Set new public key to verify proof
   function setPublicKey(uint256[2] memory pk) external onlyOwner returns (bool) {
