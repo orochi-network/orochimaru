@@ -14,6 +14,7 @@ use hyper::{
     service::service_fn,
     {Method, Request, Response, StatusCode},
 };
+use orochimaru::ethereum::ethereum::{compose_operator_proof, sign_ethereum_message};
 use orochimaru::json_rpc::JSONRPCMethod;
 use orochimaru::sqlitedb::SqliteDB;
 use serde_json::json;
@@ -223,6 +224,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             println!(
                 "Address of public key: {}",
                 hex::encode(get_address(public_key))
+            );
+
+            let raw_proof = compose_operator_proof(2, &[0xabu8; 20], Scalar::from_int(64));
+            println!("{}", hex::encode(&raw_proof));
+            println!(
+                "{}",
+                hex::encode(sign_ethereum_message(&secret_key, &raw_proof))
             );
         }
     };

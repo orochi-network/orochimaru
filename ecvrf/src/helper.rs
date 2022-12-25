@@ -123,10 +123,21 @@ pub fn keccak256_affine(a: &Affine) -> [u8; 32] {
     output
 }
 
-// Keccak a point
+// Keccak a point to scalar
 pub fn keccak256_affine_scalar(a: &Affine) -> Scalar {
     let mut r = Scalar::default();
     r.set_b32(&keccak256_affine(&a)).unwrap_u8();
+    r
+}
+
+// Keccak a vector to scalar
+pub fn keccak256_vec_scalar(a: &Vec<u8>) -> Scalar {
+    let mut output = [0u8; 32];
+    let mut hasher = Keccak::v256();
+    hasher.update(a.as_slice());
+    hasher.finalize(&mut output);
+    let mut r = Scalar::default();
+    r.set_b32(&output).unwrap_u8();
     r
 }
 
