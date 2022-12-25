@@ -5,7 +5,8 @@ contract OrandStorage {
   // Storage form of proof
   struct Epoch {
     uint128 epoch;
-    uint128 timestamp;
+    uint64 timestamp;
+    uint64 sued;
     uint256 y;
     uint256[2] gamma;
     uint256 c;
@@ -39,7 +40,8 @@ contract OrandStorage {
 
   // Check if epoch is valid
   modifier onlyValidEpoch(address receiverAddress, uint256 epoch) {
-    require(epoch < totalEpoch[receiverAddress] && epoch >= 1, 'Invalid epoch id');
+    require(epoch < totalEpoch[receiverAddress] && epoch >= 1, 'OS: Invalid epoch id');
+    require(storageEpoch[receiverAddress][epoch].sued == 0, 'OS: This epoch was sued');
     _;
   }
 
@@ -49,7 +51,8 @@ contract OrandStorage {
     uint256 receiverEpoch = totalEpoch[receiverAddress];
     storageEpoch[receiverAddress][receiverEpoch] = Epoch({
       epoch: uint128(receiverEpoch),
-      timestamp: uint128(block.timestamp),
+      timestamp: uint64(block.timestamp),
+      sued: 0,
       y: newEpoch.y,
       // Alpha of this epoch is the result of previous epoch
       // Alpha_i = Y_{i-1}

@@ -44,7 +44,7 @@ contract OrandProviderV1 is OrandStorage, OrandManagement, OrandSignatureVerifie
   }
 
   // @dev allow any account to sue Orochi Network and its alliance
-  function sue(address receiverAddress, uint256 epoch) external onlyValidEpoch(receiverAddress, epoch) {
+  function sue(address receiverAddress, uint256 epoch) external onlyValidEpoch(receiverAddress, epoch) returns (bool) {
     Epoch memory previousEpoch = storageEpoch[receiverAddress][epoch - 1];
     Epoch memory currentEpoch = storageEpoch[receiverAddress][epoch];
     // Alpha_i = Y_{i-1}
@@ -63,13 +63,17 @@ contract OrandProviderV1 is OrandStorage, OrandManagement, OrandSignatureVerifie
     returns (uint256 y) {
       if (currentEpoch.y == y) {
         // Everything is good
-        return;
+        return false;
       }
     } catch {
       // Handle revert case, if reverted that meant signature is corrupted
     }
     // Apply penalty for the rest
-    _penaltyOrand(msg.sender);
+    require(_penaltyOrand(msg.sender), 'OP1: Unable to applied penalty');
+    currentEpoch.sued = 1;
+    storageEpoch[receiverAddress][epoch] = currentEpoch;
+    emit AppliedPenalty(receiverAddress, epoch, penaltyAmount);
+    return true;
   }
 
   //=======================[  External View  ]====================

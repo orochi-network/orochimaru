@@ -1,12 +1,13 @@
 import hre from 'hardhat';
-import chai, { expect } from 'chai';
+import { expect } from 'chai';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { OrochiVRF, OrochiVRFDebug } from '../typechain-types';
-import { Axios } from 'axios';
+import { Deployer } from '../helper';
 
 let deployerSigner: SignerWithAddress;
 let orochiECVRF: OrochiVRF;
-let orochiECVRFDebug: OrochiVRFDebug;
+let deployer;
+// let orochiECVRFDebug: OrochiVRFDebug;
 
 const pk =
   '0446b01e9550b56f3655dbca90cfe6b31dec3ff137f825561c563444096803531e9d4f6e8329d300483a919b63843174f1fca692fc6d2c07b985f72386e4edc846';
@@ -45,15 +46,10 @@ const optimus = ((e) => {
 describe('Orochi ECVRF', function () {
   it('Orochi ECVRF must be deployed correctly', async () => {
     [deployerSigner] = await hre.ethers.getSigners();
-    const instanceFactory = await hre.ethers.getContractFactory('OrochiVRF', {
-      signer: deployerSigner,
-    });
-    orochiECVRF = <OrochiVRF>await instanceFactory.deploy();
+    deployer = Deployer.getInstance(hre).connect(deployerSigner);
+    orochiECVRF = <OrochiVRF>await deployer.contractDeploy('test/OrochiVRF', []);
 
-    const instanceFactoryDebug = await hre.ethers.getContractFactory('OrochiVRFDebug', {
-      signer: deployerSigner,
-    });
-    orochiECVRFDebug = <OrochiVRFDebug>await instanceFactoryDebug.deploy();
+    // orochiECVRFDebug = <OrochiVRFDebug>await deployer.contractDeploy('test/OrochiVRFDebug', []);
   });
 
   it('HASH_TO_CURVE_PREFIX must be on the curve', async () => {
