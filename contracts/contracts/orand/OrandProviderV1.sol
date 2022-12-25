@@ -40,6 +40,8 @@ contract OrandProviderV1 is OrandStorage, OrandManagement, OrandSignatureVerifie
     require(y == newEpoch.y, 'OP1: Invalid ERCVRF output');
     require(_addEpoch(verifierAddress, newEpoch), 'OP1: Unable to add new epoch');
     require(IOrandConsumerV1(verifierAddress).consumeRandomness(newEpoch.y), 'OP1: Unable to send the randomness');
+    // Increase nonce of receiver to prevent replay attack
+    _increaseNonce(verifierAddress);
     return true;
   }
 
