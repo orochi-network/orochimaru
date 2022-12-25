@@ -1,6 +1,17 @@
+import fs from 'fs';
 import { HardhatUserConfig } from 'hardhat/types';
 import { env } from './env';
 import '@nomicfoundation/hardhat-toolbox';
+
+if (fs.existsSync('/typechain-types')) {
+  const dir = fs.opendirSync(`${__dirname}/tasks`);
+  for (let entry = dir.readSync(); entry !== null; entry = dir.readSync()) {
+    if (entry.name.toLowerCase().includes('.ts')) {
+      // eslint-disable-next-line import/no-dynamic-require
+      require(`./tasks/${entry.name.replace(/\.ts$/gi, '')}`);
+    }
+  }
+}
 
 const compilers = ['0.8.7'].map((item: string) => ({
   version: item,

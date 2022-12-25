@@ -2,15 +2,18 @@
 
 use bytes::Bytes;
 use dotenv::dotenv;
-use ecvrf::helper::{generate_raw_keypair, get_address, random_bytes, FIELD_SIZE};
-use ecvrf::secp256k1::curve::Field;
-use ecvrf::secp256k1::{curve, PublicKey, SecretKey};
 use ecvrf::ECVRF;
+use ecvrf::{
+    helper::{generate_raw_keypair, get_address, random_bytes},
+    secp256k1::{curve::Scalar, PublicKey, SecretKey},
+};
 use http_body_util::{combinators::BoxBody, BodyExt, Empty, Full};
-use hyper::body::Body;
-use hyper::server::conn::http1;
-use hyper::service::service_fn;
-use hyper::{Method, Request, Response, StatusCode};
+use hyper::{
+    body::Body,
+    server::conn::http1,
+    service::service_fn,
+    {Method, Request, Response, StatusCode},
+};
 use orochimaru::json_rpc::JSONRPCMethod;
 use orochimaru::sqlitedb::SqliteDB;
 use serde_json::json;
@@ -86,7 +89,7 @@ async fn orand(
 
                     let (current_alpha, next_epoch) = match latest_epoch_record {
                         Some(latest_epoch) => {
-                            let mut alpha = curve::Scalar::default();
+                            let mut alpha = Scalar::default();
                             // Alpha of current epoch is previous randomness
                             alpha
                                 .set_b32(
@@ -103,7 +106,7 @@ async fn orand(
                             // Get alpha from random entropy
                             let mut buf = [0u8; 32];
                             random_bytes(&mut buf);
-                            let mut alpha = curve::Scalar::default();
+                            let mut alpha = Scalar::default();
                             alpha.set_b32(&buf).unwrap_u8();
                             (alpha, 0)
                         }
@@ -221,23 +224,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 "Address of public key: {}",
                 hex::encode(get_address(public_key))
             );
-
-            // Get field size from scalar value
-            let mut field_size = Field::default();
-            if !field_size.set_b32(&FIELD_SIZE.b32()) {
-                println!("{:?}", field_size);
-                field_size.normalize();
-            }
-            println!("{}", hex::encode(field_size.b32()));
-            let e = Field::new(
-                0xFFFFFC2F, 0xFFFFFFFE, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
-                0xFFFFFFFF,
-            );
-            println!("{:?}", e);
-
-            println!("{}", hex::encode(e.b32()));
-
-            println!("{:?}", field_size);
         }
     };
 

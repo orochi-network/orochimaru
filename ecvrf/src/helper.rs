@@ -22,6 +22,8 @@ const RAW_FIELD_SIZE: [u32; 8] = [
 
 pub const FIELD_SIZE: Scalar = Scalar(RAW_FIELD_SIZE);
 
+// Field size 2^256 - 0x1000003D1
+// FIELD_SIZE = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F;
 pub const FIELD_FIELD_SIZE: Field = Field::new(0, 0, 0, 0, 0, 0, 0, 0);
 
 // Compose Affine for its coordinate X,Y

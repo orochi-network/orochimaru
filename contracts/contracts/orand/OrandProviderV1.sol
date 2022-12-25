@@ -77,10 +77,12 @@ contract OrandProviderV1 is OrandStorage, OrandManagement, OrandSignatureVerifie
   }
 
   //=======================[  External View  ]====================
+  // Get address of ECVRF verifier
   function getECVRFVerifier() external view returns (address) {
     return address(ecvrf);
   }
 
+  // Check a proof is valid or not
   function check(
     uint256[2] memory gamma,
     uint256 c,

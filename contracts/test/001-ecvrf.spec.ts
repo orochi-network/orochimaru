@@ -2,7 +2,7 @@ import hre from 'hardhat';
 import { expect } from 'chai';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { OrochiVRF, OrochiVRFDebug } from '../typechain-types';
-import { Deployer } from '../helper';
+import { Deployer } from '../helpers';
 
 let deployerSigner: SignerWithAddress;
 let orochiECVRF: OrochiVRF;
@@ -13,20 +13,20 @@ const pk =
   '0446b01e9550b56f3655dbca90cfe6b31dec3ff137f825561c563444096803531e9d4f6e8329d300483a919b63843174f1fca692fc6d2c07b985f72386e4edc846';
 const record = {
   network: 56,
-  epoch: 18,
-  alpha: '4d90d759181a1a93785a1efbf24ac3bc6617fb8b7fe5f58841dc62547bd5fa3d',
+  epoch: 21,
+  alpha: 'eabe8358ea6cedc4d3759a48648631369b9fb6d1c26da3adbc26eff564e032c4',
   gamma:
-    'ca16dc635f333f7cd442a10e3d86a37193f0b4025cdfe3c00fffc3adc3047bdec1ce89cac5b4df21b08356c1e063fbebd3298791267d7b4d47424a17b5a40909',
-  c: '4dffb09d535aafa0b7725c66d7d8e7dfa201d06dfcb2fdfc042076becb9ffa4d',
-  s: '0a1cc26240a88908a45e049d7a4151415961514dac8a9d7b61645202756724fd',
-  y: 'b62c15341e6d3223c5ac84e475a765a1fcb5ac122b834c2ef8ceb127142d7e85',
-  witness_address: '714f1ff81445e2a21eaa820494c47f2bd0e4a93e',
+    '0846c76355dec9acdbc3bc5146cfe2c5aff116cdd610130f7ce2cc8a22a323f6e47fea662f1acdcbc1bd5dbe668a65ed7d4949e4aadcbdec07adefa6230f810d',
+  c: 'dd7640ebb5cf83dbbb81b9b00b67c7d09cee8570c97b9329c2564933d97f2b13',
+  s: '76b2077647a864d026657539736258056eb0b832a4833294dba014c2a579d296',
+  y: 'a0c64323bd3aa4c8a3a4d80f0bde8b510c1fc2c3b6631008bd1f3d0d67f4dae3',
+  witness_address: '3a71452865cb8d0130319227093537b207998c34',
   witness_gamma:
-    '15e6ab8312878300ca776d711935d83f6bfafdba1adc7f69bcd0c8f34e5d85bb9d3f1086e9045813f87cde2892053de66dae661bb20e96aa218c9e59711a72b7',
+    'bfb38907a586e3770477dafb940e47d28f238c8a6085ec2208d7bd9418f925bc64acfc6bc55a7655969b979735324a6b71235c998b59c09250c1b09cc45f112f',
   witness_hash:
-    '30b6f0dae6ab3985055cf33352c0b291eb754d791de5dbfc2e3e11182935645eeb1efad8d1651dfa5c0b9b295091ba8221347de66784ec340dfa7532b7343547',
-  inverse_z: 'ff174a57e0aa034c870ceaae3b06608fb543bec93e8dc3ca24d2e0beae3fcf0e',
-  created_date: '2022-12-13 02:35:25',
+    'f3c9f87643ca7c23e027b98e40ca688c98a047978d932571340e490f26617b0b2abf4b3d353fc02ec4c76db23e2a4b351d00ec1fc8cce93aff2de1463f5bf628',
+  inverse_z: 'c294252664566a8850cd8de33809a0c44347bc1a953da31542eed735cb472b59',
+  created_date: '2022-12-25 09:35:47',
 };
 
 const optimus = ((e) => {
