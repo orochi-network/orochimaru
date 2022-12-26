@@ -203,12 +203,14 @@ pub fn scalar_is_gt(a: &Scalar, b: &Scalar) -> bool {
 
 // Return true if a >= b
 pub fn scalar_is_gte(a: &Scalar, b: &Scalar) -> bool {
+    let mut is_equal = true;
     for i in (0..a.0.len()).rev() {
-        if a.0[i] >= b.0[i] {
+        if a.0[i] > b.0[i] {
             return true;
         }
+        is_equal = is_equal && a.0[i] == b.0[i]
     }
-    false
+    is_equal || false
 }
 
 // Try to generate a point on the curve based on hashes
@@ -222,12 +224,7 @@ pub fn new_candidate_point(b: &Vec<u8>) -> Affine {
     r.y.normalize();
 
     if r.y.is_odd() {
-        // Negative of y
-        let mut invert_y = r.y.clone();
-        invert_y = invert_y.neg(1);
-        invert_y.normalize();
-        // y = FIELD_SIZE - y
-        r.y = invert_y + FIELD_FIELD_SIZE;
+        r.y = r.y.neg(1);
         r.y.normalize();
     }
     r
