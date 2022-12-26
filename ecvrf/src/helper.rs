@@ -193,26 +193,28 @@ pub fn field_hash(b: &Vec<u8>) -> Field {
 
 // Return true if a > b
 pub fn scalar_is_gt(a: &Scalar, b: &Scalar) -> bool {
-    let mut is_equal = true;
     for i in (0..a.0.len()).rev() {
         if a.0[i] < b.0[i] {
             return false;
         }
-        is_equal = is_equal && a.0[i] == b.0[i]
+        if a.0[i] > b.0[i] {
+            return true;
+        }
     }
-    true && !is_equal
+    false
 }
 
 // Return true if a >= b
 pub fn scalar_is_gte(a: &Scalar, b: &Scalar) -> bool {
-    let mut is_equal = true;
     for i in (0..a.0.len()).rev() {
         if a.0[i] < b.0[i] {
             return false;
         }
-        is_equal = is_equal && a.0[i] == b.0[i]
+        if a.0[i] > b.0[i] {
+            return true;
+        }
     }
-    is_equal && true
+    true
 }
 
 // Try to generate a point on the curve based on hashes
