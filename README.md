@@ -1,32 +1,45 @@
 # Orochimaru
 
-Orochimaru is a full-node client of Orochi Network which was implemented pure in Rust programing language
+Orochimaru is a full-node client of Orochi Network which was implemented in pure Rust programming language. Orochi Network isn't a blockchain but a distributed network built to perform Multi Party Computation (MPC) and Zero-Knowledge Proof (ZKP) proving from which we provide trustless and Verifiable Computation. Our mission is to establish High Performance dApp.
 
-## Installation
+## Orochi Network
 
-You must install `sea-orm-cli` first:
+At [Orochi Network](https://orochi.network), we believe that Verifiable Computation is a critical primitive to establish Web3 and Decentralized Autonomous Economy. However, in order to reach this stage, there are still a number of major challenges of this industry to overcome.
 
+- **The limits of computation:** EVM can not guarantee semi-native performance, in addition to the extremely high cost and latency to perform computation. dApps nowadays are unfriendly to the mass, unstable, expensive and slow. In other word, they are currently unusable and we can not replace an ordinary application by a dApp yet.
+- **Data correctness:** There is no way to prove the correctness of data since all data pipelines are stored in a blackbox. We have no idea how data are processed.
+- **Data availability:** Smart contract executor and application executor are isolated from the internet that prevent data to be accessible from the run-time environment. It alway requires a third party service to feed necessary data. This approach is broken since we can not verify the data. Moreover, the latency from the third parties is unacceptable.
+
+```text
+ ┌─────────────────────────────────────┐
+ │    Orosign - Computation Layer UI   │
+ └─────────────────────────────────────┘
+
+ ┌─────────────────────────────────────┐
+ │        High Performance dApp        │
+ └─────────────────────────────────────┘
+
+ ┌─────────────────────────────────────┐
+ │         Computation Layer           │
+ │                                     │
+ │ ┌────────┐  ┌────────┐  ┌────────┐  │
+ │ │ Orand  │  │ Orocle │  │ Orocom │  │
+ │ └────────┘  └────────┘  └────────┘  │
+ │                                     │
+ │ ┌─────────────────────────────────┐ │
+ │ │             zkWasm              │ │
+ │ └─────────────────────────────────┘ │
+ │                                     │
+ └─────────────────────────────────────┘
 ```
-cargo install sea-orm-cli
-```
 
-Generate entity for sqlite:
-
-```
-sea-orm-cli generate entity -o ./src/sqlite
-```
-
-Migrate database or init database for the first time:
-
-```
-sea-orm-cli migrate
-```
+Our solution is to build a universal run-time environment (zkWasm) that provides Verifiable Computation. We can build up the verifiable data pipeline on top of our zkWasm to solve the correctness and availability challenges of the data.
 
 ## Components
 
 ### Orand: Decentralized Random Number Generator
 
-A Decentralized Random Number Generator by Orochi Network. Allowed randomness to be generated and fed to any smart contracts on EVM compatible blockchains.
+Allowed verifiable randomness to be generated and fed to any smart contracts on EVM compatible blockchains. Orand using Elliptic Curve Verifiable Random Function (ECVRF) to prove and verify randomness. You can learn more about ECVRF in our blog [blog.orochi.network](https://blog.orochi.network).
 
 #### Request randomness
 
@@ -138,24 +151,24 @@ Result:
 }]
 ```
 
-### Demo
+## Installation
+
+You must install `sea-orm-cli` first:
 
 ```
-~/GitHub/orochimaru/ecvrf $ cargo run
-   Compiling secp v0.1.0 (/Users/chiro/GitHub/orochimaru/ecvrf)
-    Finished dev [unoptimized + debuginfo] target(s) in 0.87s
-     Running `target/debug/secp`
-gamma:
- > x: 0xaee4a6b5fcfa1094a80bb73b4e02e5a5d236b71c4563abda50b999ac8a095be1
- > y: 0x149ed72cbdb6e7cad92c0ea0ed7d4512e2015ddf92482c3a75d325a4d4928b89
-c: 0xcf6df09d8cb1b2262ecf3c5527eb089dfcbf616f34fb608701ca90be006b4368
-s: 0xecbb41a7d6276dd3f8f52e61450a44dc9ac3b091462a3f47be69edb754635ae5
-y: 0x93500089dc9512508b2fbc91b9f1e15526f76d59fed1f180b21878449fe47e21
-public key:
- > x: fb8881e4cc8225ed54f7473ab9c6bab9e7152e58c79517b48434466d6ab056a4
- > y: 84ef2334b53ff8f499cb2134643984ef92e2ecec5635eb4c90adb8022f4d3ea7
+cargo install sea-orm-cli
+```
 
-Verified: true
+Generate entity for sqlite _(you don't need to perform this step)_:
+
+```
+sea-orm-cli generate entity -o ./src/sqlite
+```
+
+Migrate database or init database for the first time:
+
+```
+sea-orm-cli migrate
 ```
 
 ## License
