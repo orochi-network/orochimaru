@@ -285,10 +285,12 @@ pub fn generate_raw_keypair() -> RawKeyPair {
 
 #[cfg(test)]
 mod tests {
-    use crate::{helper::randomize, ECVRF};
-    use libsecp256k1::{curve::{Affine,Scalar}, SecretKey};
+    use crate::ECVRF;
+    use libsecp256k1::{curve::Scalar, SecretKey};
 
-    use super::{is_on_curve, new_candidate_point, random_bytes};
+    use super::{
+        is_on_curve, new_candidate_point, random_bytes, randomize, scalar_is_gt, scalar_is_gte,
+    };
 
     #[test]
     fn point_must_be_on_curve() {
@@ -301,99 +303,65 @@ mod tests {
         assert!(is_on_curve(&rv));
     }
 
+    #[test]
+    fn test_scalar_is_gte() {
+        let data_set = [
+            Scalar([0, 1, 1, 1, 1, 1, 1, 0]),
+            Scalar([1, 0, 0, 0, 0, 0, 0, 1]),
+            Scalar([0, 1, 1, 1, 1, 1, 0, 1]),
+            Scalar([1, 0, 0, 0, 0, 0, 1, 0]),
+            Scalar([0, 1, 1, 1, 1, 1, 0, 1]),
+            Scalar([0, 1, 1, 1, 1, 1, 0, 1]),
+        ];
+        let require_output = [
+            true, false, false, true, false, false, true, true, false, true, false, false, true,
+            true, true, true, true, true, false, false, false, true, false, false, true, true,
+            true, true, true, true, true, true, true, true, true, true,
+        ];
+        for x in 0..data_set.len() {
+            for y in 0..data_set.len() {
+                assert!(
+                    scalar_is_gte(&data_set[x], &data_set[y])
+                        == require_output[x * data_set.len() + y],
+                    "scalar_is_gte() is broken"
+                );
+            }
+        }
+    }
 
-    fn test_gt_and_gte(){
-        //Testcase 1
-       let b=
-            scalar_is_gte(
-                &Scalar([
-                    0x00000000, 0x00000001, 0x00000001, 0x00000001, 0x00000001, 0x00000001,
-                    0x00000001, 0x00000000,
-                ]),
-                &Scalar([
-                    0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
-                    0x00000000, 0x00000001,
-                ])
-            );
-            assert!(b==false);
-    //Testcase 2
-    let b=
-            scalar_is_gte(
-                &Scalar([
-                    0x00000000,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000000,0x00000001
-                ]),
-                &Scalar([
-                    0x00000001, 0x00000000,0x00000000,0x00000000,0x00000000,0x00000000,0x00000001,0x00000000
-                ])
-            );
-            assert!(b==true);
-    //Testcase 3
-    let b=
-            scalar_is_gte(
-                &Scalar([
-                    0x00000000,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000000,0x00000001
-                ]),
-                &Scalar([
-                    0x00000000,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000000,0x00000001
-                ])
-            );
-            assert!(b==true);
-    //Testcase 4
-    let b=
-            scalar_is_gt(
-                &Scalar([
-                    0x00000000,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000000,0x00000001
-                ]),
-                &Scalar([
-                    0x00000000,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000000,0x00000001
-                ])
-            );
-            assert!(b==false);
-    // Testcase 5
-    let b=
-    scalar_is_gt(
-        &Scalar([
-            0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001
-        ]),
-        &Scalar([
-            0x00000000,0x00000000,0x00000000,0x00000000,0x00000000,0x00000000,0x00000000,0x00000000
-        ])
-    );
-    assert!(b==true);
-    // Testcase 6
-    let b=
-    scalar_is_gt(
-        &Scalar([
-            0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001
-        ]),
-        &Scalar([
-            0x00000000,0x00000000,0x00000000,0x00000000,0x00000000,0x00000000,0x00000000,0x00000002
-        ])
-    );
-    assert!(b==false);
-    // Testcase 7
-    let b=
-    scalar_is_gt(
-        &Scalar([
-            0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001
-        ]),
-        &Scalar([
-            0x00000000,0x00000000,0x00000000,0x00000000,0x00000000,0x00000001,0x00000001,0x00000001
-        ])
-    );
-    assert!(b==true);
+    #[test]
+    fn test_scalar_is_gt() {
+        let data_set = [
+            Scalar([0, 1, 1, 1, 1, 1, 0, 1]),
+            Scalar([0, 1, 1, 1, 1, 1, 0, 1]),
+            Scalar([1, 1, 1, 1, 1, 1, 1, 1]),
+            Scalar([0, 0, 0, 0, 0, 0, 0, 0]),
+            Scalar([1, 1, 1, 1, 1, 1, 1, 1]),
+            Scalar([0, 0, 0, 0, 0, 0, 0, 2]),
+            Scalar([1, 1, 1, 1, 1, 1, 1, 1]),
+            Scalar([0, 0, 0, 0, 0, 1, 1, 1]),
+            Scalar([0, 1, 1, 1, 1, 1, 1, 1]),
+            Scalar([1, 1, 1, 1, 1, 1, 1, 1]),
+        ];
+        let require_output = [
+            false, false, false, true, false, false, false, false, false, false, false, false,
+            false, true, false, false, false, false, false, false, true, true, false, true, false,
+            false, false, true, true, false, false, false, false, false, false, false, false,
+            false, false, false, true, true, false, true, false, false, false, true, true, false,
+            true, true, true, true, true, false, true, true, true, true, true, true, false, true,
+            false, false, false, true, true, false, true, true, false, true, false, false, false,
+            false, false, false, true, true, false, true, false, false, false, true, false, false,
+            true, true, false, true, false, false, false, true, true, false,
+        ];
 
-
-    // Testcase 8
-    let b=
-    scalar_is_gt(
-        &Scalar([
-            0x00000000,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001
-        ]),
-        &Scalar([
-            0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001
-        ])
-    );
-    assert!(b==false);
+        for x in 0..data_set.len() {
+            for y in 0..data_set.len() {
+                assert!(
+                    scalar_is_gt(&data_set[x], &data_set[y])
+                        == require_output[x * data_set.len() + y],
+                    "scalar_is_gt() is broken"
+                );
+            }
+        }
     }
 }
