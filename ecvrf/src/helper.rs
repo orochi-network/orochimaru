@@ -286,7 +286,7 @@ pub fn generate_raw_keypair() -> RawKeyPair {
 #[cfg(test)]
 mod tests {
     use crate::{helper::randomize, ECVRF};
-    use libsecp256k1::{curve::Affine, SecretKey};
+    use libsecp256k1::{curve::{Affine,Scalar}, SecretKey};
 
     use super::{is_on_curve, new_candidate_point, random_bytes};
 
@@ -299,5 +299,101 @@ mod tests {
             rv = new_candidate_point(&rv.x.b32().to_vec());
         }
         assert!(is_on_curve(&rv));
+    }
+
+
+    fn test_gt_and_gte(){
+        //Testcase 1
+       let b=
+            scalar_is_gte(
+                &Scalar([
+                    0x00000000, 0x00000001, 0x00000001, 0x00000001, 0x00000001, 0x00000001,
+                    0x00000001, 0x00000000,
+                ]),
+                &Scalar([
+                    0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+                    0x00000000, 0x00000001,
+                ])
+            );
+            assert!(b==false);
+    //Testcase 2
+    let b=
+            scalar_is_gte(
+                &Scalar([
+                    0x00000000,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000000,0x00000001
+                ]),
+                &Scalar([
+                    0x00000001, 0x00000000,0x00000000,0x00000000,0x00000000,0x00000000,0x00000001,0x00000000
+                ])
+            );
+            assert!(b==true);
+    //Testcase 3
+    let b=
+            scalar_is_gte(
+                &Scalar([
+                    0x00000000,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000000,0x00000001
+                ]),
+                &Scalar([
+                    0x00000000,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000000,0x00000001
+                ])
+            );
+            assert!(b==true);
+    //Testcase 4
+    let b=
+            scalar_is_gt(
+                &Scalar([
+                    0x00000000,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000000,0x00000001
+                ]),
+                &Scalar([
+                    0x00000000,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000000,0x00000001
+                ])
+            );
+            assert!(b==false);
+    // Testcase 5
+    let b=
+    scalar_is_gt(
+        &Scalar([
+            0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001
+        ]),
+        &Scalar([
+            0x00000000,0x00000000,0x00000000,0x00000000,0x00000000,0x00000000,0x00000000,0x00000000
+        ])
+    );
+    assert!(b==true);
+    // Testcase 6
+    let b=
+    scalar_is_gt(
+        &Scalar([
+            0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001
+        ]),
+        &Scalar([
+            0x00000000,0x00000000,0x00000000,0x00000000,0x00000000,0x00000000,0x00000000,0x00000002
+        ])
+    );
+    assert!(b==false);
+    // Testcase 7
+    let b=
+    scalar_is_gt(
+        &Scalar([
+            0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001
+        ]),
+        &Scalar([
+            0x00000000,0x00000000,0x00000000,0x00000000,0x00000000,0x00000001,0x00000001,0x00000001
+        ])
+    );
+    assert!(b==true);
+
+
+    // Testcase 8
+    let b=
+    scalar_is_gt(
+        &Scalar([
+            0x00000000,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001
+        ]),
+        &Scalar([
+            0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001,0x00000001
+        ])
+    );
+    assert!(b==false);
     }
 }
