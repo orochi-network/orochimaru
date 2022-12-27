@@ -17,7 +17,7 @@ contract OrandStorage is IOrandStorage {
 
   // Check if epoch is valid
   modifier onlyValidEpoch(address receiverAddress, uint256 epoch) {
-    if (epoch >= totalEpoch[receiverAddress] && epoch < 1) {
+    if (epoch >= totalEpoch[receiverAddress] || epoch < 1) {
       revert InvalidEpochId();
     }
     if (storageEpoch[receiverAddress][epoch].sued != 0) {
