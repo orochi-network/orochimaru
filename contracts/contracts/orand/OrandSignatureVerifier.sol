@@ -1,8 +1,12 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 import '@openzeppelin/contracts/access/Ownable.sol';
 import '../libraries/Bytes.sol';
 import '../libraries/Verifier.sol';
+
+error InvalidProofLength(bytes proof);
+error InvalidProofNonce(uint256 proofNonce);
+error InvalidProofSigner(address proofSigner);
 
 contract OrandSignatureVerifier is Ownable {
   // Allowed orand operator
@@ -35,9 +39,9 @@ contract OrandSignatureVerifier is Ownable {
   //=======================[  Internal  ]====================
 
   // Increasing nonce of receiver address
-  function _increaseNonce(address receiverAddress) internal returns (uint256) {
+  function _increaseNonce(address receiverAddress) internal returns (bool) {
     nonce[receiverAddress] += 1;
-    return nonce[receiverAddress];
+    return true;
   }
 
   // Set proof operator
@@ -61,14 +65,21 @@ contract OrandSignatureVerifier is Ownable {
 
   // Verify proof of operator
   function _vefifyProof(bytes memory proof) internal view returns (bool verified, address receiverAddress, uint256 y) {
-    require(proof.length == 129, 'OSV: Invalid proof.length');
+    if (proof.length != 129) {
+      revert InvalidProofLength(proof);
+    }
     bytes memory signature = proof.readBytes(0, 65);
     bytes memory message = proof.readBytes(65, proof.length);
     uint256 receiverNonce;
     // Receiver Nonce || Receiver Address || y
     (receiverNonce, receiverAddress, y) = _decomposeProof(proof);
-    require(nonce[receiverAddress] == receiverNonce, 'OSV: Invalid nonce');
-    require(message.verifySerialized(signature) == operator, 'OSV: Invalid operator');
+    if (nonce[receiverAddress] != receiverNonce) {
+      revert InvalidProofNonce(receiverNonce);
+    }
+    address proofSigner = message.verifySerialized(signature);
+    if (proofSigner != operator) {
+      revert InvalidProofSigner(proofSigner);
+    }
     verified = true;
   }
 

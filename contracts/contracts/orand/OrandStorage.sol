@@ -1,34 +1,11 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
+import '../interfaces/IOrandStorage.sol';
 
-contract OrandStorage {
-  // Storage form of proof
-  struct Epoch {
-    uint128 epoch;
-    uint64 timestamp;
-    uint64 sued;
-    uint256 y;
-    uint256[2] gamma;
-    uint256 c;
-    uint256 s;
-    address uWitness;
-    uint256[2] cGammaWitness;
-    uint256[2] sHashWitness;
-    uint256 zInv;
-  }
+error InvalidEpochId();
+error SuedEpoch();
 
-  // Tranmission form of proof
-  struct EpochProof {
-    uint256 y;
-    uint256[2] gamma;
-    uint256 c;
-    uint256 s;
-    address uWitness;
-    uint256[2] cGammaWitness;
-    uint256[2] sHashWitness;
-    uint256 zInv;
-  }
-
+contract OrandStorage is IOrandStorage {
   // Event: New Epoch
   event NewEpoch(address indexed receiverAddress, uint256 indexed epoch, uint256 indexed randomness);
 
@@ -36,12 +13,16 @@ contract OrandStorage {
   mapping(address => mapping(uint256 => Epoch)) internal storageEpoch;
 
   // Total number of epoch
-  mapping(address => uint256) totalEpoch;
+  mapping(address => uint256) internal totalEpoch;
 
   // Check if epoch is valid
   modifier onlyValidEpoch(address receiverAddress, uint256 epoch) {
-    require(epoch < totalEpoch[receiverAddress] && epoch >= 1, 'OS: Invalid epoch id');
-    require(storageEpoch[receiverAddress][epoch].sued == 0, 'OS: This epoch was sued');
+    if (epoch >= totalEpoch[receiverAddress] && epoch < 1) {
+      revert InvalidEpochId();
+    }
+    if (storageEpoch[receiverAddress][epoch].sued != 0) {
+      revert SuedEpoch();
+    }
     _;
   }
 
