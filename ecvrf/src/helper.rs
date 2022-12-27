@@ -286,11 +286,13 @@ pub fn generate_raw_keypair() -> RawKeyPair {
 
 #[cfg(test)]
 mod tests {
+
     use crate::ECVRF;
     use libsecp256k1::{curve::{Scalar,Affine,Jacobian,Field}, SecretKey};
 
+
     use super::{
-        is_on_curve, new_candidate_point, random_bytes, randomize, scalar_is_gt, scalar_is_gte,
+        is_on_curve, new_candidate_point, random_bytes, randomize, scalar_is_gt, scalar_is_gte, projective_ec_add
     };
 
     #[test]
@@ -303,6 +305,7 @@ mod tests {
         }
         assert!(is_on_curve(&rv));
     }
+
 
     #[test]
     fn test_scalar_is_gte() {
@@ -449,4 +452,7 @@ mod tests {
         };
 
 }
+
+
+   
 }
