@@ -2,10 +2,10 @@
 
 use bytes::Bytes;
 use dotenv::dotenv;
-use ecvrf::ECVRF;
 use ecvrf::{
     helper::{generate_raw_keypair, get_address, random_bytes},
     secp256k1::{curve::Scalar, PublicKey, SecretKey},
+    ECVRF,
 };
 use http_body_util::{combinators::BoxBody, BodyExt, Empty, Full};
 use hyper::{
@@ -14,14 +14,9 @@ use hyper::{
     service::service_fn,
     {Method, Request, Response, StatusCode},
 };
-use orochimaru::ethereum::ethereum::{compose_operator_proof, sign_ethereum_message};
-use orochimaru::json_rpc::JSONRPCMethod;
-use orochimaru::sqlitedb::SqliteDB;
+use orochimaru::{json_rpc::JSONRPCMethod, sqlitedb::SqliteDB};
 use serde_json::json;
-use std::borrow::Borrow;
-use std::env;
-use std::net::SocketAddr;
-use std::str::from_utf8;
+use std::{borrow::Borrow, env, net::SocketAddr, str::from_utf8};
 use tokio::net::TcpListener;
 
 const CHAIN_ID_BNB: u32 = 56;
@@ -224,13 +219,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             println!(
                 "Address of public key: {}",
                 hex::encode(get_address(public_key))
-            );
-
-            let raw_proof = compose_operator_proof(2, &[0xabu8; 20], Scalar::from_int(64));
-            println!("{}", hex::encode(&raw_proof));
-            println!(
-                "{}",
-                hex::encode(sign_ethereum_message(&secret_key, &raw_proof))
             );
         }
     };

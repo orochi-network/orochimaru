@@ -1,13 +1,14 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 import './OrandManagement.sol';
 import './OrandStorage.sol';
 import './OrandSignatureVerifier.sol';
 import './OrandPenalty.sol';
 import '../interfaces/IOrandECVRF.sol';
+import '../interfaces/IOrandProviderV1.sol';
 import '../interfaces/IOrandConsumerV1.sol';
 
-contract OrandProviderV1 is OrandStorage, OrandManagement, OrandSignatureVerifier, OrandPenalty {
+contract OrandProviderV1 is IOrandProviderV1, OrandStorage, OrandManagement, OrandSignatureVerifier, OrandPenalty {
   // ECVRF verifier smart contract
   IOrandECVRF ecvrf;
 
@@ -35,13 +36,27 @@ contract OrandProviderV1 is OrandStorage, OrandManagement, OrandSignatureVerifie
   //=======================[  External  ]====================
   // Publish new epoch
   function publish(bytes memory proof, EpochProof memory newEpoch) external onlyReadyForPenalty returns (bool) {
-    (bool verified, address verifierAddress, uint256 y) = _vefifyProof(proof);
-    require(verified, 'OP1: Invalid proof');
-    require(y == newEpoch.y, 'OP1: Invalid ERCVRF output');
-    require(_addEpoch(verifierAddress, newEpoch), 'OP1: Unable to add new epoch');
-    require(IOrandConsumerV1(verifierAddress).consumeRandomness(newEpoch.y), 'OP1: Unable to send the randomness');
-    // Increase nonce of receiver to prevent replay attack
-    _increaseNonce(verifierAddress);
+    (bool verified, address receiverAddress, uint256 y) = _vefifyProof(proof);
+    // Verifier is false, signature proof is incorrect
+    if (!verified) {
+      revert InvalidProof(proof);
+    }
+    // Linked y is different from submitted value
+    if (y != newEpoch.y) {
+      revert InvalidECVRFOutput(y, newEpoch.y);
+    }
+    // Unable to add epoch to storage
+    if (!_addEpoch(receiverAddress, newEpoch)) {
+      revert UnableToAddNewEpoch(receiverAddress, newEpoch);
+    }
+    // Unable to forward randomness to receiver contract
+    if (!IOrandConsumerV1(receiverAddress).consumeRandomness(newEpoch.y)) {
+      revert UnableToForwardRandomness(receiverAddress, y);
+    }
+    // Increasing nonce of receiver to prevent replay attack
+    if (!_increaseNonce(receiverAddress)) {
+      revert UnableToIncreaseNonce();
+    }
     return true;
   }
 
@@ -71,7 +86,9 @@ contract OrandProviderV1 is OrandStorage, OrandManagement, OrandSignatureVerifie
       // Handle revert case, if reverted that meant signature is corrupted
     }
     // Apply penalty for the rest
-    require(_penaltyOrand(msg.sender), 'OP1: Unable to applied penalty');
+    if (!_penaltyOrand(msg.sender)) {
+      revert UnableToApplyPenalty(msg.sender, receiverAddress, epoch);
+    }
     currentEpoch.sued = 1;
     storageEpoch[receiverAddress][epoch] = currentEpoch;
     emit AppliedPenalty(receiverAddress, epoch, penaltyAmount);

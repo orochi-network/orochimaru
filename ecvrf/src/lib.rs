@@ -3,7 +3,7 @@ use crate::{
     helper::{
         address_to_scalar, calculate_witness_address, ecmult, ecmult_gen, is_on_curve,
         jacobian_to_affine, keccak256_affine_scalar, new_candidate_point, projective_ec_add,
-        randomize, scalar_is_gte, FIELD_SIZE,
+        randomize, scalar_is_gte, GROUP_ORDER,
     },
 };
 use libsecp256k1::{
@@ -146,9 +146,9 @@ impl ECVRF<'_> {
         let gamma = ecmult(self.ctx_mul, &h, &secret_key);
 
         // k = random()
-        // We need to make sure that k < FIELD_SIZE
+        // We need to make sure that k < GROUP_ORDER
         let mut k = randomize();
-        while scalar_is_gte(&k, &FIELD_SIZE) {
+        while scalar_is_gte(&k, &GROUP_ORDER) || k.is_zero() {
             k = randomize();
         }
 
@@ -221,9 +221,9 @@ impl ECVRF<'_> {
         let gamma = ecmult(self.ctx_mul, &h, &secret_key);
 
         // k = random()
-        // We need to make sure that k < FIELD_SIZE
+        // We need to make sure that k < GROUP_ORDER
         let mut k = randomize();
-        while scalar_is_gte(&k, &FIELD_SIZE) {
+        while scalar_is_gte(&k, &GROUP_ORDER) || k.is_zero() {
             k = randomize();
         }
 

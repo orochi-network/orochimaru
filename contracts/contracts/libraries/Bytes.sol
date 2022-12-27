@@ -2,10 +2,15 @@
 pragma solidity >=0.8.4 <0.9.0;
 pragma abicoder v2;
 
+error InvalidInputLength();
+error OutOfRange();
+
 library Bytes {
   // Convert bytes to bytes32[]
   function toBytes32Array(bytes memory input) internal pure returns (bytes32[] memory) {
-    require(input.length % 32 == 0, 'Bytes: invalid data length should divied by 32');
+    if (input.length % 32 != 0) {
+      revert InvalidInputLength();
+    }
     bytes32[] memory result = new bytes32[](input.length / 32);
     assembly {
       // Read length of data from offset
@@ -31,7 +36,9 @@ library Bytes {
 
   // Read address from input bytes buffer
   function readAddress(bytes memory input, uint256 offset) internal pure returns (address result) {
-    require(offset + 20 <= input.length, 'Bytes: Out of range, can not read address from bytes');
+    if (offset + 20 > input.length) {
+      revert OutOfRange();
+    }
     assembly {
       result := shr(96, mload(add(add(input, 0x20), offset)))
     }
@@ -39,19 +46,19 @@ library Bytes {
 
   // Read uint256 from input bytes buffer
   function readUint256(bytes memory input, uint256 offset) internal pure returns (uint256 result) {
-    require(offset + 32 <= input.length, 'Bytes: Out of range, can not read uint256 from bytes');
+    if (offset + 32 > input.length) {
+      revert OutOfRange();
+    }
     assembly {
       result := mload(add(add(input, 0x20), offset))
     }
   }
 
   // Read bytes from input bytes buffer
-  function readBytes(
-    bytes memory input,
-    uint256 offset,
-    uint256 length
-  ) internal pure returns (bytes memory) {
-    require(offset + length <= input.length, 'Bytes: Out of range, can not read bytes from bytes');
+  function readBytes(bytes memory input, uint256 offset, uint256 length) internal pure returns (bytes memory) {
+    if (offset + length > input.length) {
+      revert OutOfRange();
+    }
     bytes memory result = new bytes(length);
     assembly {
       // Seek offset to the beginning

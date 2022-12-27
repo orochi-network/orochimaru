@@ -1,7 +1,10 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 import '@openzeppelin/contracts/access/Ownable.sol';
 import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
+
+error UnableToApplyPenalty(address receiver, uint256 penaltyAmount);
+error NoCollateralFromVault(address vaultAddress);
 
 contract OrandPenalty is Ownable {
   // Token vault address
@@ -21,7 +24,9 @@ contract OrandPenalty is Ownable {
 
   // Check if the given vault contain enough collateral
   modifier onlyReadyForPenalty() {
-    require(token.allowance(vault, address(this)) > penaltyAmount, 'OP');
+    if (token.allowance(vault, address(this)) < penaltyAmount) {
+      revert NoCollateralFromVault(vault);
+    }
     _;
   }
 
@@ -43,7 +48,9 @@ contract OrandPenalty is Ownable {
   //=======================[  Internal  ]====================
   // Penaltiy participants in Orand
   function _penaltyOrand(address receiver) internal returns (bool) {
-    require(_safeTransfer(receiver, penaltyAmount), 'OP: Can not perform transfer');
+    if (!_safeTransfer(receiver, penaltyAmount)) {
+      revert UnableToApplyPenalty(receiver, penaltyAmount);
+    }
     return true;
   }
 

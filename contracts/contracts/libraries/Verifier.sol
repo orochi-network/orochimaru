@@ -2,6 +2,8 @@
 pragma solidity >=0.8.4 <0.9.0;
 pragma abicoder v2;
 
+error InvalidV(uint8 v);
+
 library Verifier {
   function verifySerialized(bytes memory message, bytes memory signature) internal pure returns (address) {
     bytes32 r;
@@ -23,17 +25,14 @@ library Verifier {
     return verify(message, r, s, v);
   }
 
-  function verify(
-    bytes memory message,
-    bytes32 r,
-    bytes32 s,
-    uint8 v
-  ) internal pure returns (address) {
+  function verify(bytes memory message, bytes32 r, bytes32 s, uint8 v) internal pure returns (address) {
     if (v < 27) {
       v += 27;
     }
     // V must be 27 or 28
-    require(v == 27 || v == 28, 'Invalid v value');
+    if (v != 27 && v != 28) {
+      revert InvalidV(v);
+    }
     // Get hashes of message with Ethereum proof prefix
     bytes32 hashes = keccak256(abi.encodePacked('\x19Ethereum Signed Message:\n', uintToStr(message.length), message));
 
