@@ -193,7 +193,6 @@ pub fn field_hash(b: &Vec<u8>) -> Field {
 }
 
 // Return true if a > b
-
 pub fn scalar_is_gt(a: &Scalar, b: &Scalar) -> bool {
     for i in (0..a.0.len()).rev() {
         if a.0[i] < b.0[i] {
@@ -207,7 +206,6 @@ pub fn scalar_is_gt(a: &Scalar, b: &Scalar) -> bool {
 }
 
 // Return true if a >= b
-
 pub fn scalar_is_gte(a: &Scalar, b: &Scalar) -> bool {
     for i in (0..a.0.len()).rev() {
         if a.0[i] < b.0[i] {
@@ -281,6 +279,16 @@ pub fn generate_raw_keypair() -> RawKeyPair {
     RawKeyPair {
         public_key,
         secret_key,
+    }
+}
+
+// Recover raw keypair from secret
+pub fn recover_raw_keypair(secret_key: &[u8; SECRET_KEY_SIZE]) -> RawKeyPair {
+    let secret_instance = SecretKey::parse(secret_key).expect("Can not parse secret key");
+    let public_key = PublicKey::from_secret_key(&secret_instance).serialize();
+    RawKeyPair {
+        public_key,
+        secret_key: secret_key.as_slice().try_into().unwrap(),
     }
 }
 

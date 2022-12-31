@@ -1,3 +1,4 @@
+// An ambition is hiding in the bush
 use libsecp256k1::{
     curve::{Affine, Field, Scalar},
     PublicKey,
