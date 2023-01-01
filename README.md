@@ -162,7 +162,7 @@ cargo install sea-orm-cli
 Generate entity for sqlite _(you don't need to perform this step)_:
 
 ```
-sea-orm-cli generate entity -o ./src/sqlite
+sea-orm-cli generate entity -o ./entity
 ```
 
 Migrate database or init database for the first time:

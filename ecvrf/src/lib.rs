@@ -16,6 +16,7 @@ pub mod ecproof;
 pub mod helper;
 pub mod secp256k1 {
     pub use libsecp256k1::*;
+    pub use util::*;
 }
 pub mod random {
     pub use rand::thread_rng;

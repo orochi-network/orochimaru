@@ -5,5 +5,3 @@ pub mod prelude;
 pub mod keyring;
 pub mod randomness;
 pub mod receiver;
-pub mod sqlite_db;
-pub mod table;

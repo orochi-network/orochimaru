@@ -1,4 +1,5 @@
 use crate::m20220101_000001_create_table_keyring::Keyring;
+use crate::m20221229_005309_create_table_receiver::Receiver;
 use sea_orm_migration::prelude::*;
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -20,13 +21,13 @@ impl MigrationTrait for Migration {
                             .primary_key(),
                     )
                     .col(
-                        ColumnDef::new(Randomness::Network)
-                            .big_integer()
+                        ColumnDef::new(Randomness::KeyringId)
+                            .integer()
                             .unsigned()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(Randomness::KeyringId)
+                        ColumnDef::new(Randomness::ReceiverId)
                             .integer()
                             .unsigned()
                             .not_null(),
@@ -50,6 +51,13 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Randomness::WitnessGamma).string().not_null())
                     .col(ColumnDef::new(Randomness::WitnessHash).string().not_null())
                     .col(ColumnDef::new(Randomness::InverseZ).string().not_null())
+                    // Signature should be unique, according to uniqueness of ECDSA
+                    .col(
+                        ColumnDef::new(Randomness::SignatureProof)
+                            .unique_key()
+                            .string()
+                            .not_null(),
+                    )
                     .col(
                         ColumnDef::new(Randomness::CreatedDate)
                             .timestamp()
@@ -63,6 +71,14 @@ impl MigrationTrait for Migration {
                             .from_col(Randomness::KeyringId)
                             .to_tbl(Keyring::Table)
                             .to_col(Keyring::Id),
+                    )
+                    .foreign_key(
+                        &mut ForeignKeyCreateStatement::new()
+                            .name("link_randomness_to_receiver")
+                            .from_tbl(Randomness::Table)
+                            .from_col(Randomness::ReceiverId)
+                            .to_tbl(Receiver::Table)
+                            .to_col(Receiver::Id),
                     )
                     .index(
                         Index::create()
@@ -88,8 +104,8 @@ impl MigrationTrait for Migration {
 enum Randomness {
     Table,
     Id,
-    Network,
     KeyringId,
+    ReceiverId,
     Epoch,
     Alpha,
     Gamma,
@@ -100,5 +116,6 @@ enum Randomness {
     WitnessGamma,
     WitnessHash,
     InverseZ,
+    SignatureProof,
     CreatedDate,
 }

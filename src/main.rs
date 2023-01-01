@@ -3,7 +3,7 @@
 use bytes::Bytes;
 use dotenv::dotenv;
 use ecvrf::{
-    helper::{generate_raw_keypair, get_address, random_bytes},
+    helper::{generate_raw_keypair, get_address, random_bytes, recover_raw_keypair},
     secp256k1::{curve::Scalar, PublicKey, SecretKey},
     ECVRF,
 };
@@ -14,12 +14,14 @@ use hyper::{
     service::service_fn,
     {Method, Request, Response, StatusCode},
 };
-use orochimaru::{json_rpc::JSONRPCMethod, sqlitedb::SqliteDB};
+use orochimaru::{
+    ethereum::{compose_operator_proof, sign_ethereum_message},
+    json_rpc::JSONRPCMethod,
+    sqlite_db::SQLiteDB,
+};
 use serde_json::json;
 use std::{borrow::Borrow, env, net::SocketAddr, str::from_utf8};
 use tokio::net::TcpListener;
-
-const CHAIN_ID_BNB: u32 = 56;
 
 /// This is our service handler. It receives a Request, routes on its
 /// path, and returns a Future of a Response.
@@ -28,9 +30,10 @@ async fn orand(
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
     let database_url = env::var("DATABASE_URL").expect("Can not connect to the database");
     // TODO Move these to another module, we should separate between KEYS and API
-    let sqlite: SqliteDB = SqliteDB::new(database_url).await;
-    let keyring = sqlite.table_keyring().await;
-    let randomness = sqlite.table_randomness().await;
+    let sqlite: SQLiteDB = SQLiteDB::new(database_url).await;
+    let keyring = sqlite.table_keyring();
+    let randomness = sqlite.table_randomness();
+    let receiver = sqlite.table_receiver();
 
     // Reconstruct secret key from database
     let keyring_record = keyring
@@ -54,7 +57,7 @@ async fn orand(
         // Serve some instructions at /
         (&Method::GET, "/") => Ok(Response::new(full("Wrong method, you know!."))),
 
-        // Simply echo the body back to the client.
+        // Handle all post method to JSON RPC
         (&Method::POST, "/") => {
             let max = req.body().size_hint().upper().unwrap_or(u64::MAX);
             if max > 1024 * 64 {
@@ -68,10 +71,10 @@ async fn orand(
             let json_rpc_payload = JSONRPCMethod::from_json_string(json_string);
 
             match json_rpc_payload {
-                // We ignore network param right now, support BNB chain first
-                JSONRPCMethod::OrandGetPublicEpoch(_, epoch) => {
+                // Get epoch, it's alias of orand_getPublicEpoch() and orand_getPrivateEpoch()
+                JSONRPCMethod::OrandGetEpoch(network, address, epoch) => {
                     let recent_epochs = randomness
-                        .find_recent_epoch(epoch)
+                        .find_recent_epoch(network, address, epoch)
                         .await
                         .expect("Can not get recent epoch");
 
@@ -79,9 +82,12 @@ async fn orand(
                         .expect("Can not serialize data");
                     Ok(Response::new(full(serialized_result)))
                 }
-                JSONRPCMethod::OrandNewEpoch(_) => {
-                    let latest_epoch_record =
-                        randomness.find_latest_epoch(CHAIN_ID_BNB).await.unwrap();
+                // Get epoch, it's alias of orand_newPublicEpoch() and orand_newPrivateEpoch()
+                JSONRPCMethod::OrandNewEpoch(network, address) => {
+                    let latest_epoch_record = randomness
+                        .find_latest_epoch(network, address.clone())
+                        .await
+                        .unwrap();
 
                     let (current_alpha, next_epoch) = match latest_epoch_record {
                         Some(latest_epoch) => {
@@ -124,10 +130,27 @@ async fn orand(
                     ]
                     .concat();
 
-                    let insert_result = randomness
+                    let returning_receiver = receiver
+                        .update(network, address.clone())
+                        .await
+                        .expect("Unable to update receiver")
+                        .expect("Data was insert but not found, why?");
+                    let bytes_address: [u8; 20] =
+                        hex::decode(address.replace("0x", "").replace("0X", ""))
+                            .expect("Unable to decode address")
+                            .as_slice()
+                            .try_into()
+                            .unwrap();
+                    let raw_proof = compose_operator_proof(
+                        returning_receiver.nonce as u64,
+                        &bytes_address,
+                        contract_proof.y,
+                    );
+                    let ecdsa_proof = sign_ethereum_message(&secret_key, &raw_proof);
+                    let returning_randomness = randomness
                         .insert_returning(json!({
-                            "network": CHAIN_ID_BNB,
                             "keyring_id": keyring_record.id,
+                            "receiver_id": returning_receiver.id,
                             "epoch": next_epoch,
                             "alpha":hex::encode(current_alpha.b32()),
                             "gamma":hex::encode(&gamma),
@@ -138,10 +161,12 @@ async fn orand(
                             "witness_gamma": hex::encode(&witness_gamma),
                             "witness_hash": hex::encode(&witness_hash),
                             "inverse_z": hex::encode(contract_proof.inverse_z.b32()),
+                            "signature_proof": hex::encode(&ecdsa_proof),
                         }))
                         .await
                         .unwrap();
-                    let serialized_result = serde_json::to_string_pretty(&insert_result).unwrap();
+                    let serialized_result =
+                        serde_json::to_string_pretty(&returning_randomness).unwrap();
                     Ok(Response::new(full(serialized_result)))
                 }
                 JSONRPCMethod::OrandGetPublicKey(key_name) => {
@@ -154,6 +179,9 @@ async fn orand(
                         serde_json::to_string_pretty(&key_record).expect("Can not serialize data");
                     Ok(Response::new(full(serialized_result)))
                 }
+                _ => Ok(Response::new(full(
+                    "{\"success\": \"false\", \"message\": \"It is not working in this way\"}",
+                ))),
             }
         }
 
@@ -183,17 +211,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     dotenv().ok();
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     let database_url = env::var("DATABASE_URL").expect("Can not connect to the database");
-    let sqlite: SqliteDB = SqliteDB::new(database_url).await;
-    let keyring = sqlite.table_keyring().await;
+    let sqlite: SQLiteDB = SQLiteDB::new(database_url).await;
+    let keyring = sqlite.table_keyring();
     let result_keyring = keyring.find_by_name("chiro".to_string()).await.unwrap();
-
+    let receiver = sqlite.table_receiver();
+    receiver.get_latest_record(1, "".to_string()).await?;
     // Create new key if not exist
-    match result_keyring {
+    let pk = match result_keyring {
         None => {
             // Generate key if it didn't exist
             let mut hmac_secret = [0u8; 16];
             random_bytes(&mut hmac_secret);
-            let new_keypair = generate_raw_keypair();
+            let new_keypair = match env::var("SECRET_KEY") {
+                // Get secret from .env file
+                Ok(r) => recover_raw_keypair(
+                    hex::decode(r.trim())
+                        .unwrap()
+                        .as_slice()
+                        .try_into()
+                        .unwrap(),
+                ),
+                // Generate new secret
+                Err(_) => generate_raw_keypair(),
+            };
             keyring
                 .insert(json!({
                 "username": "chiro",
@@ -201,27 +241,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 "public_key": hex::encode(new_keypair.public_key), 
                 "secret_key": hex::encode(new_keypair.secret_key)}))
                 .await
-                .unwrap();
+                .expect("Unable to insert new key to keyring table");
+            PublicKey::parse(&new_keypair.public_key).expect("Wrong public key format")
         }
-        Some(k) => {
-            println!("Found chiro key!");
-            println!("Secret key: {}", k.secret_key);
-            println!("Public Key: {}", k.public_key);
-            let secret_key = SecretKey::parse(
-                hex::decode(k.secret_key)
-                    .unwrap()
-                    .as_slice()
-                    .try_into()
-                    .unwrap(),
-            )
-            .unwrap();
-            let public_key = PublicKey::from_secret_key(&secret_key);
-            println!(
-                "Address of public key: {}",
-                hex::encode(get_address(public_key))
-            );
-        }
+        Some(k) => PublicKey::parse(
+            hex::decode(k.public_key)
+                .unwrap()
+                .as_slice()
+                .try_into()
+                .unwrap(),
+        )
+        .expect("Wrong public key format"),
     };
+
+    println!("Public Key: {}", hex::encode(pk.serialize()));
+    println!("Address of public key: 0x{}", hex::encode(get_address(pk)));
 
     let listener = TcpListener::bind(addr).await?;
 
