@@ -84,6 +84,15 @@ contract OrandSignatureVerifier is Ownable {
   }
 
   //=======================[  External View  ]====================
+  // Get signer address from a valid proof
+  function checkProofSigner(
+    bytes memory proof
+  ) external pure returns (address signer, address receiverAddress, uint256 receiverNonce, uint256 y) {
+    bytes memory signature = proof.readBytes(0, 65);
+    bytes memory message = proof.readBytes(65, proof.length);
+    (receiverNonce, receiverAddress, y) = _decomposeProof(proof);
+    signer = message.verifySerialized(signature);
+  }
 
   // Get operator
   function getOperator() external view returns (address) {

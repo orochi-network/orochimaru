@@ -22,3 +22,4 @@ cache
 artifacts
 typechain-types
 entity/
+contracts/flatten/
