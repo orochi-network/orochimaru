@@ -1,14 +1,24 @@
 /* eslint-disable no-await-in-loop */
 import '@nomiclabs/hardhat-ethers';
-import { BigNumber } from 'ethers';
+import { BigNumber, utils } from 'ethers';
 import { task } from 'hardhat/config';
 import { HardhatRuntimeEnvironment } from 'hardhat/types';
 import { Deployer, NATIVE_UNIT, printAllEvents } from '../helpers';
 import { OrandECVRF } from '../typechain-types';
 import { OrandProviderV1 } from '../typechain-types/OradProvider.sol';
+import { env } from '../env';
 
 task('deploy:orand', 'Deploy multi signature v1 contract').setAction(
   async (_taskArgs: any, hre: HardhatRuntimeEnvironment) => {
+    let pk = env.OROCHI_PUBLIC_KEY.replace(/^0x/gi, '');
+    let rawPubKey = {
+      x: pk.substring(2, 66),
+      y: pk.substring(66, 130),
+    };
+    let correspondingAddress = utils.getAddress(
+      `0x${utils.keccak256(utils.arrayify(`0x${rawPubKey.x}${rawPubKey.y}`)).substring(26, 66)}`,
+    );
+    console.log(`Corresponding address: ${correspondingAddress}`);
     const accounts = await hre.ethers.getSigners();
     const deployer: Deployer = Deployer.getInstance(hre).connect(accounts[0]);
     const bigOToken = await deployer.contractDeploy('test/BigO', []);
@@ -17,12 +27,10 @@ task('deploy:orand', 'Deploy multi signature v1 contract').setAction(
       'OrandV1/OrandProviderV1',
       [],
       // This public key is corresponding to 0x7e9e03a453867a7046B0277f6cD72E1B59f67a0e
-      [
-        '0x46b01e9550b56f3655dbca90cfe6b31dec3ff137f825561c563444096803531e',
-        '0x9d4f6e8329d300483a919b63843174f1fca692fc6d2c07b985f72386e4edc846',
-      ],
+      // We going to skip 0x04 -> Pubkey format from libsecp256k1
+      [`0x${rawPubKey.x}`, `0x${rawPubKey.y}`],
       // Operator address
-      '0x7e9e03a453867a7046B0277f6cD72E1B59f67a0e',
+      correspondingAddress,
       orandECVRF.address,
       accounts[0].address,
       bigOToken.address,

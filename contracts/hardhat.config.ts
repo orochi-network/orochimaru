@@ -26,6 +26,14 @@ const compilers = ['0.8.7'].map((item: string) => ({
 const config: HardhatUserConfig = {
   defaultNetwork: 'hardhat',
   networks: {
+    bnbtest: {
+      url: env.OROCHI_RPC,
+      chainId: 97,
+      accounts: {
+        mnemonic: env.OROCHI_MNEMONIC,
+        path: "m/44'/60'/0'/0",
+      },
+    },
     // Hard hat network
     hardhat: {
       chainId: 911,

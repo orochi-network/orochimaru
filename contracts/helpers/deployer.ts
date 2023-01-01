@@ -62,7 +62,7 @@ export class Deployer {
         });
         this._contractCache[contractPath] = await instanceFactory.deploy(...params);
         console.log('> Deploying:', contractPath.padEnd(36, ' '), this._contractCache[contractPath].address);
-        if ([56, 97, 4002, 80001].includes(this.getChainId())) {
+        if (this.getChainId() != 911) {
           // Make sure transaction will be deployed on Binance Smart Chain
           await this._contractCache[contractPath].deployTransaction.wait(5);
         }
