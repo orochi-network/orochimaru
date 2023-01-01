@@ -1,7 +1,4 @@
-use crate::{
-    randomness::{ActiveModel, Column, Entity, Model},
-    receiver,
-};
+use crate::randomness::{ActiveModel, Column, Entity, Model};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait, InsertResult,
     Order, QueryFilter, QueryOrder,

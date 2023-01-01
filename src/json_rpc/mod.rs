@@ -1,4 +1,5 @@
 use core::panic;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -18,29 +19,60 @@ pub enum JSONRPCMethod {
     OrandGetPublicKey(String),
 }
 
+const ZERO_ADDRESS: &str = "0x0000000000000000000000000000000000000000";
+
+fn decode_u32(val: String) -> u32 {
+    let regex_u32 = Regex::new(r#"\d{1,10}"#).expect("Unable to init Regex");
+    match regex_u32.is_match(val.as_str().as_ref()) {
+        true => val
+            .as_str()
+            .parse::<u32>()
+            .expect("Unable to parse &str to u32"),
+        false => panic!("Invalid input u32 value"),
+    }
+}
+
+fn decode_address(val: String) -> String {
+    let regex_address = Regex::new(r#"^0x[a-fA-F0-9]{40}$"#).expect("Unable to init Regex");
+    match regex_address.is_match(val.as_str().as_ref()) {
+        true => val.clone(),
+        false => panic!("Invalid input address value"),
+    }
+}
+
+fn decode_name(val: String) -> String {
+    let regex_name = Regex::new(r#"^[a-zA-Z0-9\s]{3,40}$"#).expect("Unable to init Regex");
+    match regex_name.is_match(val.as_str().as_ref()) {
+        true => val.clone(),
+        false => panic!("Invalid input name value"),
+    }
+}
+
 impl JSONRPCMethod {
     pub fn from_json_string(json_string: &str) -> Self {
         let json_rpc: JSONRPCPayload = serde_json::from_str(json_string).unwrap();
         match json_rpc.method.as_str() {
             "orand_getPublicEpoch" => Self::OrandGetEpoch(
-                json_rpc.params[0].as_str().parse().unwrap(),
-                "0x0000000000000000000000000000000000000000".to_string(),
-                json_rpc.params[1].as_str().parse().unwrap(),
+                decode_u32(json_rpc.params[0].clone()),
+                ZERO_ADDRESS.to_string(),
+                decode_u32(json_rpc.params[1].clone()),
             ),
             "orand_getPrivateEpoch" => Self::OrandGetEpoch(
-                json_rpc.params[0].as_str().parse().unwrap(),
-                json_rpc.params[1].to_string(),
-                json_rpc.params[2].as_str().parse().unwrap(),
+                decode_u32(json_rpc.params[0].clone()),
+                decode_address(json_rpc.params[1].clone()),
+                decode_u32(json_rpc.params[2].clone()),
             ),
             "orand_newPublicEpoch" => Self::OrandNewEpoch(
-                json_rpc.params[0].as_str().parse().unwrap(),
-                "0x0000000000000000000000000000000000000000".to_string(),
+                decode_u32(json_rpc.params[0].clone()),
+                ZERO_ADDRESS.to_string(),
             ),
             "orand_newPrivateEpoch" => Self::OrandNewEpoch(
-                json_rpc.params[0].as_str().parse().unwrap(),
-                json_rpc.params[1].to_string(),
+                decode_u32(json_rpc.params[0].clone()),
+                decode_address(json_rpc.params[1].clone()),
             ),
-            "orand_getPublicKey" => Self::OrandGetPublicKey(json_rpc.params[0].to_string()),
+            "orand_getPublicKey" => {
+                Self::OrandGetPublicKey(decode_name(json_rpc.params[0].clone()))
+            }
             _ => panic!("Unsupported method"),
         }
     }

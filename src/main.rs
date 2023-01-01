@@ -14,7 +14,11 @@ use hyper::{
     service::service_fn,
     {Method, Request, Response, StatusCode},
 };
-use orochimaru::{json_rpc::JSONRPCMethod, sqlite_db::SQLiteDB};
+use orochimaru::{
+    ethereum::{compose_operator_proof, sign_ethereum_message},
+    json_rpc::JSONRPCMethod,
+    sqlite_db::SQLiteDB,
+};
 use serde_json::json;
 use std::{borrow::Borrow, env, net::SocketAddr, str::from_utf8};
 use tokio::net::TcpListener;
@@ -127,11 +131,22 @@ async fn orand(
                     .concat();
 
                     let returning_receiver = receiver
-                        .update(network, address)
+                        .update(network, address.clone())
                         .await
                         .expect("Unable to update receiver")
                         .expect("Data was insert but not found, why?");
-
+                    let bytes_address: [u8; 20] =
+                        hex::decode(address.replace("0x", "").replace("0X", ""))
+                            .expect("Unable to decode address")
+                            .as_slice()
+                            .try_into()
+                            .unwrap();
+                    let raw_proof = compose_operator_proof(
+                        returning_receiver.nonce as u64,
+                        &bytes_address,
+                        contract_proof.y,
+                    );
+                    let ecdsa_proof = sign_ethereum_message(&secret_key, &raw_proof);
                     let returning_randomness = randomness
                         .insert_returning(json!({
                             "keyring_id": keyring_record.id,
@@ -146,6 +161,7 @@ async fn orand(
                             "witness_gamma": hex::encode(&witness_gamma),
                             "witness_hash": hex::encode(&witness_hash),
                             "inverse_z": hex::encode(contract_proof.inverse_z.b32()),
+                            "signature_proof": hex::encode(&ecdsa_proof),
                         }))
                         .await
                         .unwrap();
@@ -201,7 +217,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let receiver = sqlite.table_receiver();
     receiver.get_latest_record(1, "".to_string()).await?;
     // Create new key if not exist
-    match result_keyring {
+    let pk = match result_keyring {
         None => {
             // Generate key if it didn't exist
             let mut hmac_secret = [0u8; 16];
@@ -225,25 +241,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 "public_key": hex::encode(new_keypair.public_key), 
                 "secret_key": hex::encode(new_keypair.secret_key)}))
                 .await
-                .unwrap();
+                .expect("Unable to insert new key to keyring table");
+            PublicKey::parse(&new_keypair.public_key).expect("Wrong public key format")
         }
-        Some(k) => {
-            println!("Found chiro key!");
-            println!("Public Key: {}", k.public_key);
-            let public_key = PublicKey::parse(
-                hex::decode(k.public_key)
-                    .unwrap()
-                    .as_slice()
-                    .try_into()
-                    .unwrap(),
-            )
-            .expect("Wrong public key format");
-            println!(
-                "Address of public key: {}",
-                hex::encode(get_address(public_key))
-            );
-        }
+        Some(k) => PublicKey::parse(
+            hex::decode(k.public_key)
+                .unwrap()
+                .as_slice()
+                .try_into()
+                .unwrap(),
+        )
+        .expect("Wrong public key format"),
     };
+
+    println!("Public Key: {}", hex::encode(pk.serialize()));
+    println!("Address of public key: 0x{}", hex::encode(get_address(pk)));
 
     let listener = TcpListener::bind(addr).await?;
 

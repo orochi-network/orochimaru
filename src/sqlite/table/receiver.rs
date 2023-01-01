@@ -34,25 +34,25 @@ impl<'a> ReceiverTable<'a> {
         match receiver {
             Some(r) => {
                 Entity::update(ActiveModel {
-                    id: ActiveValue::NotSet,
-                    name: ActiveValue::NotSet,
-                    network: ActiveValue::Set(network),
-                    address: ActiveValue::Set(address),
-                    nonce: ActiveValue::Set(r.nonce + 1),
+                    id: ActiveValue::set(r.id),
+                    name: ActiveValue::set(r.name),
+                    network: ActiveValue::set(network),
+                    address: ActiveValue::set(address),
+                    nonce: ActiveValue::set(r.nonce + 1),
                     created_date: ActiveValue::default(),
                 })
                 .exec(self.connection)
                 .await
-                .expect("Unable to update record");
+                .expect("Unable to update receiver");
                 self.find_by_id(r.id).await
             }
             None => {
                 let returning_receiver = Entity::insert(ActiveModel {
-                    id: ActiveValue::NotSet,
-                    name: ActiveValue::Set(Uuid::new_v4().to_string()),
-                    network: ActiveValue::Set(network),
-                    address: ActiveValue::Set(address),
-                    nonce: ActiveValue::Set(0),
+                    id: ActiveValue::not_set(),
+                    name: ActiveValue::set(Uuid::new_v4().to_string()),
+                    network: ActiveValue::set(network),
+                    address: ActiveValue::set(address),
+                    nonce: ActiveValue::set(0),
                     created_date: ActiveValue::default(),
                 })
                 .exec_with_returning(self.connection)
