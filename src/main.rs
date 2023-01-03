@@ -209,7 +209,7 @@ fn full<T: Into<Bytes>>(chunk: T) -> BoxBody<Bytes, hyper::Error> {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     dotenv().ok();
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let addr = SocketAddr::from(([0, 0, 0, 0], 1337));
     let database_url = env::var("DATABASE_URL").expect("Can not connect to the database");
     let sqlite: SQLiteDB = SQLiteDB::new(database_url).await;
     let keyring = sqlite.table_keyring();
