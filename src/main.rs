@@ -52,16 +52,21 @@ async fn orand(
     .expect("Can not reconstruct secret key");
 
     let vrf = ECVRF::new(secret_key);
+    let response_builder = Response::builder().header("Access-Control-Allow-Origin", "*");
 
     match (req.method(), req.uri().path()) {
         // Serve some instructions at /
-        (&Method::GET, "/") => Ok(Response::new(full("Wrong method, you know!."))),
+        (&Method::GET, "/") => Ok(response_builder
+            .body(full("Wrong method, you know!."))
+            .unwrap()),
 
         // Handle all post method to JSON RPC
         (&Method::POST, "/") => {
             let max = req.body().size_hint().upper().unwrap_or(u64::MAX);
             if max > 1024 * 64 {
-                let mut resp = Response::new(full("Your body too big, can not fit the body bag"));
+                let mut resp = response_builder
+                    .body(full("Your body too big, can not fit the body bag"))
+                    .unwrap();
                 *resp.status_mut() = hyper::StatusCode::PAYLOAD_TOO_LARGE;
                 return Ok(resp);
             }
@@ -80,7 +85,7 @@ async fn orand(
 
                     let serialized_result = serde_json::to_string_pretty(&recent_epochs)
                         .expect("Can not serialize data");
-                    Ok(Response::new(full(serialized_result)))
+                    Ok(response_builder.body(full(serialized_result)).unwrap())
                 }
                 // Get epoch, it's alias of orand_newPublicEpoch() and orand_newPrivateEpoch()
                 JSONRPCMethod::OrandNewEpoch(network, address) => {
@@ -167,7 +172,7 @@ async fn orand(
                         .unwrap();
                     let serialized_result =
                         serde_json::to_string_pretty(&returning_randomness).unwrap();
-                    Ok(Response::new(full(serialized_result)))
+                    Ok(response_builder.body(full(serialized_result)).unwrap())
                 }
                 JSONRPCMethod::OrandGetPublicKey(key_name) => {
                     let key_record = keyring
@@ -177,11 +182,13 @@ async fn orand(
 
                     let serialized_result =
                         serde_json::to_string_pretty(&key_record).expect("Can not serialize data");
-                    Ok(Response::new(full(serialized_result)))
+                    Ok(response_builder.body(full(serialized_result)).unwrap())
                 }
-                _ => Ok(Response::new(full(
-                    "{\"success\": \"false\", \"message\": \"It is not working in this way\"}",
-                ))),
+                _ => Ok(response_builder
+                    .body(full(
+                        "{\"success\": \"false\", \"message\": \"It is not working in this way\"}",
+                    ))
+                    .unwrap()),
             }
         }
 
