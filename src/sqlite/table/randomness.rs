@@ -1,7 +1,7 @@
 use crate::randomness::{ActiveModel, Column, Entity, Model};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait, InsertResult,
-    Order, QueryFilter, QueryOrder,
+    Order, QueryFilter, QueryOrder, QuerySelect,
 };
 
 use super::ReceiverTable;
@@ -34,6 +34,8 @@ impl<'a> RandomnessTable<'a> {
                             .add(Column::ReceiverId.eq(receiver_record.id))
                             .add(Column::Epoch.gte(epoch)),
                     )
+                    // 20 is the limit of number of records
+                    .limit(20)
                     .order_by(Column::Epoch, Order::Desc)
                     .all(self.connection)
                     .await
