@@ -295,10 +295,14 @@ pub fn recover_raw_keypair(secret_key: &[u8; SECRET_KEY_SIZE]) -> RawKeyPair {
 #[cfg(test)]
 mod tests {
     use crate::ECVRF;
-    use libsecp256k1::{curve::{Scalar,Affine,Jacobian,Field}, SecretKey};
+    use libsecp256k1::{
+        curve::{Affine, Field, Jacobian, Scalar},
+        SecretKey,
+    };
 
     use super::{
-        is_on_curve, new_candidate_point, random_bytes, randomize, scalar_is_gt, scalar_is_gte, projective_ec_add
+        is_on_curve, new_candidate_point, projective_ec_add, random_bytes, randomize, scalar_is_gt,
+        scalar_is_gte,
     };
 
     #[test]
@@ -376,8 +380,10 @@ mod tests {
 
     #[test]
     // The results below have been tested on chainlink.
-    fn test_projective_ec_add(){
+    fn test_projective_ec_add() {
         //Check the correctness of the projective_ec_add function
+
+        //The x and y coordinates of the points P
         let P_x = [
             Field::new_raw(
                 1014095, 27245485, 18079781, 62818885, 6005449, 27754920, 47166199, 49620396,
@@ -423,6 +429,7 @@ mod tests {
             ),
         ];
 
+        //The x and y coordinates of the points Q
         let Q_x = [
             Field::new_raw(
                 3949615, 66779817, 1606560, 47410390, 831760, 1795286, 36595269, 30921352,
@@ -468,6 +475,7 @@ mod tests {
             ),
         ];
 
+        // The x,y,z coordinates of the points R
         let R_x = [
             Field::new_raw(
                 1838677, 7158945, 56087361, 27064659, 42315756, 49776020, 38075574, 33867422,
