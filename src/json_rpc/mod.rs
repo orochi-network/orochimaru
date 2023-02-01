@@ -10,25 +10,25 @@ pub struct JSONRPCPayload {
 
 pub enum JSONRPCMethod {
     // New epoch of given network
-    OrandNewEpoch(u32, String),
+    OrandNewEpoch(u64, String),
     // Network, receiverAddress, epoch
-    OrandGetEpoch(u32, String, u32),
+    OrandGetEpoch(u64, String, u64),
     // New epoch of given network
-    OrandNewPrivateEpoch(u32, String),
+    OrandNewPrivateEpoch(u64, String),
     // Get public key
     OrandGetPublicKey(String),
 }
 
 const ZERO_ADDRESS: &str = "0x0000000000000000000000000000000000000000";
 
-fn decode_u32(val: String) -> u32 {
-    let regex_u32 = Regex::new(r#"\d{1,10}"#).expect("Unable to init Regex");
-    match regex_u32.is_match(val.as_str().as_ref()) {
+fn decode_u64(val: String) -> u64 {
+    let regex_u64 = Regex::new(r#"\d{1,10}"#).expect("Unable to init Regex");
+    match regex_u64.is_match(val.as_str().as_ref()) {
         true => val
             .as_str()
-            .parse::<u32>()
-            .expect("Unable to parse &str to u32"),
-        false => panic!("Invalid input u32 value"),
+            .parse::<u64>()
+            .expect("Unable to parse &str to u64"),
+        false => panic!("Invalid input u64 value"),
     }
 }
 
@@ -53,21 +53,21 @@ impl JSONRPCMethod {
         let json_rpc: JSONRPCPayload = serde_json::from_str(json_string).unwrap();
         match json_rpc.method.as_str() {
             "orand_getPublicEpoch" => Self::OrandGetEpoch(
-                decode_u32(json_rpc.params[0].clone()),
+                decode_u64(json_rpc.params[0].clone()),
                 ZERO_ADDRESS.to_string(),
-                decode_u32(json_rpc.params[1].clone()),
+                decode_u64(json_rpc.params[1].clone()),
             ),
             "orand_getPrivateEpoch" => Self::OrandGetEpoch(
-                decode_u32(json_rpc.params[0].clone()),
+                decode_u64(json_rpc.params[0].clone()),
                 decode_address(json_rpc.params[1].clone()),
-                decode_u32(json_rpc.params[2].clone()),
+                decode_u64(json_rpc.params[2].clone()),
             ),
             "orand_newPublicEpoch" => Self::OrandNewEpoch(
-                decode_u32(json_rpc.params[0].clone()),
+                decode_u64(json_rpc.params[0].clone()),
                 ZERO_ADDRESS.to_string(),
             ),
             "orand_newPrivateEpoch" => Self::OrandNewEpoch(
-                decode_u32(json_rpc.params[0].clone()),
+                decode_u64(json_rpc.params[0].clone()),
                 decode_address(json_rpc.params[1].clone()),
             ),
             "orand_getPublicKey" => {

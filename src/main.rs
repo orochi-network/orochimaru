@@ -1,10 +1,9 @@
 #![deny(warnings)]
 
 use bytes::Bytes;
-use dotenv::dotenv;
 use ecvrf::{
-    helper::{generate_raw_keypair, get_address, random_bytes, recover_raw_keypair},
-    secp256k1::{curve::Scalar, PublicKey, SecretKey},
+    helper::random_bytes,
+    secp256k1::{curve::Scalar, SecretKey},
     ECVRF,
 };
 use http_body_util::{combinators::BoxBody, BodyExt, Empty, Full};
@@ -14,42 +13,25 @@ use hyper::{
     service::service_fn,
     {Method, Request, Response, StatusCode},
 };
+use kvdb::{KVStorage, RocksDB};
 use orochimaru::{
     ethereum::{compose_operator_proof, sign_ethereum_message},
     json_rpc::JSONRPCMethod,
-    sqlite_db::SQLiteDB,
+    keyring_get, keyring_load,
 };
-use serde_json::json;
-use std::{borrow::Borrow, env, net::SocketAddr, str::from_utf8};
+use std::{borrow::Borrow, env, net::SocketAddr, str::from_utf8, sync::Arc, time::Instant};
 use tokio::net::TcpListener;
-
 /// This is our service handler. It receives a Request, routes on its
 /// path, and returns a Future of a Response.
 async fn orand(
     req: Request<hyper::body::Incoming>,
+    db: Arc<RocksDB>,
+    secret_key: Arc<SecretKey>,
+    keyring_uuid: Arc<String>,
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
-    let database_url = env::var("DATABASE_URL").expect("Can not connect to the database");
-    // TODO Move these to another module, we should separate between KEYS and API
-    let sqlite: SQLiteDB = SQLiteDB::new(database_url).await;
-    let keyring = sqlite.table_keyring();
-    let randomness = sqlite.table_randomness();
-    let receiver = sqlite.table_receiver();
-
-    // Reconstruct secret key from database
-    let keyring_record = keyring
-        .find_by_name("chiro".to_string())
-        .await
-        .expect("Can not query our database")
-        .expect("Chiro not found");
-
-    let secret_key = SecretKey::parse(
-        hex::decode(keyring_record.secret_key)
-            .unwrap()
-            .as_slice()
-            .try_into()
-            .unwrap(),
-    )
-    .expect("Can not reconstruct secret key");
+    let keyring = keyring_get(db).expect("Everything isn't ok Rick!");
+    let secret_key = SecretKey::parse(keyring.secret_key.as_slice().try_into().unwrap())
+        .expect("Can not reconstruct secret key");
 
     let vrf = ECVRF::new(secret_key);
     let response_builder = Response::builder().header("Access-Control-Allow-Origin", "*");
@@ -87,6 +69,7 @@ async fn orand(
                         .expect("Can not serialize data");
                     Ok(response_builder.body(full(serialized_result)).unwrap())
                 }
+                /*
                 // Get epoch, it's alias of orand_newPublicEpoch() and orand_newPrivateEpoch()
                 JSONRPCMethod::OrandNewEpoch(network, address) => {
                     let latest_epoch_record = randomness
@@ -118,7 +101,7 @@ async fn orand(
                             (alpha, 0)
                         }
                     };
-
+                    let start = Instant::now();
                     let contract_proof = vrf.prove_contract(&current_alpha);
 
                     let gamma =
@@ -152,6 +135,11 @@ async fn orand(
                         contract_proof.y,
                     );
                     let ecdsa_proof = sign_ethereum_message(&secret_key, &raw_proof);
+                    let duration = start.elapsed();
+                    println!(
+                        "Time elapsed in ECVRF proving + ECDSA proof is: {} ms",
+                        duration.as_millis()
+                    );
                     let returning_randomness = randomness
                         .insert_returning(json!({
                             "keyring_id": keyring_record.id,
@@ -184,6 +172,7 @@ async fn orand(
                         serde_json::to_string_pretty(&key_record).expect("Can not serialize data");
                     Ok(response_builder.body(full(serialized_result)).unwrap())
                 }
+                */
                 _ => Ok(response_builder
                     .body(full(
                         "{\"success\": \"false\", \"message\": \"It is not working in this way\"}",
@@ -215,65 +204,30 @@ fn full<T: Into<Bytes>>(chunk: T) -> BoxBody<Bytes, hyper::Error> {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    dotenv().ok();
     let addr = SocketAddr::from(([0, 0, 0, 0], 1337));
-    let database_url = env::var("DATABASE_URL").expect("Can not connect to the database");
-    let sqlite: SQLiteDB = SQLiteDB::new(database_url).await;
-    let keyring = sqlite.table_keyring();
-    let result_keyring = keyring.find_by_name("chiro".to_string()).await.unwrap();
-    let receiver = sqlite.table_receiver();
-    receiver.get_latest_record(1, "".to_string()).await?;
-    // Create new key if not exist
-    let pk = match result_keyring {
-        None => {
-            // Generate key if it didn't exist
-            let mut hmac_secret = [0u8; 16];
-            random_bytes(&mut hmac_secret);
-            let new_keypair = match env::var("SECRET_KEY") {
-                // Get secret from .env file
-                Ok(r) => recover_raw_keypair(
-                    hex::decode(r.trim())
-                        .unwrap()
-                        .as_slice()
-                        .try_into()
-                        .unwrap(),
-                ),
-                // Generate new secret
-                Err(_) => generate_raw_keypair(),
-            };
-            keyring
-                .insert(json!({
-                "username": "chiro",
-                "hmac_secret": hex::encode(hmac_secret),
-                "public_key": hex::encode(new_keypair.public_key), 
-                "secret_key": hex::encode(new_keypair.secret_key)}))
-                .await
-                .expect("Unable to insert new key to keyring table");
-            PublicKey::parse(&new_keypair.public_key).expect("Wrong public key format")
-        }
-        Some(k) => PublicKey::parse(
-            hex::decode(k.public_key)
-                .unwrap()
-                .as_slice()
-                .try_into()
-                .unwrap(),
-        )
-        .expect("Wrong public key format"),
-    };
-
-    println!("Public Key: {}", hex::encode(pk.serialize()));
-    println!("Address of public key: 0x{}", hex::encode(get_address(pk)));
-
+    let database_location = env::var("DATABASE_LOCATION").expect("Can not connect to the database");
     let listener = TcpListener::bind(addr).await?;
-
     println!("Listening on http://{}", addr);
-
+    let db = Arc::new(RocksDB::new(
+        database_location,
+        ["metadata", "randomness", "receiver", "keyring"],
+    ));
+    let keyring_record = keyring_load(db).expect("Unable to get the keyring record from database");
+    let secret_key = Arc::new(
+        SecretKey::parse(keyring_record.secret_key.as_slice().try_into().unwrap())
+            .expect("Can not reconstruct secret key"),
+    );
+    let keyring_uuid = Arc::new(keyring_record.uuid);
     loop {
         let (stream, _) = listener.accept().await?;
-
         tokio::task::spawn(async move {
             if let Err(err) = http1::Builder::new()
-                .serve_connection(stream, service_fn(orand))
+                .serve_connection(
+                    stream,
+                    service_fn(move |req| {
+                        orand(req, db.clone(), secret_key.clone(), keyring_uuid.clone())
+                    }),
+                )
                 .await
             {
                 println!("Error serving connection: {:?}", err);
