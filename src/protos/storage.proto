@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+message StorageRandomness {
+  string uuid = 1;
+  string previous_uuid = 2;
+  string keyring_uuid = 3;
+  string receiver_uuid = 4;
+  uint64 epoch = 5;
+  bytes alpha = 6;
+  bytes gamma = 7;
+  bytes c = 8;
+  bytes s = 9;
+  bytes y = 10;
+  bytes witness_address = 11;
+  bytes witness_gamma = 12;
+  bytes wintess_hash = 13;
+  bytes inverse_z = 14;
+  bytes signature_proof = 15;
+  uint64 timestamp = 16;
+}
+
+message StorageKeyring {
+  string uuid = 1;
+  string username = 2;
+  bytes hmac_secret = 3;
+  bytes public_key = 4;
+  bytes secret_key = 5;
+  uint64 timestamp = 6;
+}
+
+message StorageReceiver {
+  string uuid = 1;
+  string name = 2;
+  uint64 network = 3;
+  string address = 4;
+  uint64 nonce = 5;
+  uint64 timestamp = 6;
+}
