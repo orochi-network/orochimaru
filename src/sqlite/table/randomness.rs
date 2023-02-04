@@ -1,7 +1,7 @@
 use crate::randomness::{ActiveModel, Column, Entity, Model};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait, InsertResult,
-    Order, QueryFilter, QueryOrder, QuerySelect,
+    ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait, Order,
+    QueryFilter, QueryOrder, QuerySelect,
 };
 
 use super::ReceiverTable;
@@ -36,7 +36,7 @@ impl<'a> RandomnessTable<'a> {
                     )
                     // 20 is the limit of number of records
                     .limit(20)
-                    .order_by(Column::Epoch, Order::Desc)
+                    .order_by(Column::Epoch, Order::Asc)
                     .all(self.connection)
                     .await
             }
@@ -65,16 +65,9 @@ impl<'a> RandomnessTable<'a> {
         }
     }
 
-    pub async fn insert(
-        &self,
-        json_record: serde_json::Value,
-    ) -> Result<InsertResult<ActiveModel>, DbErr> {
+    pub async fn insert(&self, json_record: serde_json::Value) -> Result<Model, DbErr> {
         let new_record = ActiveModel::from_json(json_record)?;
-        Entity::insert(new_record).exec(self.connection).await
-    }
 
-    pub async fn insert_returning(&self, json_record: serde_json::Value) -> Result<Model, DbErr> {
-        let new_record = ActiveModel::from_json(json_record)?;
         Entity::insert(new_record)
             .exec_with_returning(self.connection)
             .await
