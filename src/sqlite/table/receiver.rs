@@ -1,7 +1,7 @@
 use crate::receiver::{ActiveModel, Column, Entity, Model};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait,
-    InsertResult, QueryFilter, QueryOrder, QuerySelect,
+    QueryFilter, QueryOrder, QuerySelect,
 };
 use uuid::Uuid;
 
@@ -20,7 +20,7 @@ impl<'a> ReceiverTable<'a> {
     }
 
     // Find receiver record by its network and address
-    pub async fn update(&self, network: u32, address: String) -> Result<Option<Model>, DbErr> {
+    pub async fn update(&self, network: u32, address: &String) -> Result<Option<Model>, DbErr> {
         let receiver = Entity::find()
             .filter(
                 Condition::all()
@@ -37,7 +37,7 @@ impl<'a> ReceiverTable<'a> {
                     id: ActiveValue::set(r.id),
                     name: ActiveValue::set(r.name),
                     network: ActiveValue::set(network),
-                    address: ActiveValue::set(address),
+                    address: ActiveValue::set(address.clone()),
                     nonce: ActiveValue::set(r.nonce + 1),
                     created_date: ActiveValue::default(),
                 })
@@ -51,7 +51,7 @@ impl<'a> ReceiverTable<'a> {
                     id: ActiveValue::not_set(),
                     name: ActiveValue::set(Uuid::new_v4().to_string()),
                     network: ActiveValue::set(network),
-                    address: ActiveValue::set(address),
+                    address: ActiveValue::set(address.clone()),
                     nonce: ActiveValue::set(0),
                     created_date: ActiveValue::default(),
                 })
@@ -81,16 +81,7 @@ impl<'a> ReceiverTable<'a> {
     }
 
     // Insert data to receiver table
-    pub async fn insert(
-        &self,
-        json_record: serde_json::Value,
-    ) -> Result<InsertResult<ActiveModel>, DbErr> {
-        let new_record = ActiveModel::from_json(json_record)?;
-        Entity::insert(new_record).exec(self.connection).await
-    }
-
-    // Insert data to receiver table
-    pub async fn insert_returning(&self, json_record: serde_json::Value) -> Result<Model, DbErr> {
+    pub async fn insert(&self, json_record: serde_json::Value) -> Result<Model, DbErr> {
         let new_record = ActiveModel::from_json(json_record)?;
         Entity::insert(new_record)
             .exec_with_returning(self.connection)

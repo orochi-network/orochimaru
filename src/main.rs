@@ -20,17 +20,15 @@ use orochimaru::{
     sqlite_db::SQLiteDB,
 };
 use serde_json::json;
-use std::{borrow::Borrow, env, net::SocketAddr, str::from_utf8};
+use std::{borrow::Borrow, env, net::SocketAddr, str::from_utf8, sync::Arc};
 use tokio::net::TcpListener;
 
 /// This is our service handler. It receives a Request, routes on its
 /// path, and returns a Future of a Response.
 async fn orand(
     req: Request<hyper::body::Incoming>,
+    sqlite: Arc<SQLiteDB>,
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
-    let database_url = env::var("DATABASE_URL").expect("Can not connect to the database");
-    // TODO Move these to another module, we should separate between KEYS and API
-    let sqlite: SQLiteDB = SQLiteDB::new(database_url).await;
     let keyring = sqlite.table_keyring();
     let randomness = sqlite.table_randomness();
     let receiver = sqlite.table_receiver();
@@ -136,7 +134,7 @@ async fn orand(
                     .concat();
 
                     let returning_receiver = receiver
-                        .update(network, address.clone())
+                        .update(network, &address)
                         .await
                         .expect("Unable to update receiver")
                         .expect("Data was insert but not found, why?");
@@ -153,7 +151,7 @@ async fn orand(
                     );
                     let ecdsa_proof = sign_ethereum_message(&secret_key, &raw_proof);
                     let returning_randomness = randomness
-                        .insert_returning(json!({
+                        .insert(json!({
                             "keyring_id": keyring_record.id,
                             "receiver_id": returning_receiver.id,
                             "epoch": next_epoch,
@@ -218,13 +216,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     dotenv().ok();
     let addr = SocketAddr::from(([0, 0, 0, 0], 1337));
     let database_url = env::var("DATABASE_URL").expect("Can not connect to the database");
-    let sqlite: SQLiteDB = SQLiteDB::new(database_url).await;
+    // TODO Move these to another module, we should separate between KEYS and API
+    let sqlite = Arc::new(SQLiteDB::new(database_url).await);
     let keyring = sqlite.table_keyring();
     let result_keyring = keyring.find_by_name("chiro".to_string()).await.unwrap();
     let receiver = sqlite.table_receiver();
     receiver.get_latest_record(1, "".to_string()).await?;
     // Create new key if not exist
-    let pk = match result_keyring {
+    let keyring_record = match result_keyring {
         None => {
             // Generate key if it didn't exist
             let mut hmac_secret = [0u8; 16];
@@ -248,19 +247,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 "public_key": hex::encode(new_keypair.public_key), 
                 "secret_key": hex::encode(new_keypair.secret_key)}))
                 .await
-                .expect("Unable to insert new key to keyring table");
-            PublicKey::parse(&new_keypair.public_key).expect("Wrong public key format")
+                .expect("Unable to insert new key to keyring table")
+            //PublicKey::parse(&new_keypair.public_key).expect("Wrong public key format")
         }
-        Some(k) => PublicKey::parse(
+        Some(k) => k,
+        /*PublicKey::parse(
             hex::decode(k.public_key)
                 .unwrap()
                 .as_slice()
                 .try_into()
                 .unwrap(),
         )
-        .expect("Wrong public key format"),
+        .expect("Wrong public key format"),*/
     };
-
+    let pk = PublicKey::parse(
+        hex::decode(keyring_record.public_key)
+            .unwrap()
+            .as_slice()
+            .try_into()
+            .unwrap(),
+    )
+    .expect("Wrong public key format");
     println!("Public Key: {}", hex::encode(pk.serialize()));
     println!("Address of public key: 0x{}", hex::encode(get_address(pk)));
 
@@ -270,10 +277,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     loop {
         let (stream, _) = listener.accept().await?;
-
+        let sqlite_instance = sqlite.clone();
         tokio::task::spawn(async move {
             if let Err(err) = http1::Builder::new()
-                .serve_connection(stream, service_fn(orand))
+                .serve_connection(
+                    stream,
+                    service_fn(move |req| orand(req, sqlite_instance.clone())),
+                )
                 .await
             {
                 println!("Error serving connection: {:?}", err);
