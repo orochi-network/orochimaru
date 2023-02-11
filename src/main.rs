@@ -1,4 +1,4 @@
-#![deny(warnings)]
+// #![deny(warnings)]
 
 use bytes::Bytes;
 use dotenv::dotenv;
@@ -17,10 +17,11 @@ use hyper::{
 use orochimaru::{
     ethereum::{compose_operator_proof, sign_ethereum_message},
     json_rpc::JSONRPCMethod,
+    jwt::verify,
     sqlite_db::SQLiteDB,
 };
 use serde_json::json;
-use std::{borrow::Borrow, env, net::SocketAddr, str::from_utf8, sync::Arc};
+use std::{borrow::Borrow, env, net::SocketAddr, process::exit, str::from_utf8, sync::Arc};
 use tokio::net::TcpListener;
 
 /// This is our service handler. It receives a Request, routes on its
@@ -213,6 +214,8 @@ fn full<T: Into<Bytes>>(chunk: T) -> BoxBody<Bytes, hyper::Error> {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    verify();
+    exit(0);
     dotenv().ok();
     let addr = SocketAddr::from(([0, 0, 0, 0], 1337));
     let database_url = env::var("DATABASE_URL").expect("Can not connect to the database");

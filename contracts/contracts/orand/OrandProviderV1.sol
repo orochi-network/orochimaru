@@ -36,25 +36,25 @@ contract OrandProviderV1 is IOrandProviderV1, OrandStorage, OrandManagement, Ora
   //=======================[  External  ]====================
   // Publish new epoch
   function publish(bytes memory proof, EpochProof memory newEpoch) external onlyReadyForPenalty returns (bool) {
-    (bool verified, address receiverAddress, uint256 y) = _vefifyProof(proof);
+    (bool verified, OrandECDSAProof memory decodedProof) = _vefifyProof(proof);
     // Verifier is false, signature proof is incorrect
     if (!verified) {
       revert InvalidProof(proof);
     }
     // Linked y is different from submitted value
-    if (y != newEpoch.y) {
-      revert InvalidECVRFOutput(y, newEpoch.y);
+    if (decodedProof.y != newEpoch.y) {
+      revert InvalidECVRFOutput(decodedProof.y, newEpoch.y);
     }
     // Unable to add epoch to storage
-    if (!_addEpoch(receiverAddress, newEpoch)) {
-      revert UnableToAddNewEpoch(receiverAddress, newEpoch);
+    if (!_addEpoch(decodedProof.receiverAddress, newEpoch)) {
+      revert UnableToAddNewEpoch(decodedProof.receiverAddress, newEpoch);
     }
     // Unable to forward randomness to receiver contract
-    if (!IOrandConsumerV1(receiverAddress).consumeRandomness(newEpoch.y)) {
-      revert UnableToForwardRandomness(receiverAddress, y);
+    if (!IOrandConsumerV1(decodedProof.receiverAddress).consumeRandomness(newEpoch.y)) {
+      revert UnableToForwardRandomness(decodedProof.receiverAddress, decodedProof.y);
     }
     // Increasing nonce of receiver to prevent replay attack
-    if (!_increaseNonce(receiverAddress)) {
+    if (!_increaseNonce(decodedProof.receiverAddress)) {
       revert UnableToIncreaseNonce();
     }
     return true;
