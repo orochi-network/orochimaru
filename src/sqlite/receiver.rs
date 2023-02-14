@@ -9,6 +9,7 @@ pub struct Model {
     #[sea_orm(primary_key)]
     #[serde(skip_deserializing, skip_serializing)]
     pub id: u32,
+    pub keyring_id: u32,
     pub name: String,
     pub address: String,
     pub network: u32,
@@ -21,11 +22,25 @@ pub struct Model {
 pub enum Relation {
     #[sea_orm(has_many = "super::randomness::Entity")]
     Randomness,
+    #[sea_orm(
+        belongs_to = "super::keyring::Entity",
+        from = "Column::KeyringId",
+        to = "super::keyring::Column::Id",
+        on_update = "NoAction",
+        on_delete = "NoAction"
+    )]
+    Keyring,
 }
 
 impl Related<super::randomness::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Randomness.def()
+    }
+}
+
+impl Related<super::keyring::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Keyring.def()
     }
 }
 
