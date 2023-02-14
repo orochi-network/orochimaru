@@ -19,7 +19,7 @@ pub enum JSONRPCMethod {
     OrandGetPublicKey(String),
 }
 
-const ZERO_ADDRESS: &str = "0x0000000000000000000000000000000000000000";
+pub const ZERO_ADDRESS: &str = "0x0000000000000000000000000000000000000000";
 
 fn decode_u32(val: String) -> u32 {
     let regex_u32 = Regex::new(r#"\d{1,10}"#).expect("Unable to init Regex");

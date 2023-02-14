@@ -2,10 +2,10 @@
 pragma solidity ^0.8.0;
 import '../interfaces/IOrandStorage.sol';
 
-error InvalidEpochId();
-error SuedEpoch();
-
 contract OrandStorage is IOrandStorage {
+  error InvalidEpochId();
+  error SuedEpoch();
+
   // Event: New Epoch
   event NewEpoch(address indexed receiverAddress, uint256 indexed epoch, uint256 indexed randomness);
 

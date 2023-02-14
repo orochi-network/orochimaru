@@ -1,4 +1,4 @@
-#![deny(warnings)]
+// #![deny(warnings)]
 
 use bytes::Bytes;
 use dotenv::dotenv;
@@ -16,7 +16,8 @@ use hyper::{
 };
 use orochimaru::{
     ethereum::{compose_operator_proof, sign_ethereum_message},
-    json_rpc::JSONRPCMethod,
+    json_rpc::{JSONRPCMethod, ZERO_ADDRESS},
+    jwt::JWT,
     sqlite_db::SQLiteDB,
 };
 use serde_json::json;
@@ -29,30 +30,14 @@ async fn orand(
     req: Request<hyper::body::Incoming>,
     sqlite: Arc<SQLiteDB>,
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
-    let keyring = sqlite.table_keyring();
+    let (header, body) = req.into_parts();
     let randomness = sqlite.table_randomness();
-    let receiver = sqlite.table_receiver();
+    let response_builder = Response::builder()
+        .header("Access-Control-Allow-Origin", "*")
+        .header("Content-Type", "application/json");
+    let keyring = sqlite.table_keyring();
 
-    // Reconstruct secret key from database
-    let keyring_record = keyring
-        .find_by_name("chiro".to_string())
-        .await
-        .expect("Can not query our database")
-        .expect("Chiro not found");
-
-    let secret_key = SecretKey::parse(
-        hex::decode(keyring_record.secret_key)
-            .unwrap()
-            .as_slice()
-            .try_into()
-            .unwrap(),
-    )
-    .expect("Can not reconstruct secret key");
-
-    let vrf = ECVRF::new(secret_key);
-    let response_builder = Response::builder().header("Access-Control-Allow-Origin", "*");
-
-    match (req.method(), req.uri().path()) {
+    match (&header.method, header.uri.path()) {
         // Serve some instructions at /
         (&Method::GET, "/") => Ok(response_builder
             .body(full("Wrong method, you know!."))
@@ -60,7 +45,9 @@ async fn orand(
 
         // Handle all post method to JSON RPC
         (&Method::POST, "/") => {
-            let max = req.body().size_hint().upper().unwrap_or(u64::MAX);
+            let max = body.size_hint().upper().unwrap_or(u64::MAX);
+
+            // Body is 64 KB
             if max > 1024 * 64 {
                 let mut resp = response_builder
                     .body(full("Your body too big, can not fit the body bag"))
@@ -69,7 +56,7 @@ async fn orand(
                 return Ok(resp);
             }
             // Body to byte
-            let whole_body = req.collect().await?.to_bytes();
+            let whole_body = body.collect().await?.to_bytes();
             let json_string = from_utf8(whole_body.borrow()).unwrap();
             let json_rpc_payload = JSONRPCMethod::from_json_string(json_string);
 
@@ -87,6 +74,84 @@ async fn orand(
                 }
                 // Get epoch, it's alias of orand_newPublicEpoch() and orand_newPrivateEpoch()
                 JSONRPCMethod::OrandNewEpoch(network, address) => {
+                    let receiver = sqlite.table_receiver();
+
+                    // Decode JWT payload, this code is dirty let try catch_unwind next time
+                    let (jwt_payload, json_web_token) = match header.headers.get("authorization") {
+                        Some(e) => {
+                            match e.to_str() {
+                                Ok(s) => match JWT::decode_payload(&s.to_string()) {
+                                    Some(p) => (p, s),
+                                    None => {
+                                        return Ok(response_builder
+                                            .body(full("{\"success\":false, \"message\":\"Unable to decode authorization header\"}"))
+                                            .unwrap());
+                                    }
+                                },
+                                Err(_) => {
+                                    return Ok(response_builder
+                                    .body(full("{\"success\":false, \"message\":\"Unable to decode authorization header\"}"))
+                                    .unwrap());
+                                }
+                            }
+                            //JWT::new(secret_hex_string);
+                        }
+                        None => {
+                            return Ok(response_builder
+                                .body(full("{\"success\":false, \"message\":\"Access denied, this method required authorization\"}"))
+                                .unwrap());
+                        }
+                    };
+
+                    // Reconstruct secret key from database
+                    let keyring_record = match keyring
+                        .find_by_name(jwt_payload.user.clone())
+                        .await
+                        .expect("Can not query our database")
+                    {
+                        Some(record) => record,
+                        None => {
+                            return Ok(response_builder
+                                    .body(full("{\"success\":false, \"message\":\"Access denied, this method required authorization\"}"))
+                                    .unwrap());
+                        }
+                    };
+
+                    // Only orand could able to create public epoch
+                    if address.eq(ZERO_ADDRESS) && !jwt_payload.user.eq("orand") {
+                        return Ok(response_builder
+                            .body(full(
+                                "{\"success\":false, \"message\":\"Access denied, you do not have ability to create public\"}",
+                            ))
+                            .unwrap());
+                    }
+
+                    let jwt = JWT::new(&keyring_record.hmac_secret);
+                    if !jwt.verify(&json_web_token.to_string()) {
+                        return Ok(response_builder
+                            .body(full(
+                                "{\"success\":false, \"message\":\"Access denied, incorrect key\"}",
+                            ))
+                            .unwrap());
+                    }
+
+                    let secret_key = SecretKey::parse(
+                        hex::decode(keyring_record.secret_key)
+                            .unwrap()
+                            .as_slice()
+                            .try_into()
+                            .unwrap(),
+                    )
+                    .expect("Can not reconstruct secret key");
+
+                    let returning_receiver = receiver
+                        .update(keyring_record.id, network, &address)
+                        .await
+                        .expect("Unable to update receiver")
+                        .expect("Data was insert but not found, why?");
+
+                    let vrf = ECVRF::new(secret_key);
+
                     let latest_epoch_record = randomness
                         .find_latest_epoch(network, address.clone())
                         .await
@@ -133,11 +198,6 @@ async fn orand(
                     ]
                     .concat();
 
-                    let returning_receiver = receiver
-                        .update(network, &address)
-                        .await
-                        .expect("Unable to update receiver")
-                        .expect("Data was insert but not found, why?");
                     let bytes_address: [u8; 20] =
                         hex::decode(address.replace("0x", "").replace("0X", ""))
                             .expect("Unable to decode address")
@@ -219,9 +279,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // TODO Move these to another module, we should separate between KEYS and API
     let sqlite = Arc::new(SQLiteDB::new(database_url).await);
     let keyring = sqlite.table_keyring();
-    let result_keyring = keyring.find_by_name("chiro".to_string()).await.unwrap();
-    let receiver = sqlite.table_receiver();
-    receiver.get_latest_record(1, "".to_string()).await?;
+    let result_keyring = keyring.find_by_name("orand".to_string()).await.unwrap();
+
     // Create new key if not exist
     let keyring_record = match result_keyring {
         None => {
@@ -242,23 +301,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             };
             keyring
                 .insert(json!({
-                "username": "chiro",
+                "username": "orand",
                 "hmac_secret": hex::encode(hmac_secret),
                 "public_key": hex::encode(new_keypair.public_key), 
                 "secret_key": hex::encode(new_keypair.secret_key)}))
                 .await
                 .expect("Unable to insert new key to keyring table")
-            //PublicKey::parse(&new_keypair.public_key).expect("Wrong public key format")
         }
         Some(k) => k,
-        /*PublicKey::parse(
-            hex::decode(k.public_key)
-                .unwrap()
-                .as_slice()
-                .try_into()
-                .unwrap(),
-        )
-        .expect("Wrong public key format"),*/
     };
     let pk = PublicKey::parse(
         hex::decode(keyring_record.public_key)
