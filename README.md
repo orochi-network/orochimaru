@@ -2,7 +2,7 @@
     <img src="./assets/orochimaru.png" alter="Orochimaru desu?">
 </p>
 
-# Orochimaru
+## Orochimaru
 
 Orochimaru is a full-node client of Orochi Network which was implemented in pure Rust programming language. Orochi Network isn't a blockchain but a distributed network built to perform Multi Party Computation (MPC) and Zero-Knowledge Proof (ZKP) proving from which we provide trustless and Verifiable Computation. Our mission is to establish High Performance dApp.
 

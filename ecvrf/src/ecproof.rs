@@ -32,21 +32,3 @@ impl ECVRFProof {
         Self { gamma, c, s, y, pk }
     }
 }
-
-impl ToString for ECVRFProof {
-    fn to_string(&self) -> String {
-        let mut pub_affine: Affine = self.pk.into();
-        pub_affine.x.normalize();
-        pub_affine.y.normalize();
-        format!(
-            "gamma: x: 0x{}\n > y: 0x{}\nc: 0x{}\ns: 0x{}\ny: 0x{}\npublic key:\n > x: {}\n > y: {}\n",
-            hex::encode(self.gamma.x.b32()),
-            hex::encode(self.gamma.y.b32()),
-            hex::encode(self.c.b32()),
-            hex::encode(self.s.b32()),
-            hex::encode(self.y.b32()),
-            hex::encode(pub_affine.x.b32()),
-            hex::encode(pub_affine.y.b32())
-        )
-    }
-}

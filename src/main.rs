@@ -24,6 +24,8 @@ use serde_json::json;
 use std::{borrow::Borrow, env, net::SocketAddr, str::from_utf8, sync::Arc};
 use tokio::net::TcpListener;
 
+const ORAND_KEYRING_NAME: &str = "orand";
+
 /// This is our service handler. It receives a Request, routes on its
 /// path, and returns a Future of a Response.
 async fn orand(
@@ -104,7 +106,7 @@ async fn orand(
                     };
 
                     // Reconstruct secret key from database
-                    let keyring_record = match keyring
+                    let user_record = match keyring
                         .find_by_name(jwt_payload.user.clone())
                         .await
                         .expect("Can not query our database")
@@ -117,8 +119,24 @@ async fn orand(
                         }
                     };
 
+                    // Reconstruct secret key from database
+                    let keyring_record = match keyring
+                        .find_by_name(ORAND_KEYRING_NAME.to_string())
+                        .await
+                        .expect("Can not query our database")
+                    {
+                        Some(record) => record,
+                        None => {
+                            return Ok(response_builder
+                                .body(full(
+                                    "{\"success\":false, \"message\":\"Orand key was not init\"}",
+                                ))
+                                .unwrap());
+                        }
+                    };
+
                     // Only orand could able to create public epoch
-                    if address.eq(ZERO_ADDRESS) && !jwt_payload.user.eq("orand") {
+                    if address.eq(ZERO_ADDRESS) && !jwt_payload.user.eq(ORAND_KEYRING_NAME) {
                         return Ok(response_builder
                             .body(full(
                                 "{\"success\":false, \"message\":\"Access denied, you do not have ability to create public\"}",
@@ -126,7 +144,7 @@ async fn orand(
                             .unwrap());
                     }
 
-                    let jwt = JWT::new(&keyring_record.hmac_secret);
+                    let jwt = JWT::new(&user_record.hmac_secret);
                     if !jwt.verify(&json_web_token.to_string()) {
                         return Ok(response_builder
                             .body(full(
@@ -145,7 +163,7 @@ async fn orand(
                     .expect("Can not reconstruct secret key");
 
                     let returning_receiver = receiver
-                        .update(keyring_record.id, network, &address)
+                        .update(network, &address)
                         .await
                         .expect("Unable to update receiver")
                         .expect("Data was insert but not found, why?");
@@ -279,7 +297,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // TODO Move these to another module, we should separate between KEYS and API
     let sqlite = Arc::new(SQLiteDB::new(database_url).await);
     let keyring = sqlite.table_keyring();
-    let result_keyring = keyring.find_by_name("orand".to_string()).await.unwrap();
+    let result_keyring = keyring
+        .find_by_name(ORAND_KEYRING_NAME.to_string())
+        .await
+        .unwrap();
 
     // Create new key if not exist
     let keyring_record = match result_keyring {
@@ -301,7 +322,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             };
             keyring
                 .insert(json!({
-                "username": "orand",
+                "username": ORAND_KEYRING_NAME,
                 "hmac_secret": hex::encode(hmac_secret),
                 "public_key": hex::encode(new_keypair.public_key), 
                 "secret_key": hex::encode(new_keypair.secret_key)}))

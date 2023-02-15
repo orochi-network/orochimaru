@@ -22,7 +22,6 @@ impl<'a> ReceiverTable<'a> {
     // Find receiver record by its network and address
     pub async fn update(
         &self,
-        keyring_id: u32,
         network: u32,
         address: &String,
     ) -> Result<Option<Model>, DbErr> {
@@ -40,7 +39,6 @@ impl<'a> ReceiverTable<'a> {
             Some(r) => {
                 Entity::update(ActiveModel {
                     id: ActiveValue::set(r.id),
-                    keyring_id: ActiveValue::set(keyring_id),
                     name: ActiveValue::set(r.name),
                     network: ActiveValue::set(network),
                     address: ActiveValue::set(address.clone()),
@@ -55,7 +53,6 @@ impl<'a> ReceiverTable<'a> {
             None => {
                 let returning_receiver = Entity::insert(ActiveModel {
                     id: ActiveValue::not_set(),
-                    keyring_id: ActiveValue::set(keyring_id),
                     name: ActiveValue::set(Uuid::new_v4().to_string()),
                     network: ActiveValue::set(network),
                     address: ActiveValue::set(address.clone()),
