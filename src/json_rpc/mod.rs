@@ -35,13 +35,13 @@ fn decode_u32(val: String) -> u32 {
 fn decode_address(val: String) -> String {
     let regex_address = Regex::new(r#"^0x[a-fA-F0-9]{40}$"#).expect("Unable to init Regex");
     match regex_address.is_match(val.as_str().as_ref()) {
-        true => val.clone(),
+        true => val.clone().to_lowercase(),
         false => panic!("Invalid input address value"),
     }
 }
 
 fn decode_name(val: String) -> String {
-    let regex_name = Regex::new(r#"^[a-zA-Z0-9\s]{3,40}$"#).expect("Unable to init Regex");
+    let regex_name = Regex::new(r#"^[a-zA-Z0-9]{3,40}$"#).expect("Unable to init Regex");
     match regex_name.is_match(val.as_str().as_ref()) {
         true => val.clone(),
         false => panic!("Invalid input name value"),

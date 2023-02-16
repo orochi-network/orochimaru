@@ -66,7 +66,7 @@ async fn orand(
                 // Get epoch, it's alias of orand_getPublicEpoch() and orand_getPrivateEpoch()
                 JSONRPCMethod::OrandGetEpoch(network, address, epoch) => {
                     let recent_epochs = randomness
-                        .find_recent_epoch(network, address, epoch)
+                        .find_recent_epoch(network, &address, epoch)
                         .await
                         .expect("Can not get recent epoch");
 
@@ -153,6 +153,28 @@ async fn orand(
                             .unwrap());
                     }
 
+                    // Reconstruct secret key from database
+                    let receiver_record = match receiver
+                        .find_one(network, &address)
+                        .await
+                        .expect("Can not query our database")
+                    {
+                        Some(record) => record,
+                        None => {
+                            return Ok(response_builder
+                                .body(full(
+                                    "{\"success\":false, \"message\":\"Receiver was not registered\"}",
+                                ))
+                                .unwrap());
+                        }
+                    };
+
+                    let returning_receiver = receiver
+                        .update(&receiver_record, network, &address)
+                        .await
+                        .expect("Unable to update receiver")
+                        .expect("Data was insert but not found, why?");
+
                     let secret_key = SecretKey::parse(
                         hex::decode(keyring_record.secret_key)
                             .unwrap()
@@ -162,16 +184,10 @@ async fn orand(
                     )
                     .expect("Can not reconstruct secret key");
 
-                    let returning_receiver = receiver
-                        .update(network, &address)
-                        .await
-                        .expect("Unable to update receiver")
-                        .expect("Data was insert but not found, why?");
-
                     let vrf = ECVRF::new(secret_key);
 
                     let latest_epoch_record = randomness
-                        .find_latest_epoch(network, address.clone())
+                        .find_latest_epoch(network, &address)
                         .await
                         .unwrap();
 
@@ -223,7 +239,7 @@ async fn orand(
                             .try_into()
                             .unwrap();
                     let raw_proof =
-                        compose_operator_proof(returning_receiver.nonce as u64, &bytes_address);
+                        compose_operator_proof(receiver_record.nonce as u64, &bytes_address);
                     let ecdsa_proof = sign_ethereum_message(&secret_key, &raw_proof);
                     let returning_randomness = randomness
                         .insert(json!({

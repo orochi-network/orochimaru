@@ -19,11 +19,11 @@ impl<'a> RandomnessTable<'a> {
     pub async fn find_recent_epoch(
         &self,
         network: u32,
-        address: String,
+        address: &String,
         epoch: u32,
     ) -> Result<Vec<Model>, DbErr> {
         let receiver = ReceiverTable::new(self.connection)
-            .get_latest_record(network, address)
+            .find_one(network, address)
             .await
             .expect("Unable to query receiver from database");
         match receiver {
@@ -47,10 +47,10 @@ impl<'a> RandomnessTable<'a> {
     pub async fn find_latest_epoch(
         &self,
         network: u32,
-        address: String,
+        address: &String,
     ) -> Result<Option<Model>, DbErr> {
         let receiver = ReceiverTable::new(self.connection)
-            .get_latest_record(network, address)
+            .find_one(network, address)
             .await
             .expect("Unable to query receiver from database");
         match receiver {
