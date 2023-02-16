@@ -13,7 +13,7 @@ if (fs.existsSync('./typechain-types')) {
   }
 }
 
-const compilers = ['0.8.7'].map((item: string) => ({
+const compilers = ['0.8.17'].map((item: string) => ({
   version: item,
   settings: {
     optimizer: {
@@ -25,6 +25,9 @@ const compilers = ['0.8.7'].map((item: string) => ({
 
 const config: HardhatUserConfig = {
   defaultNetwork: 'hardhat',
+  gasReporter: {
+    enabled: true,
+  },
   networks: {
     bnbtest: {
       url: env.OROCHI_RPC,
