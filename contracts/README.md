@@ -3,17 +3,15 @@
 ## BNB Chain Testnet
 
 ```text
-[Report for network: bnbtest] --------------------------------------------------------
-        test/BigO:                                       0xBEB242c818bd220b369917B6C15cB7f0a0b8bB89
-        OrandV1/OrandECVRF:                              0x91E8a91051cf8336a190b241993118559a6Ffa61
-        OrandV1/OrandProviderV1:                         0x81459fdf766981F27c989f7C546a372b46D71Cb1
-[End of Report for network: bnbtest] -------------------------------------------------
+[Report for network: bnbChainTest] --------------------------------------------------------
+        OrandV1/OrandECVRF:                              0x0c761D294F4e4beb9566076d1aa25793d6B1C533
+        OrandV1/OrandProviderV1:                         0xD4Ed3f4aC98481BE3e7AAfC5D4e507c2Be5108E1
+[End of Report for network: bnbChainTest] -------------------------------------------------
 Deployer: 0x23A0944B9a8260964Fa23116D6549625c6bBD50A
 ```
 
-- [0xBEB242c818bd220b369917B6C15cB7f0a0b8bB89](https://testnet.bscscan.com/address/0xBEB242c818bd220b369917B6C15cB7f0a0b8bB89): BigO
-- [0x91E8a91051cf8336a190b241993118559a6Ffa61](https://testnet.bscscan.com/address/0x91E8a91051cf8336a190b241993118559a6Ffa61): OrandECVRF
-- [0x81459fdf766981F27c989f7C546a372b46D71Cb1](https://testnet.bscscan.com/address/0x81459fdf766981F27c989f7C546a372b46D71Cb1): OrandProviderV1
+- [0x0c761D294F4e4beb9566076d1aa25793d6B1C533](https://testnet.bscscan.com/address/0x0c761D294F4e4beb9566076d1aa25793d6B1C533): OrandECVRF
+- [0xD4Ed3f4aC98481BE3e7AAfC5D4e507c2Be5108E1](https://testnet.bscscan.com/address/0xD4Ed3f4aC98481BE3e7AAfC5D4e507c2Be5108E1): OrandProviderV1
 
 # Installation
 
