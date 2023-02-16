@@ -8,18 +8,11 @@ error InvalidProofNonce(uint256 proofNonce);
 error InvalidProofSigner(address proofSigner);
 
 contract OrandSignatureVerifier is Ownable {
-  // ECDSA proof
-  struct OrandMessage {
-    uint96 receiverNonce;
-    address receiverAddress;
-    uint256 y;
-  }
-
   // Allowed orand operator
-  address internal operator;
+  address private operator;
 
   // Nonce value
-  mapping(address => uint256) internal nonce;
+  mapping(address => uint256) private nonce;
 
   // Byte manipulation
   using Bytes for bytes;
@@ -46,9 +39,8 @@ contract OrandSignatureVerifier is Ownable {
   //=======================[  Internal  ]====================
 
   // Increasing nonce of receiver address
-  function _increaseNonce(address receiverAddress) internal returns (bool) {
+  function _increaseNonce(address receiverAddress) internal {
     nonce[receiverAddress] += 1;
-    return true;
   }
 
   // Set proof operator

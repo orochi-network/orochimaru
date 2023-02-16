@@ -11,8 +11,8 @@ Deployer: 0x23A0944B9a8260964Fa23116D6549625c6bBD50A
 ```
 
 - [0x0c761D294F4e4beb9566076d1aa25793d6B1C533](https://testnet.bscscan.com/address/0x0c761D294F4e4beb9566076d1aa25793d6B1C533): OrandECVRF
-- [0xD4Ed3f4aC98481BE3e7AAfC5D4e507c2Be5108E1](https://testnet.bscscan.com/address/0xD4Ed3f4aC98481BE3e7AAfC5D4e507c2Be5108E1): OrandProviderV1
-- [0xd2BA349f31Aa48F6A6E26Fd5EeCbaF8c06069902](https://testnet.bscscan.com/address/0xd2BA349f31Aa48F6A6E26Fd5EeCbaF8c06069902): DiceExample
+- [0xF3455Bb39e8C9228f8701ECb5D5A177A77096593](https://testnet.bscscan.com/address/0xF3455Bb39e8C9228f8701ECb5D5A177A77096593): OrandProviderV1
+- [0x66681298BBbdf30a0B3Ec98cAbf41AA7669dc201](https://testnet.bscscan.com/address/0x66681298BBbdf30a0B3Ec98cAbf41AA7669dc201): DiceExample
 
 # Installation
 

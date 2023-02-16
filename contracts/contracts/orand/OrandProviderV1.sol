@@ -6,10 +6,8 @@ import './OrandSignatureVerifier.sol';
 import '../interfaces/IOrandECVRF.sol';
 import '../interfaces/IOrandProviderV1.sol';
 import '../interfaces/IOrandConsumerV1.sol';
-import '../libraries/Bytes.sol';
 
 contract OrandProviderV1 is IOrandProviderV1, OrandStorage, OrandManagement, OrandSignatureVerifier {
-  using Bytes for bytes;
   // ECVRF verifier smart contract
   IOrandECVRF ecvrf;
 
@@ -34,13 +32,21 @@ contract OrandProviderV1 is IOrandProviderV1, OrandStorage, OrandManagement, Ora
   //=======================[  External  ]====================
   // Publish new epoch
   function publish(bytes memory proof, EpochProof memory newEpoch) external returns (bool) {
+    // Output of current epoch
+    uint256 y;
+
+    // Verify ECDSA proof
     (uint256 receiverNonce, address receiverAddress) = _vefifyProof(proof);
-    uint256 y = uint256(keccak256(abi.encodePacked(newEpoch.gamma[0], newEpoch.gamma[1])));
-    if (receiverNonce == 0) {
-      _addEpoch(receiverAddress, receiverNonce, y);
+
+    // Epoch 0 won't check the proof
+    if (receiverNonce > 0) {
+      y = ecvrf.verifyProof(publicKey, getPreviousAlpha(receiverAddress), newEpoch);
     } else {
-      ecvrf.verifyProof(publicKey, getPreviousAlpha(receiverAddress), newEpoch);
+      y = uint256(keccak256(abi.encodePacked(newEpoch.gamma[0], newEpoch.gamma[1])));
     }
+
+    // Add epoch to the chain
+    _addEpoch(receiverAddress, receiverNonce, y);
 
     // Check for the existing smart contract and forward randomness to receiver
     if (receiverAddress.code.length > 0) {
@@ -50,9 +56,7 @@ contract OrandProviderV1 is IOrandProviderV1, OrandStorage, OrandManagement, Ora
     }
 
     // Increasing nonce of receiver to prevent replay attack
-    if (!_increaseNonce(receiverAddress)) {
-      revert UnableToIncreaseNonce();
-    }
+    _increaseNonce(receiverAddress);
     return true;
   }
 
@@ -60,5 +64,10 @@ contract OrandProviderV1 is IOrandProviderV1, OrandStorage, OrandManagement, Ora
   // Get address of ECVRF verifier
   function getECVRFVerifier() external view returns (address) {
     return address(ecvrf);
+  }
+
+  // Check ECVRF proof
+  function checkECVRFProof(uint256 alpha, EpochProof memory newEpoch) external view returns (uint256 output) {
+    return ecvrf.verifyProof(publicKey, alpha, newEpoch);
   }
 }
