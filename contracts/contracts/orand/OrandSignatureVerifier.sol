@@ -4,13 +4,12 @@ import '@openzeppelin/contracts/access/Ownable.sol';
 import '@openzeppelin/contracts/utils/cryptography/ECDSA.sol';
 import '../libraries/Bytes.sol';
 
-contract OrandSignatureVerifier is Ownable {
-  error InvalidProofLength(bytes proof);
-  error InvalidProofNonce(uint256 proofNonce);
-  error InvalidProofSigner(address proofSigner);
+error InvalidProofNonce(uint256 proofNonce);
+error InvalidProofSigner(address proofSigner);
 
+contract OrandSignatureVerifier is Ownable {
   // ECDSA proof
-  struct OrandECDSAProof {
+  struct OrandMessage {
     uint96 receiverNonce;
     address receiverAddress;
     uint256 y;
@@ -61,46 +60,38 @@ contract OrandSignatureVerifier is Ownable {
 
   //=======================[  Internal View ]====================
 
-  // Decompose nonce and receiver address in signed proof
-  function _decomposeProof(bytes memory proof) internal pure returns (OrandECDSAProof memory decodedProof) {
-    uint256 proofUint = proof.readUint256(65);
-    decodedProof.receiverNonce = uint96(proofUint >> 160);
-    decodedProof.receiverAddress = address(uint160(proofUint));
-    decodedProof.y = proof.readUint256(97);
-    return decodedProof;
-  }
-
   // Verify proof of operator
-  function _vefifyProof(bytes memory proof) internal view returns (bool verified, OrandECDSAProof memory decodedProof) {
-    if (proof.length != 129) {
-      revert InvalidProofLength(proof);
-    }
+  function _vefifyProof(bytes memory proof) internal view returns (uint256 receiverNonce, address receiverAddress) {
     bytes memory signature = proof.readBytes(0, 65);
-    bytes memory message = proof.readBytes(65, proof.length);
+    bytes memory message = proof.readBytes(65, 32);
 
-    // Receiver Nonce || Receiver Address || y
-    decodedProof = _decomposeProof(proof);
+    uint256 proofUint = message.readUint256(0);
+    receiverNonce = uint96(proofUint >> 160);
+    receiverAddress = address(uint160(proofUint));
 
-    if (uint96(nonce[decodedProof.receiverAddress]) != decodedProof.receiverNonce) {
-      revert InvalidProofNonce(decodedProof.receiverNonce);
+    if (uint96(nonce[receiverAddress]) != receiverNonce) {
+      revert InvalidProofNonce(receiverNonce);
     }
     address proofSigner = message.toEthSignedMessageHash().recover(signature);
     if (proofSigner != operator) {
       revert InvalidProofSigner(proofSigner);
     }
-    return (true, decodedProof);
+    return (receiverNonce, receiverAddress);
   }
 
   //=======================[  External View  ]====================
   // Get signer address from a valid proof
   function checkProofSigner(
     bytes memory proof
-  ) external pure returns (address signer, OrandECDSAProof memory decodedProof) {
+  ) external pure returns (address signer, uint256 receiverNonce, address receiverAddress) {
     bytes memory signature = proof.readBytes(0, 65);
-    bytes memory message = proof.readBytes(65, proof.length);
-    decodedProof = _decomposeProof(proof);
+    bytes memory message = proof.readBytes(65, 32);
+    uint256 proofUint = message.readUint256(0);
+    receiverNonce = uint96(proofUint >> 160);
+    receiverAddress = address(uint160(proofUint));
     signer = message.toEthSignedMessageHash().recover(signature);
-    return (signer, decodedProof);
+
+    return (signer, receiverNonce, receiverAddress);
   }
 
   // Get operator

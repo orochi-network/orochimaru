@@ -42,6 +42,7 @@ library Bytes {
     assembly {
       result := shr(96, mload(add(add(input, 0x20), offset)))
     }
+    return result;
   }
 
   // Read uint256 from input bytes buffer
@@ -52,6 +53,7 @@ library Bytes {
     assembly {
       result := mload(add(add(input, 0x20), offset))
     }
+    return result;
   }
 
   // Read bytes from input bytes buffer

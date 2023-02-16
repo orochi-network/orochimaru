@@ -222,11 +222,8 @@ async fn orand(
                             .as_slice()
                             .try_into()
                             .unwrap();
-                    let raw_proof = compose_operator_proof(
-                        returning_receiver.nonce as u64,
-                        &bytes_address,
-                        contract_proof.y,
-                    );
+                    let raw_proof =
+                        compose_operator_proof(returning_receiver.nonce as u64, &bytes_address);
                     let ecdsa_proof = sign_ethereum_message(&secret_key, &raw_proof);
                     let returning_randomness = randomness
                         .insert(json!({

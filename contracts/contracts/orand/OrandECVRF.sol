@@ -1,22 +1,27 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 import '../libraries/VRF.sol';
+import '../interfaces/IOrandStorage.sol';
 
-contract OrandECVRF is VRF {
+contract OrandECVRF is VRF, IOrandStorage {
   //=======================[  External  ]====================
   function verifyProof(
     uint256[2] memory pk,
-    uint256[2] memory gamma,
-    uint256 c,
-    uint256 s,
     uint256 alpha,
-    address uWitness,
-    uint256[2] memory cGammaWitness,
-    uint256[2] memory sHashWitness,
-    uint256 zInv
+    EpochProof memory epoch
   ) external view returns (uint256 output) {
-    verifyVRFProof(pk, gamma, c, s, alpha, uWitness, cGammaWitness, sHashWitness, zInv);
+    verifyVRFProof(
+      pk,
+      epoch.gamma,
+      epoch.c,
+      epoch.s,
+      alpha,
+      epoch.uWitness,
+      epoch.cGammaWitness,
+      epoch.sHashWitness,
+      epoch.zInv
+    );
     // Encode without prefix
-    output = uint256(keccak256(abi.encode(gamma)));
+    return uint256(keccak256(abi.encode(epoch.gamma)));
   }
 }
