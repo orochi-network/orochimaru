@@ -3,7 +3,9 @@
 use bytes::Bytes;
 use dotenv::dotenv;
 use ecvrf::{
-    helper::{generate_raw_keypair, get_address, random_bytes, recover_raw_keypair},
+    helper::{
+        affine_to_hex_string, generate_raw_keypair, get_address, random_bytes, recover_raw_keypair,
+    },
     secp256k1::{curve::Scalar, PublicKey, SecretKey},
     ECVRF,
 };
@@ -218,28 +220,17 @@ async fn orand(
 
                     let contract_proof = vrf.prove_contract(&current_alpha);
 
-                    let gamma =
-                        [contract_proof.gamma.x.b32(), contract_proof.gamma.y.b32()].concat();
-                    let witness_gamma = [
-                        contract_proof.witness_gamma.x.b32(),
-                        contract_proof.witness_gamma.y.b32(),
-                    ]
-                    .concat();
-
-                    let witness_hash = [
-                        contract_proof.witness_hash.x.b32(),
-                        contract_proof.witness_hash.y.b32(),
-                    ]
-                    .concat();
-
                     let bytes_address: [u8; 20] =
                         hex::decode(address.replace("0x", "").replace("0X", ""))
                             .expect("Unable to decode address")
                             .as_slice()
                             .try_into()
                             .unwrap();
-                    let raw_proof =
-                        compose_operator_proof(receiver_record.nonce as u64, &bytes_address);
+                    let raw_proof = compose_operator_proof(
+                        receiver_record.nonce as u64,
+                        &bytes_address,
+                        &contract_proof.y,
+                    );
                     let ecdsa_proof = sign_ethereum_message(&secret_key, &raw_proof);
                     let returning_randomness = randomness
                         .insert(json!({
@@ -247,13 +238,13 @@ async fn orand(
                             "receiver_id": returning_receiver.id,
                             "epoch": next_epoch,
                             "alpha":hex::encode(current_alpha.b32()),
-                            "gamma":hex::encode(&gamma),
+                            "gamma": affine_to_hex_string(&contract_proof.gamma),
                             "c":hex::encode(&contract_proof.c.b32()),
                             "s":hex::encode(&contract_proof.s.b32()),
                             "y":hex::encode(&contract_proof.y.b32()),
                             "witness_address": hex::encode(contract_proof.witness_address.b32())[24..64],
-                            "witness_gamma": hex::encode(&witness_gamma),
-                            "witness_hash": hex::encode(&witness_hash),
+                            "witness_gamma": affine_to_hex_string(&contract_proof.witness_gamma),
+                            "witness_hash": affine_to_hex_string(&contract_proof.witness_hash),
                             "inverse_z": hex::encode(contract_proof.inverse_z.b32()),
                             "signature_proof": hex::encode(&ecdsa_proof),
                         }))

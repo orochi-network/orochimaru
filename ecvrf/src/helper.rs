@@ -36,6 +36,10 @@ pub fn affine_composer(x: &Field, y: &Field) -> Affine {
     r
 }
 
+pub fn affine_to_hex_string(a: &Affine) -> String {
+    hex::encode([a.x.b32(), a.y.b32()].concat())
+}
+
 // Projective sub, cost optimization for EVM
 pub fn projective_sub(a: &Affine, b: &Affine) -> Affine {
     let mut c = Affine::default();
