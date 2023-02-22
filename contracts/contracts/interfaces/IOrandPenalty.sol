@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 
-error NotEnougCollateral(uint256 requiredCollateral);
+error NotEnougCollateral(uint256 balance, uint256 requiredCollateral);
 error InvalidCaller(address callerAddress);
 
 interface IOrandPenalty {

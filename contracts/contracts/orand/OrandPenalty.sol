@@ -27,6 +27,10 @@ contract OrandPenalty is IOrandPenalty {
     _;
   }
 
+  constructor(uint256 initalFee) {
+    _setPenalty(initalFee);
+  }
+
   //=======================[  Internal ]====================
 
   // Transfer collateral to agiven address and recude the collateral record

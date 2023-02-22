@@ -39,6 +39,11 @@ contract OrandECDSA is IOrandECDSA {
     operator = operatorAddress;
   }
 
+  // Get epoch by receiver
+  function _setTargetEpoch(OrandECDSAProof memory ecdsaProof) internal {
+    epoch[ecdsaProof.receiverAddress] = ecdsaProof.receiverEpoch + 1;
+  }
+
   //=======================[  Internal View  ]====================
 
   // Get epoch by receiver

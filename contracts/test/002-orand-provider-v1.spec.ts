@@ -122,7 +122,7 @@ const toEcvrfProof2 = (e: any) => {
   ].join()}`;
 };
 
-describe('Orochi ECVRF', function () {
+describe('OrandProviderV1', function () {
   it('orand proof must be correct', async () => {
     [deployerSigner, somebody] = await hre.ethers.getSigners();
     deployer = Deployer.getInstance(hre).connect(deployerSigner);
@@ -145,7 +145,16 @@ describe('Orochi ECVRF', function () {
       // Operator address
       correspondingAddress,
       orandECVRF.address,
+      1000000,
     );
+
+    await orandProviderV1.deposit('0x66681298BBbDF30a0B3Ec98caBF41aA7669dc200', { value: 1000000000 });
+
+    expect((await orandProviderV1.collateralBalance('0x66681298BBbDF30a0B3Ec98caBF41aA7669dc200')).toNumber()).eq(
+      1000000000,
+    );
+
+    expect((await orandProviderV1.getPenaltyFee()).toNumber()).eq(1000000);
 
     const [signer, receiverNonce, receiverAddress, y] = await orandProviderV1.callStatic.checkProofSigner(
       `0x${epochs[0].signatureProof}`,
@@ -162,29 +171,15 @@ describe('Orochi ECVRF', function () {
     await orandProviderV1.connect(somebody).publishValidityProof(...optimus(epochs[0]));
   });
 
-  it('anyone should able to publish epoch 1 with a ECDSA + Validity proof', async () => {
+  it('anyone should able to publish epoch 1 with a ECDSA + Fraud proof', async () => {
     //@ts-ignore
-    await orandProviderV1.connect(somebody).publishValidityProof(...optimus(epochs[1]));
+    await orandProviderV1.connect(somebody).publishFraudProof(`0x${epochs[1].signatureProof}`);
+    await orandProviderV1.switchToValidityProof(`0x${epochs[1].signatureProof}`);
   });
 
   it('anyone should able to publish epoch 2 with a ECDSA + Validity proof', async () => {
     //@ts-ignore
     await orandProviderV1.connect(somebody).publishValidityProof(...optimus(epochs[2]));
-  });
-
-  it('anyone should able to publish epoch 0 with a ECDSA + Fraud proof', async () => {
-    //@ts-ignore
-    await orandProviderV1.connect(somebody).publishFraudProof(`0x${epochs[0].signatureProof}`);
-  });
-
-  it('anyone should able to publish epoch 1 with a ECDSA + Fraud proof', async () => {
-    //@ts-ignore
-    await orandProviderV1.connect(somebody).publishFraudProof(`0x${epochs[1].signatureProof}`);
-  });
-
-  it('anyone should able to publish epoch 2 with a ECDSA + Fraud proof', async () => {
-    //@ts-ignore
-    await orandProviderV1.connect(somebody).publishFraudProof(`0x${epochs[2].signatureProof}`);
   });
 
   it('anyone should not able to sue since Orochi Network and the consumer did nothing wrong', async () => {

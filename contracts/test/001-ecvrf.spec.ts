@@ -43,7 +43,7 @@ const optimus = ((e) => {
   };
 })(record);
 
-describe('Orochi ECVRF', function () {
+describe('OrandECVRF', function () {
   it('Orochi ECVRF must be deployed correctly', async () => {
     [deployerSigner] = await hre.ethers.getSigners();
     deployer = Deployer.getInstance(hre).connect(deployerSigner);

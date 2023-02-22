@@ -32,6 +32,11 @@ contract OrandStorage is IOrandStorage, IOrandECDSA {
   //=======================[  Internal  ]====================
 
   // Add validity epoch
+  function _setEpochResult(OrandECDSAProof memory ecdsaProof) internal {
+    currentAlpha[ecdsaProof.receiverAddress] = ecdsaProof.y;
+  }
+
+  // Add validity epoch
   function _addValidityEpoch(OrandECDSAProof memory ecdsaProof) internal returns (bool) {
     emit NewEpoch(ecdsaProof.receiverAddress, ecdsaProof.receiverEpoch, ecdsaProof.y);
     currentAlpha[ecdsaProof.receiverAddress] = ecdsaProof.y;
@@ -40,7 +45,6 @@ contract OrandStorage is IOrandStorage, IOrandECDSA {
 
   // Add fraud epoch
   function _addFraudEpoch(OrandECDSAProof memory ecdsaProof) internal returns (bool) {
-    emit NewEpoch(ecdsaProof.receiverAddress, ecdsaProof.receiverEpoch, ecdsaProof.y);
     uint256 key = _packing(ecdsaProof.receiverEpoch, ecdsaProof.receiverAddress);
     // We won't overwite the epoch that was fulfilled or sued
     if (fraudProof[key] > 0) {

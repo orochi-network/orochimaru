@@ -19,9 +19,10 @@ contract OrandProviderV1 is Ownable, IOrandProviderV1, OrandStorage, OrandManage
   // Provider V1 will support many consumers at once
   constructor(
     bytes memory pk,
-    address orandAddress,
-    address ecvrfAddress
-  ) OrandManagement(pk) OrandECDSA(orandAddress) {
+    address operatorAddress,
+    address ecvrfAddress,
+    uint256 penaltyFee
+  ) OrandManagement(pk) OrandECDSA(operatorAddress) OrandPenalty(penaltyFee) {
     ecvrf = IOrandECVRF(ecvrfAddress);
   }
 
@@ -51,6 +52,14 @@ contract OrandProviderV1 is Ownable, IOrandProviderV1, OrandStorage, OrandManage
     return true;
   }
 
+  // Set the penalty amount
+  function switchToValidityProof(bytes memory proof) external onlyOwner returns (bool) {
+    OrandECDSAProof memory ecdsaProof = _decodeProof(proof);
+    _setEpochResult(ecdsaProof);
+    _setTargetEpoch(ecdsaProof);
+    return true;
+  }
+
   //=======================[  External  ]====================
 
   // Publish new epoch with ECDSA + Validity ECVRF proof
@@ -77,9 +86,6 @@ contract OrandProviderV1 is Ownable, IOrandProviderV1, OrandStorage, OrandManage
       y = uint256(keccak256(abi.encodePacked(newEpoch.gamma[0], newEpoch.gamma[1])));
     }
 
-    // Add epoch to the chain
-    _addValidityEpoch(ecdsaProof);
-
     // These two value must be the same
     if (ecdsaProof.y != y) {
       revert MismatchProofResult(y, ecdsaProof.y);
@@ -92,6 +98,9 @@ contract OrandProviderV1 is Ownable, IOrandProviderV1, OrandStorage, OrandManage
       }
     }
 
+    // Add epoch to the chain
+    _addValidityEpoch(ecdsaProof);
+
     // Increasing epoch of receiver to prevent replay attack
     _increaseEpoch(ecdsaProof.receiverAddress);
     return true;
@@ -103,7 +112,7 @@ contract OrandProviderV1 is Ownable, IOrandProviderV1, OrandStorage, OrandManage
     OrandECDSAProof memory ecdsaProof = _decodeProof(proof);
 
     if (_collateralBalance(ecdsaProof.receiverAddress) < _getPenaltyFee()) {
-      revert NotEnougCollateral(_getPenaltyFee());
+      revert NotEnougCollateral(_collateralBalance(ecdsaProof.receiverAddress), _getPenaltyFee());
     }
 
     // Check for the existing smart contract and forward randomness to receiver
