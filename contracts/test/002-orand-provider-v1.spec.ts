@@ -2,10 +2,9 @@ import hre from 'hardhat';
 import { expect } from 'chai';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { OrandECVRF } from '../typechain-types';
-import { Deployer, NATIVE_UNIT } from '../helpers';
+import { Deployer } from '../helpers';
 import { OrandProviderV1 } from '../typechain-types/';
-import { BigNumber, utils } from 'ethers';
-import { BigO } from '../typechain-types/contracts/test/Token.sol';
+import { utils } from 'ethers';
 
 let deployerSigner: SignerWithAddress;
 let orandECVRF: OrandECVRF;
@@ -15,44 +14,63 @@ let somebody: SignerWithAddress;
 
 const pk =
   '0446b01e9550b56f3655dbca90cfe6b31dec3ff137f825561c563444096803531e9d4f6e8329d300483a919b63843174f1fca692fc6d2c07b985f72386e4edc846';
-const epoch0 = {
-  epoch: 0,
-  alpha: '65b68223a80a079104a807e05de6a96dff9abd0f4565c46f03383e88709eadaf',
-  gamma:
-    '0f0b8be7be48dd7c830538ddfe0ae98f8bc7d39e41ee92cfd21bb4d1d9eac00ce4de89f43cfc2a4541737497387b359b68006e1b393b82bf8a4127cd4af634b0',
-  c: 'da43550d7eb8804f22b8191389124a48f7e83d7c59f14085dffeffa723403204',
-  s: '7684943541a5c57fb0691f21be5a1af701c1421a3977aa8824e9577ef9db0c74',
-  y: '3444a98d72989c0abd13131cf95596672e50bde1d476ff71aa6ce625da1801ca',
-  witnessAddress: '8fe95904320a9647ccd7f9ee8abe9043d3db6c5e',
-  witnessGamma:
-    '984723e486699337c81ae5b0a172f5a248fab6e981411a6472089a43a1d9486ed2eddba1a2fb40f867bfa4cec10fc541c27388441ca95e99def52a43c5b0c9b9',
-  witnessHash:
-    '7f5b013e14a70f4db047cc56eddba865f0854a06638493367e269e0ca6220328a1f910e54935f4355b076a53090ad09b91d7cc80b260a72ec0674dee47a7330f',
-  inverseZ: '601653433309a146b4ad649631b1d7e3563cdd28f4f4c6da123cca7b8084fe4a',
-  signatureProof:
-    '436f80df9026124a79c605b8f5b7406a1fd7a7bebdbff4532eeb6b85cc4c506e3b59df206fe9704c2a58d590530430df12fa4931e2560c60d37ed58fb0f083071c0000000000000000000000002cdfa6346e8449dd14b23706bc93d2186bc4f301',
-  createdDate: '2023-02-16 07:44:19',
-};
 
-const epoch1 = {
-  epoch: 1,
-  alpha: '3444a98d72989c0abd13131cf95596672e50bde1d476ff71aa6ce625da1801ca',
-  gamma:
-    '7ee67cae027e711d9c036bb4c6b18280eac2084d7737a450127c93ac37300415350007bed8559b83f1aea29724333a726a1be6fdef64aed35c96aa10ad577635',
-  c: 'd6d4fcd865f1a2e2b68f74d5edd4045da8d7cb5af53e14a93b3ba60a22ebd105',
-  s: 'ec7d1e97ae729d8d6bf11d8f2a0b9157a6f2d5acb0558dee48c847acbd4ef956',
-  y: '704f150179ebe5caa582ef34a46c9c39972697692054b0326af244e42769d0b9',
-  witnessAddress: '1795c14dbbb225f51b6aed6858facecb34b156f8',
-  witnessGamma:
-    '6ad3124030a927db8d917819b0e0e5b2f8ce0b82f99c027047e18ea07a52cf80985f435921a469a5915c2a6131435c47237667d5a0fa01f392fbbf7d3f76b768',
-  witnessHash:
-    '104936fc09c4d80be236d9fb00076890eec0d7a863036315228962dfc5c9bf4de6b3d1a39b21825273f284b59d9beb1df8d0ebfb82ae82ef758ce7155283cf4f',
-  inverseZ: 'a9413d42144d70510803cc41aeeea14867a2ca37ff7eace5c7839f5bbfafe446',
-  signatureProof:
-    '351d1d43d52ff1e3948e88c40dc4768b1ef7b00755086b9b2de5aa34201f7aa6463d1813b16ce43ca555bdeae01281c048b7c0483880b5180dad688479f870a51c0000000000000000000000012cdfa6346e8449dd14b23706bc93d2186bc4f301',
-  createdDate: '2023-02-16 07:44:21',
-};
-
+const epochs = [
+  {
+    epoch: 0,
+    alpha: '0e1e7e382020781f47c56cb161fbd088729bbf977792e8c149a496400f07d31f',
+    gamma:
+      '0cfb95e2d50c67f06f52189bf13da9a15b0727feb6aa5ebe376be28dbe06f09c308a9742b00bed515f20075abe82b2ff7ee4714f195f4f9d3d6e213b0d6d0426',
+    c: '4e3498d44ac1133de4bae554e6b6ad895c9afdcfd7e2d765bdd9ab10875fd641',
+    s: '4e22ff32cce0314887d04f011a02fe02ab1f9257ea28fbaf3a39f9e757a8679d',
+    y: '8597ef3fafdf2e593f66d0e1b6133dd2e7fb3d0cbbf702c0c72bdad7ae383139',
+    witnessAddress: 'dcd0d2c41d902523c01e0d7898d9ae06578a41f3',
+    witnessGamma:
+      '4aa481c53f06061f6961ff02536553e3577753d3ed17117ceb9fe759446a1daa23fbc69f2801adfdc4f38959160f5db0605837411f8b7ba8a765cf0f0d58881b',
+    witnessHash:
+      'b5168ce47b4f44feb237110135e15c8da137cb68370fe4569186b5ce1edd106a9bd47eff0b5e2ed9945ffcbd2a0870dd6f8d51a881624ac4509d1c66f91eebe2',
+    inverseZ: '9fdadba6602048d7d6a6a2f08b2a33f1127da289d37510311966f87f9f4e7b75',
+    signatureProof:
+      '7789525b0b7f5fbfc87aa187a0a89a98f87edc7a08c244f1a6e36471cead96355212e05548f5e7b47cd6b3769978582604e8fc7be9fb12e36ca5a42d9d3149071c00000000000000000000000066681298bbbdf30a0b3ec98cabf41aa7669dc2008597ef3fafdf2e593f66d0e1b6133dd2e7fb3d0cbbf702c0c72bdad7ae383139',
+    createdDate: '2023-02-20 07:49:14',
+  },
+  {
+    epoch: 1,
+    alpha: '8597ef3fafdf2e593f66d0e1b6133dd2e7fb3d0cbbf702c0c72bdad7ae383139',
+    gamma:
+      'b33e0a062a9e0305ab49f312d6f5d18c64b93c52b6446c99a4554712f093874039b57820072433305175a3ccaf9e9ad254a1c34cc642b4698bf63d4f38056d75',
+    c: 'f62240c2cfa0de038665c00c233d0edca52f9cac41b457032f4b247d56f597c5',
+    s: 'dc0acdb466632e4ddbb3ea64ea10991df53bf8bef7f76e668eeeac486ef3dfab',
+    y: 'eef31a865c8f1d6eddd3454ef308294716dbd358f440ffa4da486d124e0dacbf',
+    witnessAddress: '312e35807b04a7da24e8a0ba42cdfd0154031b5b',
+    witnessGamma:
+      '3f16e58ce46c4073a298b0aa3bc7db1eecf477e65d749f8da28262eb2deaf825c7648584e5342fa9c8fcdacc3baaee4b558d254d0ae8d686248ba38961a07ebb',
+    witnessHash:
+      'af48183cd69c9e14da2b5a4ef84f483b393802afaf5e89e392a301865da05a88a9ea54b273385e31d5d030299b1c818093db52c5568919db8e481dcf50bbfd99',
+    inverseZ: '48723e72091bb003e7f642e026c1f4a2b506660883eabde08e11ded75afee5f9',
+    signatureProof:
+      '291812b956c636a3c260913215c8682f12cda35f67891434c3e6197f8b7799ce4d7de3c4cd062b9b44f36cf16aa17d3f7add4165d9c46c43053f4dba5dd803d61b00000000000000000000000166681298bbbdf30a0b3ec98cabf41aa7669dc200eef31a865c8f1d6eddd3454ef308294716dbd358f440ffa4da486d124e0dacbf',
+    createdDate: '2023-02-20 07:49:15',
+  },
+  {
+    epoch: 2,
+    alpha: 'eef31a865c8f1d6eddd3454ef308294716dbd358f440ffa4da486d124e0dacbf',
+    gamma:
+      '6875154cc98f50fcadcad276e6650b71861de058c313486e166a464b01d3fcfbd35d3e82e1b2c14d40facb5feb1fd0e2ebb30cf4b2307c748ac4c19952cf7fe5',
+    c: 'ea010c2f937af33f83b39d0da459842f8c95885b5a157530e35492e5eb0ddf43',
+    s: 'd3c818d995cc933173cb140fbcbe38b2620c9c50188af0a46f6e42857c0eeefe',
+    y: 'ea538ab81b86e75bf5afefba18aad191c920f0ef6cc35f849faa2b508728fa16',
+    witnessAddress: 'b86fb34c8974a1bfb2a3a204333da09e7724da29',
+    witnessGamma:
+      'e2eae97c28219d2029d74dbca1d77c6340d75f1efa74235786d2a306e096964d2aa04e468dcb2089c33f16d90e3812d2afb3f18b9c4087b09ac38f6ecc240478',
+    witnessHash:
+      '2d2b3d6a8f24d4cc0b57c5354c851cae6b5a7666bd65508c577c523f02d9df585e2de9addc0e0d204e0371644583f99ba706c69937f59815b8b33532b452fc75',
+    inverseZ: 'ca15128174a0ac9444b63891a1394fd555e309ad70e5efb4f4a04ad3526afe0f',
+    signatureProof:
+      '837e0968112fb3139685511235dd6b99c08911e2f9ef0d128d056b4fd7db74b94453195b404f7819c7e19ebb99f0bf6d2496337e0f8d7fee9512f7eab858ec491b00000000000000000000000266681298bbbdf30a0b3ec98cabf41aa7669dc200ea538ab81b86e75bf5afefba18aad191c920f0ef6cc35f849faa2b508728fa16',
+    createdDate: '2023-02-20 07:49:15',
+  },
+];
 const optimus = (e: any) => {
   return [
     `0x${e.signatureProof}`,
@@ -129,32 +147,60 @@ describe('Orochi ECVRF', function () {
       orandECVRF.address,
     );
 
-    const [signer, receiverNonce, receiverAddress] = await orandProviderV1.callStatic.checkProofSigner(
-      `0x${epoch0.signatureProof}`,
+    const [signer, receiverNonce, receiverAddress, y] = await orandProviderV1.callStatic.checkProofSigner(
+      `0x${epochs[0].signatureProof}`,
     );
 
     expect(signer).eq('0x7e9e03a453867a7046B0277f6cD72E1B59f67a0e');
-    expect(receiverAddress).eq('0x2cdFA6346E8449Dd14B23706Bc93D2186BC4F301');
+    expect(receiverAddress).eq('0x66681298BBbDF30a0B3Ec98caBF41aA7669dc200');
+    expect(y.toHexString().replace(/^0x/i, '')).eq(epochs[0].y);
     expect(receiverNonce.toNumber()).eq(0);
   });
 
-  it('anyone should able to publish epoch with a signed proof', async () => {
+  it('anyone should able to publish epoch 0 with a ECDSA + Validity proof', async () => {
     //@ts-ignore
-    await orandProviderV1.connect(somebody).publish(...optimus(epoch0));
+    await orandProviderV1.connect(somebody).publishValidityProof(...optimus(epochs[0]));
   });
 
-  it('anyone should able to publish epoch with a signed proof', async () => {
+  it('anyone should able to publish epoch 1 with a ECDSA + Validity proof', async () => {
     //@ts-ignore
-    await orandProviderV1.connect(somebody).publish(...optimus(epoch1));
+    await orandProviderV1.connect(somebody).publishValidityProof(...optimus(epochs[1]));
+  });
+
+  it('anyone should able to publish epoch 2 with a ECDSA + Validity proof', async () => {
+    //@ts-ignore
+    await orandProviderV1.connect(somebody).publishValidityProof(...optimus(epochs[2]));
+  });
+
+  it('anyone should able to publish epoch 0 with a ECDSA + Fraud proof', async () => {
+    //@ts-ignore
+    await orandProviderV1.connect(somebody).publishFraudProof(`0x${epochs[0].signatureProof}`);
+  });
+
+  it('anyone should able to publish epoch 1 with a ECDSA + Fraud proof', async () => {
+    //@ts-ignore
+    await orandProviderV1.connect(somebody).publishFraudProof(`0x${epochs[1].signatureProof}`);
+  });
+
+  it('anyone should able to publish epoch 2 with a ECDSA + Fraud proof', async () => {
+    //@ts-ignore
+    await orandProviderV1.connect(somebody).publishFraudProof(`0x${epochs[2].signatureProof}`);
+  });
+
+  it('anyone should not able to sue since Orochi Network and the consumer did nothing wrong', async () => {
+    expect(async () =>
+      //@ts-ignore
+      orandProviderV1.connect(somebody).sueFraudProof(...optimus(epochs[2])),
+    ).to.revertedWithCustomError(orandProviderV1, 'EverythingIsCorrect');
   });
 
   it('epoch 0 and 1 should be liked', async () => {
-    const proof0 = toEcvrfProof(epoch0);
-    const proof1 = toEcvrfProof(epoch1);
-    const result0 = await orandECVRF.verifyProof(proof0.pk, proof0.alpha, optimus(epoch0)[1]);
-    const result1 = await orandECVRF.verifyProof(proof1.pk, proof1.alpha, optimus(epoch1)[1]);
-    expect(result0.toHexString()).eq(`0x${epoch0.y}`);
-    expect(result1.toHexString()).eq(`0x${epoch1.y}`);
-    expect(result0.toHexString()).eq(`0x${epoch1.alpha}`);
+    const proof0 = toEcvrfProof(epochs[0]);
+    const proof1 = toEcvrfProof(epochs[1]);
+    const result0 = await orandECVRF.verifyProof(proof0.pk, proof0.alpha, optimus(epochs[0])[1]);
+    const result1 = await orandECVRF.verifyProof(proof1.pk, proof1.alpha, optimus(epochs[1])[1]);
+    expect(result0.toHexString()).eq(`0x${epochs[0].y}`);
+    expect(result1.toHexString()).eq(`0x${epochs[1].y}`);
+    expect(result0.toHexString()).eq(`0x${epochs[1].alpha}`);
   });
 });

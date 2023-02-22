@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 
+error CanotOverwiteEpoch(address receiverAddress, uint256 receiverEpoch, uint256 randomness);
+
 interface IOrandStorage {
-  // Tranmission form of proof
-  struct EpochProof {
+  // Tranmission form of ECVRF epoch proof
+  struct ECVRFEpochProof {
     uint256 y;
     uint256[2] gamma;
     uint256 c;

@@ -4,12 +4,14 @@ import '../libraries/VRF.sol';
 import '../interfaces/IOrandStorage.sol';
 
 contract OrandECVRF is VRF, IOrandStorage {
-  //=======================[  External  ]====================
+  //=======================[  External View  ]====================
+
+  // Verify ECVRF proof
   function verifyProof(
     uint256[2] memory pk,
     uint256 alpha,
-    EpochProof memory epoch
-  ) external view returns (uint256 output) {
+    ECVRFEpochProof memory epoch
+  ) external view returns (uint256 epochResult) {
     verifyVRFProof(
       pk,
       epoch.gamma,

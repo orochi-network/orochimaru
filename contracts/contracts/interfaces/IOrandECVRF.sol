@@ -2,10 +2,11 @@
 pragma solidity ^0.8.0;
 import './IOrandStorage.sol';
 
-interface IOrandECVRF is IOrandStorage {
+interface IOrandECVRF {
+  // Verify proof from provider
   function verifyProof(
     uint256[2] memory pk,
     uint256 alpha,
-    EpochProof memory epoch
+    IOrandStorage.ECVRFEpochProof memory epoch
   ) external view returns (uint256 output);
 }
