@@ -111,6 +111,7 @@ contract OrandProviderV1 is Ownable, IOrandProviderV1, OrandStorage, OrandManage
     // Verify ECDSA proof
     OrandECDSAProof memory ecdsaProof = _decodeProof(proof);
 
+    // Make sure that consumer have enough collateral for fraud proof
     if (_collateralBalance(ecdsaProof.receiverAddress) < _getPenaltyFee()) {
       revert NotEnougCollateral(_collateralBalance(ecdsaProof.receiverAddress), _getPenaltyFee());
     }
