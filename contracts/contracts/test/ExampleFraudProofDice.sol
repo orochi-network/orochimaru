@@ -6,7 +6,7 @@ import './ExampleValidityProofDice.sol';
 // Fraud proof is the same to
 contract ExampleFraudProofDice is ExampleValidityProofDice {
   // Constructor
-  constructor(address provider) ExampleValidityProofDice(provider) {}
+  constructor(address provider, uint256 limitBatching) ExampleValidityProofDice(provider, limitBatching) {}
 
   // We MUST allowed this smart contract to receive native token
   receive() external payable {}

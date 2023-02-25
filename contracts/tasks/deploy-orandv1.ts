@@ -1,9 +1,9 @@
 /* eslint-disable no-await-in-loop */
 import '@nomiclabs/hardhat-ethers';
-import { utils } from 'ethers';
+import { BigNumber, utils } from 'ethers';
 import { task } from 'hardhat/config';
 import { HardhatRuntimeEnvironment } from 'hardhat/types';
-import { Deployer } from '../helpers';
+import { Deployer, NATIVE_UNIT } from '../helpers';
 import { OrandECVRF } from '../typechain-types';
 import { OrandProviderV1 } from '../typechain-types/OradProvider.sol';
 import { env } from '../env';
@@ -30,6 +30,7 @@ task('deploy:orand', 'Deploy Orand V1 contracts').setAction(async (_taskArgs: an
     // Operator address
     correspondingAddress,
     orandECVRF.address,
+    BigNumber.from(NATIVE_UNIT).div(10),
   );
 
   deployer.printReport();

@@ -37,8 +37,8 @@ contract ExampleValidityProofDice is IOrandConsumerV1, Ownable {
   // Fulfiled randomness
   uint256 private fulfilled;
 
-  // We batching the processing of 100 games
-  uint256 private maximumBatching = 100;
+  // We batching the radomness in one epoch
+  uint256 private maximumBatching;
 
   // Only allow Orand to submit result
   modifier onlyOrandProviderV1() {
@@ -49,8 +49,9 @@ contract ExampleValidityProofDice is IOrandConsumerV1, Ownable {
   }
 
   // Constructor
-  constructor(address provider) {
+  constructor(address provider, uint256 limitBatching) {
     _setProvider(provider);
+    _setBatching(limitBatching);
   }
 
   //=======================[  Internal  ]====================
@@ -66,6 +67,12 @@ contract ExampleValidityProofDice is IOrandConsumerV1, Ownable {
     return orandProviderV1;
   }
 
+  // Set max batching
+  function _setBatching(uint256 maximum) internal {
+    maximumBatching = maximum;
+    emit AdjustMaximumBatching(maximum);
+  }
+
   //=======================[  Owner  ]====================
 
   // Set provider
@@ -76,8 +83,7 @@ contract ExampleValidityProofDice is IOrandConsumerV1, Ownable {
 
   // Set provider
   function setMaximumBatching(uint256 maximum) external onlyOwner returns (bool) {
-    maximumBatching = maximum;
-    emit AdjustMaximumBatching(maximum);
+    _setBatching(maximum);
     return true;
   }
 
