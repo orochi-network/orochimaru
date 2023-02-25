@@ -1,5 +1,5 @@
 use bytes::{BufMut, BytesMut};
-use ecvrf::{
+use libecvrf::{
     helper::keccak256_vec_scalar,
     secp256k1::{curve::Scalar, sign_with_context, Message, SecretKey, ECMULT_GEN_CONTEXT},
 };

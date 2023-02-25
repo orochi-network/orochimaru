@@ -12,7 +12,7 @@ path = "src/main.rs"
 [features]
 
 [dependencies]
-ecvrf = { version = "1.0.0", path="./ecvrf" }
+libecvrf = { version = "1.0.1", path="./libecvrf" }
 tiny-keccak = { version = "2.0.2", default-features = false, features=["keccak"] }
 log = "0.4.17"
 env_logger = "0.9.0"

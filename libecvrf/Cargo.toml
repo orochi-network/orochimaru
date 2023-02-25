@@ -1,11 +1,13 @@
 [package]
-name = "ecvrf"
-version = "1.0.0"
+name = "libecvrf"
+version = "1.0.1"
+description = "A ECVRF that's friendly with EVM, based on cur secp256k1 and keccak256"
+license = "Apache-2.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
-name = "ecvrf"
+name = "libecvrf"
 path = "src/lib.rs"
 
 [dependencies]

@@ -370,19 +370,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "03d8c417d7a8cb362e0c37e5d815f5eb7c37f79ff93707329d5a194e42e54ca0"
 
 [[package]]
-name = "ecvrf"
-version = "1.0.0"
-dependencies = [
- "hex",
- "hmac 0.12.1",
- "hyper 0.14.22",
- "libsecp256k1",
- "rand",
- "serde_json",
- "tiny-keccak",
-]
-
-[[package]]
 name = "either"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -846,6 +833,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc7fcc620a3bff7cdd7a365be3376c97191aeaccc2a603e600951e452615bf89"
 
 [[package]]
+name = "libecvrf"
+version = "1.0.1"
+dependencies = [
+ "hex",
+ "hmac 0.12.1",
+ "hyper 0.14.22",
+ "libsecp256k1",
+ "rand",
+ "serde_json",
+ "tiny-keccak",
+]
+
+[[package]]
 name = "libsecp256k1"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1034,12 +1034,12 @@ dependencies = [
  "base64-url",
  "bytes",
  "dotenv",
- "ecvrf",
  "env_logger",
  "hex",
  "hmac 0.12.1",
  "http-body-util",
  "hyper 1.0.0-rc.2",
+ "libecvrf",
  "log",
  "regex",
  "sea-orm",

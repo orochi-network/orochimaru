@@ -2,19 +2,19 @@
 
 use bytes::Bytes;
 use dotenv::dotenv;
-use ecvrf::{
-    helper::{
-        affine_to_hex_string, generate_raw_keypair, get_address, random_bytes, recover_raw_keypair,
-    },
-    secp256k1::{curve::Scalar, PublicKey, SecretKey},
-    ECVRF,
-};
 use http_body_util::{combinators::BoxBody, BodyExt, Empty, Full};
 use hyper::{
     body::Body,
     server::conn::http1,
     service::service_fn,
     {Method, Request, Response, StatusCode},
+};
+use libecvrf::{
+    helper::{
+        affine_to_hex_string, generate_raw_keypair, get_address, random_bytes, recover_raw_keypair,
+    },
+    secp256k1::{curve::Scalar, PublicKey, SecretKey},
+    ECVRF,
 };
 use orochimaru::{
     ethereum::{compose_operator_proof, sign_ethereum_message},
