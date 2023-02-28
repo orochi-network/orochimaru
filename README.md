@@ -8,11 +8,11 @@ Orochimaru is a full-node client of Orochi Network which was implemented in pure
 
 ## Orochi Network
 
-At [Orochi Network](https://orochi.network), we believe that Verifiable Computation is a critical primitive to establish Web3 and Decentralized Autonomous Economy. However, in order to reach this stage, there are still a number of major challenges of this industry to overcome.
+At [Orochi Network](https://orochi.network), we believe that Verifiable Computation is a critical primitive to establish Web3 and Decentralized Autonomous Economy. However, in order to reach this stage, there are still a number of major challenges in this industry to overcome.
 
-- **The limits of computation:** EVM can not guarantee semi-native performance, in addition to the extremely high cost and latency to perform computation. dApps nowadays are unfriendly to the mass, unstable, expensive and slow. In other word, they are currently unusable and we can not replace an ordinary application by a dApp yet.
+- **The limits of computation:** EVM can not guarantee semi-native performance, in addition to the extremely high cost and latency to perform computation. dApps nowadays are unfriendly to the mass, unstable, expensive and slow. In other words, they are currently unusable and we can not replace an ordinary application by a dApp yet.
 - **Data correctness:** There is no way to prove the correctness of data since all data pipelines are stored in a blackbox. We have no idea how data are processed.
-- **Data availability:** Smart contract executor and application executor are isolated from the internet that prevent data to be accessible from the run-time environment. It alway requires a third party service to feed necessary data. This approach is broken since we can not verify the data. Moreover, the latency from the third parties is unacceptable.
+- **Data availability:** Smart contract executor and application executor are isolated from the internet that prevent data to be accessible from the run-time environment. It always requires a third party service to feed necessary data. This approach is broken since we can not verify the data. Moreover, the latency from the third parties is unacceptable.
 
 ```text
  ┌─────────────────────────────────────┐
@@ -43,7 +43,7 @@ Our solution is to build a universal run-time environment (zkWasm) that provides
 
 ### Orand: Decentralized Random Number Generator
 
-Allowed verifiable randomness to be generated and fed to any smart contracts on EVM compatible blockchains. Orand using Elliptic Curve Verifiable Random Function (ECVRF) to prove and verify randomness. You can learn more about ECVRF in our blog [blog.orochi.network](https://blog.orochi.network).
+Allowed verifiable randomness to be generated and fed to any smart contracts on EVM compatible blockchains. Orand uses Elliptic Curve Verifiable Random Function (ECVRF) to prove and verify randomness. You can learn more about ECVRF in our blog [blog.orochi.network](https://blog.orochi.network).
 
 #### Request randomness
 
@@ -74,11 +74,11 @@ Allowed verifiable randomness to be generated and fed to any smart contracts on 
 
 #### Orand v1.0 is providing:
 
-- **Verifiable randomness:** We're using Elliptic Curve Verifiable Random Function (ECVRF) to generate randomness the process described here https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-vrf-05#section-5.3. Curve secp256k1 and keccak256 (Ethereum variant) was used to minimizing verification cost for smart contract.
+- **Verifiable randomness:** We're using Elliptic Curve Verifiable Random Function (ECVRF) to generate randomness in the process described here https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-vrf-05#section-5.3. Curve secp256k1 and keccak256 (Ethereum variant) was used to minimizing verification cost for smart contract.
 
 - **Dispersity:** A distributed system with many participants/nodes will join to generate randomness by using Multi Party Computation (MPC)
 
-- **Unpredictability:** A VRF will perform with the input is previous randomness and it’s also require half of participants to participate in MPC
+- **Unpredictability:** A VRF will perform with the input is previous randomness and it also requires half of participants to participate in MPC
 
 - **High throughput:** Game server could request randomness from the Orand system. The result will be provided as soon as half of participants participate in the MPC.
 
