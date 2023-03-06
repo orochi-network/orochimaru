@@ -1,4 +1,4 @@
-// #![deny(warnings)]
+#![deny(warnings)]
 
 use bytes::Bytes;
 use dotenv::dotenv;
@@ -25,6 +25,7 @@ use orochimaru::{
 use serde_json::json;
 use std::{borrow::Borrow, env, net::SocketAddr, str::from_utf8, sync::Arc};
 use tokio::net::TcpListener;
+use uuid::Uuid;
 
 const ORAND_KEYRING_NAME: &str = "orand";
 
@@ -40,6 +41,11 @@ async fn orand(
         .header("Access-Control-Allow-Origin", "*")
         .header("Content-Type", "application/json");
     let keyring = sqlite.table_keyring();
+    // Check if it's testnet or not
+    let is_testnet = match env::var("ORAND_TESTNET") {
+        Ok(s) => s.trim().to_lowercase().eq("true"),
+        _ => false,
+    };
 
     match (&header.method, header.uri.path()) {
         // Serve some instructions at /
@@ -163,11 +169,25 @@ async fn orand(
                     {
                         Some(record) => record,
                         None => {
-                            return Ok(response_builder
-                                .body(full(
-                                    "{\"success\":false, \"message\":\"Receiver was not registered\"}",
-                                ))
-                                .unwrap());
+                            if is_testnet {
+                                // Add new record of receiver if we're on testnet
+
+                                receiver
+                                    .insert(json!({
+                                        "name": format!("{}-{}", jwt_payload.user.clone(), Uuid::new_v4()),
+                                        "network": network,
+                                        "address": address.clone(),
+                                        "nonce": 0
+                                    }))
+                                    .await
+                                    .unwrap()
+                            } else {
+                                return Ok(response_builder
+                                        .body(full(
+                                            "{\"success\":false, \"message\":\"Receiver was not registered\"}",
+                                        ))
+                                        .unwrap());
+                            }
                         }
                     };
 
