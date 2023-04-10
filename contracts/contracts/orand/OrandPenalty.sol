@@ -27,6 +27,7 @@ contract OrandPenalty is IOrandPenalty {
     _;
   }
 
+  // Set penalty fee for consumer
   constructor(uint256 initalFee) {
     _setPenalty(initalFee);
   }
