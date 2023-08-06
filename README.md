@@ -15,26 +15,29 @@ At [Orochi Network](https://orochi.network), we believe that Verifiable Computat
 - **Data availability:** Smart contract executor and application executor are isolated from the internet that prevent data to be accessible from the run-time environment. It always requires a third party service to feed necessary data. This approach is broken since we can not verify the data. Moreover, the latency from the third parties is unacceptable.
 
 ```text
- ┌─────────────────────────────────────┐
- │    Orosign - Computation Layer UI   │
- └─────────────────────────────────────┘
+┌─────────────────────────────┐
+│                             │
+│ ┌─────────────────────────┐ │
+│ │   Orosign - zkOS's UI   │ │
+│ └─────────────────────────┘ │
+│                             │
+│ ┌─────────────────────────┐ │
+│ │  High Performance dApp  │ │
+│ └─────────────────────────┘ │
+│                             │
+│ ┌───────────┐ ┌───────────┐ │
+│ │zkDatabase │ │   Orand   │ │
+│ └───────────┘ └───────────┘ │
+│                             │
+│ ┌─────────────────────────┐ │
+│ │          zkWasm         │ │
+│ └─────────────────────────┘ │
+│                             │
+└─────────────────────────────┘
 
- ┌─────────────────────────────────────┐
- │        High Performance dApp        │
- └─────────────────────────────────────┘
-
- ┌─────────────────────────────────────┐
- │         Computation Layer           │
- │                                     │
- │ ┌────────┐  ┌────────┐  ┌────────┐  │
- │ │ Orand  │  │ Orocle │  │ Orocom │  │
- │ └────────┘  └────────┘  └────────┘  │
- │                                     │
- │ ┌─────────────────────────────────┐ │
- │ │             zkWasm              │ │
- │ └─────────────────────────────────┘ │
- │                                     │
- └─────────────────────────────────────┘
+┌─────────────────────────────┐
+│       Settlement Layer      │
+└─────────────────────────────┘
 ```
 
 Our solution is to build a universal run-time environment (zkWasm) that provides Verifiable Computation. We can build up the verifiable data pipeline on top of our zkWasm to solve the correctness and availability challenges of the data.
