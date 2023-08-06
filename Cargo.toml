@@ -1,5 +1,5 @@
 [workspace]
-members = ["libecvrf", "zkmemory", "src"]
+members = ["libecvrf", "zkmemory", "node"]
 exclude = []
 resolver = "2"
 
@@ -7,12 +7,12 @@ resolver = "2"
 authors = [
     "Chiro <chiro@orochi.network>",
 ]
-repository = "https://github.com/paritytech/wasmi"
+repository = "https://github.com/orochi-network/orochimaru/"
 edition = "2021"
 readme = "README.md"
 license = "Apache-2.0"
-keywords = ["verifiable computation", "orochi", "zkp", "vrf", "cryptography"]
-categories = ["zkp", "cryptography"]
+keywords = ["verifiable computation", "orochi", "zkp", "vrf", "cryptography", "mpc"]
+categories = ["zkp", "cryptography", "distributed", "mpc"]
 
 [profile.bench]
 lto = "fat"

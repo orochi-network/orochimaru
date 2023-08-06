@@ -298,12 +298,9 @@ pub fn recover_raw_keypair(secret_key: &[u8; SECRET_KEY_SIZE]) -> RawKeyPair {
 
 #[cfg(test)]
 mod tests {
-    use crate::ECVRF;
-    use libsecp256k1::{curve::Scalar, SecretKey};
+    use libsecp256k1::curve::Scalar;
 
-    use super::{
-        is_on_curve, new_candidate_point, random_bytes, randomize, scalar_is_gt, scalar_is_gte,
-    };
+    use super::{is_on_curve, new_candidate_point, random_bytes, scalar_is_gt, scalar_is_gte};
 
     #[test]
     fn point_must_be_on_curve() {

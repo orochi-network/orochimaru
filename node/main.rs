@@ -1,5 +1,4 @@
 #![deny(warnings)]
-
 use bytes::Bytes;
 use dotenv::dotenv;
 use http_body_util::{combinators::BoxBody, BodyExt, Empty, Full};
@@ -9,6 +8,7 @@ use hyper::{
     service::service_fn,
     {Method, Request, Response, StatusCode},
 };
+use hyper_util::rt::TokioIo;
 use libecvrf::{
     helper::{
         affine_to_hex_string, generate_raw_keypair, get_address, random_bytes, recover_raw_keypair,
@@ -16,12 +16,14 @@ use libecvrf::{
     secp256k1::{curve::Scalar, PublicKey, SecretKey},
     ECVRF,
 };
-use orochimaru::{
+
+use node::{
     ethereum::{compose_operator_proof, sign_ethereum_message},
     json_rpc::{JSONRPCMethod, ZERO_ADDRESS},
     jwt::JWT,
     sqlite_db::SQLiteDB,
 };
+
 use serde_json::json;
 use std::{borrow::Borrow, env, net::SocketAddr, str::from_utf8, sync::Arc};
 use tokio::net::TcpListener;
@@ -372,11 +374,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     loop {
         let (stream, _) = listener.accept().await?;
+        let io = TokioIo::new(stream);
         let sqlite_instance = sqlite.clone();
+
         tokio::task::spawn(async move {
             if let Err(err) = http1::Builder::new()
                 .serve_connection(
-                    stream,
+                    io,
                     service_fn(move |req| orand(req, sqlite_instance.clone())),
                 )
                 .await
