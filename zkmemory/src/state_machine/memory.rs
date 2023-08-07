@@ -1,4 +1,4 @@
-use std::ops::{Div, Rem};
+use core::ops::{Add, Div, Rem, Sub};
 
 use rbtree::RBTree;
 
@@ -8,7 +8,7 @@ pub type Word256 = U256;
 
 pub type Word64 = u64;
 
-pub trait Address<T> {
+pub trait Address {
     fn is_zero(&self) -> bool;
     fn zero() -> Self;
 }
@@ -18,7 +18,17 @@ pub struct Address256 {
     addr: U256,
 }
 
-impl Address<U256> for Address256 {
+impl Address for u64 {
+    fn is_zero(&self) -> bool {
+        *self == 0
+    }
+
+    fn zero() -> Self {
+        0
+    }
+}
+
+impl Address for Address256 {
     fn is_zero(&self) -> bool {
         self.addr.eq(&U256::ZERO)
     }
@@ -36,8 +46,28 @@ impl From<u64> for Address256 {
     }
 }
 
+impl Sub for Address256 {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self {
+            addr: self.addr - rhs.addr,
+        }
+    }
+}
+
+impl Add for Address256 {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self {
+            addr: self.addr + rhs.addr,
+        }
+    }
+}
+
 impl Div for Address256 {
-    type Output = Address256;
+    type Output = Self;
 
     fn div(self, rhs: Self) -> Self::Output {
         Self {
@@ -47,7 +77,7 @@ impl Div for Address256 {
 }
 
 impl Rem for Address256 {
-    type Output = Address256;
+    type Output = Self;
 
     fn rem(self, rhs: Self) -> Self::Output {
         Self {
@@ -64,9 +94,10 @@ impl From<Address256> for usize {
 
 pub trait GenericMemory<K, V> {
     fn new(word_size: u64) -> Self;
+    fn compute_address(&self, address: K) -> Vec<K>;
     fn read(&self, address: K) -> Option<&V>;
     fn write(&mut self, address: K, value: V);
-    fn cell_size(&self) -> usize;
+    fn cell_size(&self) -> K;
     fn len(&self) -> usize;
 }
 
@@ -80,7 +111,15 @@ where
 
 impl<K, V> GenericMemory<K, V> for RawMemory<K, V>
 where
-    K: Address<V> + Div + From<u64> + Ord + Into<usize> + Copy,
+    K: Address
+        + Ord
+        + From<u64>
+        + Copy
+        + PartialEq
+        + Add<K, Output = K>
+        + Sub<K, Output = K>
+        + Rem<K, Output = K>
+        + Div<K, Output = K>,
 {
     fn new(word_size: u64) -> Self {
         if word_size % 8 != 0 {
@@ -93,18 +132,40 @@ where
     }
 
     fn read(&self, address: K) -> Option<&V> {
-        self.memory_map.get(&address)
+        let remain = address % self.cell_size;
+        if remain.is_zero() {
+            // Read on a cell
+            self.memory_map.get(&address)
+        } else {
+            // Read on the middle of the cell
+            self.memory_map.get(&address)
+        }
     }
 
     fn write(&mut self, address: K, value: V) {
-        self.memory_map.insert(address, value);
+        let remain = address % self.cell_size;
+        if remain.is_zero() {
+            self.memory_map.insert(address, value);
+        } else {
+            self.memory_map.insert(address, value);
+        }
     }
 
     fn len(&self) -> usize {
         self.memory_map.len()
     }
 
-    fn cell_size(&self) -> usize {
-        self.cell_size.into()
+    fn cell_size(&self) -> K {
+        self.cell_size
+    }
+
+    fn compute_address(&self, address: K) -> Vec<K> {
+        let remain = address % self.cell_size;
+        if remain.is_zero() {
+            vec![address]
+        } else {
+            let base = address - remain;
+            vec![base, base + self.cell_size]
+        }
     }
 }

@@ -11,4 +11,11 @@ fn main() {
     );
 
     println!("{:?}", raw_mem.read(Address256::from(0)));
+
+    let mut raw_mem64 = RawMemory::<u64, u64>::new(64);
+
+    raw_mem64.write(0, 1);
+    raw_mem64.write(8, 2);
+
+    println!("{:?}", raw_mem64.read(8));
 }
