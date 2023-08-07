@@ -3,8 +3,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{DummyCommitment, DummyCommitmentScheme};
-
+pub mod memory;
+/*
 /// Configuration for zk memory
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -180,3 +180,4 @@ mod tests {
         println!("{:#?}", zk_memory_instance.get_trace());
     }
 }
+*/

@@ -1,20 +1,3 @@
-mod commitment;
-mod memory;
+mod state_machine;
 
-pub use commitment::*;
-pub use memory::*;
-
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub use state_machine::*;
