@@ -4,9 +4,7 @@ use rbtree::RBTree;
 
 use revm_primitives::U256;
 
-pub type Word256 = U256;
-
-pub type Word64 = u64;
+pub type Uint256 = U256;
 
 pub trait Address {
     fn is_zero(&self) -> bool;
