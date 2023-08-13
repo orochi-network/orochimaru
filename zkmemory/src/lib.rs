@@ -1,3 +1,3 @@
-mod state_machine;
+mod ram_machine;
 
-pub use state_machine::*;
+pub use ram_machine::*;
