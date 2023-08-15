@@ -46,11 +46,11 @@ fn main() {
     println!("{:#016x?}", raw_mem64.read(13));
 
     // @note: It's usual to little endian
-    // let a = 0x0102030405060708u64;
+    let a = 0x0102030405060708u64;
 
-    // println!("{:?}", a.to_ne_bytes());
-    // println!("{:?}", a.to_be_bytes());
-    // println!("{:?}", a.to_le_bytes());
+    println!("{:?}", a.to_ne_bytes());
+    println!("{:?}", a.to_be_bytes());
+    println!("{:?}", a.to_le_bytes());
 
     // Test the state machine of U256 values
 
