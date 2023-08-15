@@ -1,33 +1,41 @@
 use crate::machine::{CellInteraction, Instruction};
 use core::ops::{Add, Div, Rem, Sub};
 use rbtree::RBTree;
-
 use revm_primitives::U256;
 
+/// Base trait for memory address and value
 pub trait Base<K = Self>:
     Ord
-    + From<u64>
     + Copy
     + PartialEq
+    + From<Vec<u8>>
     + Add<K, Output = K>
     + Sub<K, Output = K>
     + Rem<K, Output = K>
     + Div<K, Output = K>
 {
+    /// Check if the value is zero
     fn is_zero(&self) -> bool;
+    /// Get the zero value
     fn zero() -> Self;
 }
 
+/// Generic memory trait
 pub trait GenericMemory<K, V> {
+    /// Create a new instance of memory
     fn new(word_size: u64) -> Self;
-    fn compute_address(&self, address: K) -> Vec<K>;
+    /// Read a value from a memory address
+    /// Return a [CellInteraction](crate::machine::CellInteraction)
     fn read(&mut self, address: K) -> CellInteraction<K, V>;
+    /// Write a value to a memory address return a [CellInteraction](crate::machine::CellInteraction)
     fn write(&mut self, address: K, value: V) -> CellInteraction<K, V>;
-    fn increase_time(&mut self) -> u64;
+    /// Get the cell size
     fn cell_size(&self) -> K;
+    /// Get the number of cells
     fn len(&self) -> usize;
 }
 
+/// 256 bits unsigned integer
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Copy)]
 pub struct Uint256 {
     addr: U256,
@@ -43,10 +51,10 @@ impl Base for Uint256 {
     }
 }
 
-impl From<u64> for Uint256 {
-    fn from(value: u64) -> Self {
+impl From<Vec<u8>> for Uint256 {
+    fn from(value: Vec<u8>) -> Self {
         Self {
-            addr: U256::from_limbs([0, 0, 0, value]),
+            addr: U256::from_be_bytes(value.as_slice()),
         }
     }
 }
@@ -107,6 +115,13 @@ impl Base for u64 {
     }
 }
 
+impl From<Vec<u8>> for u64 {
+    fn from(value: Vec<u8>) -> Self {
+        u64::from_be_bytes(value.as_slice().try_into().unwrap())
+    }
+}
+
+/// Raw memory
 #[derive(Debug)]
 pub struct RawMemory<K, V>
 where
@@ -117,6 +132,7 @@ where
     time_log: u64,
 }
 
+/// Implementation of [GenericMemory] for [RawMemory]
 impl<K, V> GenericMemory<K, V> for RawMemory<K, V>
 where
     K: Base,
@@ -133,14 +149,8 @@ where
         }
     }
 
-    fn increase_time(&mut self) -> u64 {
-        self.time_log += 1;
-        self.time_log
-    }
-
     fn read(&mut self, address: K) -> CellInteraction<K, V> {
         let remain = address % self.cell_size();
-        let e = K::from(0);
         if remain.is_zero() {
             // Read on a cell
             //self.memory_map.get(&address);
@@ -215,6 +225,17 @@ where
 
     fn cell_size(&self) -> K {
         self.cell_size
+    }
+}
+
+impl<K, V> RawMemory<K, V>
+where
+    K: Base,
+    V: Base,
+{
+    fn increase_time(&mut self) -> u64 {
+        self.time_log += 1;
+        self.time_log
     }
 
     fn compute_address(&self, address: K) -> Vec<K> {
