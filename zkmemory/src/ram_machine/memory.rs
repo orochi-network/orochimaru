@@ -8,7 +8,7 @@ pub trait Base<K = Self>:
     Ord
     + Copy
     + PartialEq
-    + From<Vec<u8>>
+    + From<u64>
     + Add<K, Output = K>
     + Sub<K, Output = K>
     + Rem<K, Output = K>
@@ -18,6 +18,10 @@ pub trait Base<K = Self>:
     fn is_zero(&self) -> bool;
     /// Get the zero value
     fn zero() -> Self;
+    // Convert to Vec<u8> (bytes)
+    fn to_bytes_be(&self) -> Vec<u8>;
+    // Convert from bytes
+    fn from_bytes_be(chunk: Vec<u8>) -> Self;
 }
 
 /// Generic memory trait
@@ -49,12 +53,22 @@ impl Base for Uint256 {
     fn zero() -> Self {
         Self { addr: U256::ZERO }
     }
+
+    fn to_bytes_be(&self) -> Vec<u8> {
+        self.addr.to_be_bytes_vec()
+    }
+
+    fn from_bytes_be(chunk: Vec<u8>) -> Self {
+        let chunk_bytes: [u8; 32] = chunk.try_into().unwrap();
+        Self { addr: U256::from_be_bytes(chunk_bytes)}
+    }
 }
 
-impl From<Vec<u8>> for Uint256 {
-    fn from(value: Vec<u8>) -> Self {
+impl From<u64> for Uint256 {
+    fn from(value: u64) -> Self {
         Self {
-            addr: U256::from_be_bytes(value.as_slice()),
+            // Little-endian style
+            addr: U256::from_limbs([0, 0, 0, value]),
         }
     }
 }
@@ -113,11 +127,13 @@ impl Base for u64 {
     fn zero() -> Self {
         0
     }
-}
 
-impl From<Vec<u8>> for u64 {
-    fn from(value: Vec<u8>) -> Self {
-        u64::from_be_bytes(value.as_slice().try_into().unwrap())
+    fn to_bytes_be(&self) -> Vec<u8> {
+        Vec::from(self.to_be_bytes())
+    }
+
+    fn from_bytes_be(chunk: Vec<u8>) -> Self {
+        u64::from_be_bytes(chunk.clone().try_into().unwrap())
     }
 }
 
@@ -152,70 +168,134 @@ where
     fn read(&mut self, address: K) -> CellInteraction<K, V> {
         let remain = address % self.cell_size();
         if remain.is_zero() {
+
             // Read on a cell
-            //self.memory_map.get(&address);
-            CellInteraction::Cell(Instruction::Read(self.increase_time(), address, V::zero()))
+            let chunk = self.memory_map.get(&address);
+
+            match chunk {
+                Some(result) => {
+
+                    // Avoid the error of using a borrowed variable
+                    let temp = V::from_bytes_be(result.to_bytes_be());
+                    CellInteraction::Cell(Instruction::Read(self.increase_time(), address, temp))
+                },
+
+                // By default, unwritten cell is 0
+                None => CellInteraction::Cell(Instruction::Read(self.increase_time(), address, V::from(0))),
+            } 
+            
         } else {
-            CellInteraction::TwoCell(
-                Instruction::Read(self.increase_time(), address, V::zero()),
-                Instruction::Read(self.increase_time(), address, V::zero()),
-            )
-            // Read on the middle of the cell
-            /*
-            // Attempt to read 2 cells, low and high, then combine and return
-            self.memory_map.get(&address);
+
+            // Get the address of 2 cells
             let cell_low = address - remain;
             let cell_high = cell_low + self.cell_size();
-            let chunk_low_cell = self.memory_map.get(&cell_low);
-            let chunk_high_cell = self.memory_map.get(&cell_high);
-            match (chunk_low_cell, chunk_high_cell) {
+
+            // Get the 2 cells
+            let data_cell_low = self.memory_map.get(&cell_low);
+            let data_cell_high = self.memory_map.get(&cell_high);
+
+            match (data_cell_low, data_cell_high) {
+
+                // Both cells are written
                 (Some(chunk_low), Some(chunk_high)) => {
-                    // returns a value referencing data owned by the current function
-                    let result = V::from(vec![0u64, 1u64, 2u64, 3u64]);
-                    Some(&result)
-                }
+        
+                    let chunk_low_bytes = V::from_bytes_be(chunk_low.to_bytes_be());
+                    let chunk_high_bytes = V::from_bytes_be(chunk_high.to_bytes_be());
 
+                    CellInteraction::TwoCell(
+                        Instruction::Read(self.increase_time(), cell_low, chunk_low_bytes),
+                        Instruction::Read(self.increase_time(), cell_high, chunk_high_bytes),
+                    )
+                },
+
+                // Chunk high is unwritten
                 (Some(chunk_low), None) => {
-                    // returns a value referencing data owned by the current function
-                    let result = V::from(vec![0u64, 1u64, 2u64, 3u64]);
-                    Some(&result)
-                }
 
+                    let chunk_low_bytes = V::from_bytes_be(chunk_low.to_bytes_be());
+
+                    CellInteraction::TwoCell(
+                        Instruction::Read(self.increase_time(), cell_low, chunk_low_bytes),
+                        Instruction::Read(self.increase_time(), cell_high, V::from(0)),
+                    )
+                },
+
+                // Chunk low is unwritten
                 (None, Some(chunk_high)) => {
-                    // returns a value referencing data owned by the current function
-                    let result = V::from(vec![0u64, 1u64, 2u64, 3u64]);
-                    Some(&result)
-                }
+                    let chunk_high_bytes = V::from_bytes_be(chunk_high.to_bytes_be());
+                    CellInteraction::TwoCell(
+                        Instruction::Read(self.increase_time(), cell_low, V::from(0)),
+                        Instruction::Read(self.increase_time(), cell_high, chunk_high_bytes),
+                    )
+                },
 
-                (None, None) => None,
-            }*/
+                // Both cells are unwritten
+                (None, None) => {
+                    CellInteraction::TwoCell(
+                        Instruction::Read(self.increase_time(), cell_low, V::from(0)),
+                        Instruction::Read(self.increase_time(), cell_high, V::from(0)),
+                    )
+                },
+            }
         }
     }
 
     fn write(&mut self, address: K, value: V) -> CellInteraction<K, V> {
         let remain = address % self.cell_size();
         if remain.is_zero() {
+
+            // Write on a cell
             self.memory_map.insert(address, value);
             CellInteraction::Cell(Instruction::Write(self.increase_time(), address, value))
+
         } else {
+
+            // Get the address of 2 cells
+            let cell_low = address - remain;
+            let cell_high = cell_low + self.cell_size();
+
+            // slice : the distance from cell_high to address
+            let mut slice = cell_high - address;
+
+            // Convert the value into bytes chunk
+            let chunk = value.to_bytes_be();
+
+            // Find the offset i that divides 2 cells
+            let mut i: usize = 0;
+            while !slice.is_zero() {
+                slice = slice - K::from(1);
+                i += 1;
+            }
+
+            // Get the cell size in usize
+            let cell_size = self.cell_size().to_bytes_be().len();
+
+            // Slice 2 cells into low and high
+            let mut chunk_low = Vec::from(&chunk[0..i]);
+            let mut chunk_high = Vec::from(&chunk[i..cell_size]);
+
+            // Append chunk in high cell with 0
+            while chunk_high.len() < cell_size {
+                chunk_high.push(0);
+            }
+
+            // Prepend chunk in low cell with 0
+            while chunk_low.len() < cell_size {
+                chunk_low.insert(0 as usize, 0u8);
+            }
+
+            // Create write cell from the 2 chunks
+            let cell_low_result = V::from_bytes_be(chunk_low);
+            let cell_high_result = V::from_bytes_be(chunk_high);
+
+            // Write
+            self.memory_map.insert(cell_low, cell_low_result);
+            self.memory_map.insert(cell_high, cell_high_result);
+
+            // Return
             CellInteraction::TwoCell(
-                Instruction::Write(self.increase_time(), address, value),
-                Instruction::Write(self.increase_time(), address, value),
+                Instruction::Write(self.increase_time(), cell_low, cell_low_result),
+                Instruction::Write(self.increase_time(), cell_high, cell_high_result),
             )
-            /*
-                       let chunk = value.to_bytes_le();
-                       let cell_low = address - remain;
-                       let cell_high = cell_low + self.cell_size();
-                       let offset = (cell_high - address)
-
-                       let chunk_low_cell = V::from(convert_to_u64(Vec::from(&chunk[0..offset as usize])));
-                       let chunk_high_cell = V::from(convert_to_u64(Vec::from(
-                           &chunk[offset as usize..self.cell_size() as usize],
-                       )));
-
-                       self.memory_map.insert(cell_low, chunk_low_cell);
-                       self.memory_map.insert(cell_high, chunk_high_cell);
-            */
         }
     }
 
@@ -226,6 +306,7 @@ where
     fn cell_size(&self) -> K {
         self.cell_size
     }
+    
 }
 
 impl<K, V> RawMemory<K, V>
