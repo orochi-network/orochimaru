@@ -18,9 +18,9 @@ pub trait Base<K = Self>:
     fn is_zero(&self) -> bool;
     /// Get the zero value
     fn zero() -> Self;
-    // Convert to Vec<u8> (bytes)
+    /// Convert to Vec<u8> (bytes)
     fn to_bytes_be(&self) -> Vec<u8>;
-    // Convert from bytes
+    /// Convert from bytes
     fn from_bytes_be(chunk: Vec<u8>) -> Self;
 }
 
@@ -32,7 +32,7 @@ pub trait GenericMemory<K, V> {
     /// Return a [CellInteraction](crate::machine::CellInteraction)
     fn read(&mut self, address: K) -> CellInteraction<K, V>;
     /// Write a value to a memory address return a [CellInteraction](crate::machine::CellInteraction)
-    fn write(&mut self, address: K, value: V) -> CellInteraction<K, V>;
+    fn write(&mut self, address: K, value: V) -> CellInteraction<K, V>; 
     /// Get the cell size
     fn cell_size(&self) -> K;
     /// Get the number of cells
@@ -187,8 +187,9 @@ where
         } else {
 
             // Get the address of 2 cells
-            let cell_low = address - remain;
-            let cell_high = cell_low + self.cell_size();
+            let cell_address = self.compute_address(address);
+            let cell_low = cell_address[0];
+            let cell_high = cell_address[1];
 
             // Get the 2 cells
             let data_cell_low = self.memory_map.get(&cell_low);
@@ -250,8 +251,9 @@ where
         } else {
 
             // Get the address of 2 cells
-            let cell_low = address - remain;
-            let cell_high = cell_low + self.cell_size();
+            let cell_address = self.compute_address(address);
+            let cell_low = cell_address[0];
+            let cell_high = cell_address[1];
 
             // slice : the distance from cell_high to address
             let mut slice = cell_high - address;
