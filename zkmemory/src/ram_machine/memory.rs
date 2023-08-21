@@ -144,6 +144,32 @@ impl Base<8> for u64 {
     }
 }
 
+impl Base<4> for u32 {
+    fn is_zero(&self) -> bool {
+        *self == 0
+    }
+
+    fn zero() -> Self {
+        0
+    }
+
+    fn to_bytes_be(&self) -> [u8; 4] {
+        self.to_be_bytes()
+    }
+
+    fn from_bytes_be(chunk: [u8; 4]) -> Self {
+        u32::from_be_bytes(chunk)
+    }
+
+    fn from_usize(value: usize) -> Self {
+        value as u32
+    }
+
+    fn to_usize(&self) -> usize {
+        *self as usize
+    }
+}
+
 /// Raw memory
 #[derive(Debug)]
 pub struct RawMemory<const S: usize, K, V>

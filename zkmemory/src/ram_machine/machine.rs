@@ -38,9 +38,6 @@ pub type StateMachine256 = StateMachine<32, Uint256, Uint256>;
 /// State Machine with 64 bits address and word size
 pub type StateMachine64 = StateMachine<8, u64, u64>;
 
-/// State Machine with 32 bits address and 64 bits word size
-pub type StateMachineWasm32 = StateMachine<8, u32, u64>;
-
 /// State Machine with 32 bits address and 32 bits word size
 pub type StateMachine32 = StateMachine<4, u32, u32>;
 
