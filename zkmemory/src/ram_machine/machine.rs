@@ -25,32 +25,32 @@ pub enum CellInteraction<K, V> {
 /// Random Access Memory Machine
 pub trait RAMMachine<K, V> {
     /// Create a new instance of RAM machine
-    fn new(word_size: u64) -> Self;
+    fn new(word_size: usize) -> Self;
     /// Write a value to a memory address
     fn write(&mut self, address: K, value: V);
     /// Read a value from a memory address
-    fn read(&mut self, address: K);
+    fn read(&mut self, address: K) -> V;
 }
 
 /// State Machine
 #[derive(Debug)]
-pub struct StateMachine<K, V>
+pub struct StateMachine<const S: usize, K, V>
 where
-    K: Base,
+    K: Base<S>,
 {
-    memory: RawMemory<K, V>,
+    memory: RawMemory<S, K, V>,
     trace: Vec<Instruction<K, V>>,
 }
 
 /// Implementation of RAMMachine for StateMachine
-impl<K, V> RAMMachine<K, V> for StateMachine<K, V>
+impl<const S: usize, K, V> RAMMachine<K, V> for StateMachine<S, K, V>
 where
-    K: Base,
-    V: Base,
+    K: Base<S>,
+    V: Base<S>,
 {
-    fn new(word_size: u64) -> Self {
+    fn new(word_size: usize) -> Self {
         Self {
-            memory: RawMemory::<K, V>::new(word_size),
+            memory: RawMemory::<S, K, V>::new(word_size),
             trace: Vec::new(),
         }
     }
@@ -66,8 +66,9 @@ where
         }
     }
 
-    fn read(&mut self, address: K) {
-        match self.memory.read(address) {
+    fn read(&mut self, address: K) -> V {
+        let (value, interaction) = self.memory.read(address);
+        match interaction {
             CellInteraction::Cell(instruction) => self.trace.push(instruction),
             CellInteraction::TwoCell(instruction1, instruction2) => {
                 self.trace.push(instruction1);
@@ -75,5 +76,6 @@ where
             }
             _ => panic!("Invalid memory interaction"),
         }
+        value
     }
 }
