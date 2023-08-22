@@ -15,6 +15,7 @@ name = "zkmemory"
 path = "src/lib.rs"
 
 [dependencies]
+cargo-llvm-cov = "0.5.27"
 halo2_proofs = {git="https://github.com/privacy-scaling-explorations/halo2", tag="v2023_04_20"}
 hex = "0.4.3"
 rbtree = "0.1.5"
