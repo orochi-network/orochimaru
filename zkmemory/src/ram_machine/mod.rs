@@ -1,4 +1,8 @@
-/// @TODO : add documentation
+/// A state machine with two instructions [Write](crate::machine::Instruction::Write) and [Read](crate::machine::Instruction::Read).
+/// This machine have configurable word size and address size. This crate provide following aliases:
+/// - [StateMachine256](crate::machine::StateMachine256) with 256 bits address and word size
+/// - [StateMachine64](crate::machine::StateMachine64) with 64 bits address and word size
+/// - [StateMachine32](crate::machine::StateMachine32) with 32 bits address and word size
 pub mod machine;
-/// @TODO : add documentation
+/// Raw memory as a key-value store base on [RBTree](rbtree::RBTree) that mapping address to value
 pub mod memory;

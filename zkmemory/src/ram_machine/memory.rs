@@ -17,9 +17,9 @@ pub trait Base<const S: usize, K = Self>:
     fn is_zero(&self) -> bool;
     /// Get the zero value
     fn zero() -> Self;
-    /// Convert to Vec<u8> (bytes)
+    /// Convert to [`[u8]`](core::primitive::u8)
     fn to_bytes_be(&self) -> [u8; S];
-    /// Convert from bytes
+    /// Convert from  [`[u8]`](core::primitive::u8)
     fn from_bytes_be(chunk: [u8; S]) -> Self;
     /// Convert from [usize]
     fn from_usize(value: usize) -> Self;
@@ -42,7 +42,7 @@ pub trait GenericMemory<const S: usize, K, V> {
     fn len(&self) -> usize;
 }
 
-/// 256 bits unsigned integer
+/// Wrapper for 256 bits unsigned integer
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Copy)]
 pub struct Uint256 {
     val: U256,
@@ -170,7 +170,7 @@ impl Base<4> for u32 {
     }
 }
 
-/// Raw memory
+/// Raw memory base on [RBTree](rbtree::RBTree)
 #[derive(Debug)]
 pub struct RawMemory<const S: usize, K, V>
 where
