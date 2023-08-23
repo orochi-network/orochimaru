@@ -1,4 +1,5 @@
-use crate::memory::*;
+use crate::base::{Base, U256};
+use crate::memory::{GenericMemory, RawMemory};
 
 /// RAM machine instruction set
 #[derive(Debug)]
@@ -33,7 +34,7 @@ pub trait RAMMachine<K, V> {
 }
 
 /// State Machine with 256 bits address and word size
-pub type StateMachine256 = StateMachine<32, Uint256, Uint256>;
+pub type StateMachine256 = StateMachine<32, U256, U256>;
 
 /// State Machine with 64 bits address and word size
 pub type StateMachine64 = StateMachine<8, u64, u64>;

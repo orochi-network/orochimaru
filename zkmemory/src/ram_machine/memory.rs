@@ -1,31 +1,8 @@
-use crate::machine::{CellInteraction, Instruction};
-use core::ops::{Add, Div, Rem, Sub};
+use crate::{
+    base::Base,
+    machine::{CellInteraction, Instruction},
+};
 use rbtree::RBTree;
-use revm_primitives::U256;
-
-/// Base trait for memory address and value
-pub trait Base<const S: usize, K = Self>:
-    Ord
-    + Copy
-    + PartialEq
-    + Add<K, Output = K>
-    + Sub<K, Output = K>
-    + Rem<K, Output = K>
-    + Div<K, Output = K>
-{
-    /// Check if the value is zero
-    fn is_zero(&self) -> bool;
-    /// Get the zero value
-    fn zero() -> Self;
-    /// Convert to [`[u8]`](core::primitive::u8)
-    fn to_bytes_be(&self) -> [u8; S];
-    /// Convert from  [`[u8]`](core::primitive::u8)
-    fn from_bytes_be(chunk: [u8; S]) -> Self;
-    /// Convert from [usize]
-    fn from_usize(value: usize) -> Self;
-    /// Convert to [usize]
-    fn to_usize(&self) -> usize;
-}
 
 /// Generic memory trait
 pub trait GenericMemory<const S: usize, K, V> {
@@ -40,134 +17,6 @@ pub trait GenericMemory<const S: usize, K, V> {
     fn cell_size(&self) -> K;
     /// Get the number of cells
     fn len(&self) -> usize;
-}
-
-/// Wrapper for 256 bits unsigned integer
-#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Copy)]
-pub struct Uint256 {
-    val: U256,
-}
-
-impl Base<32> for Uint256 {
-    fn is_zero(&self) -> bool {
-        self.val.eq(&U256::ZERO)
-    }
-
-    fn zero() -> Self {
-        Self { val: U256::ZERO }
-    }
-
-    fn to_bytes_be(&self) -> [u8; 32] {
-        self.val.to_be_bytes()
-    }
-
-    fn from_bytes_be(chunk: [u8; 32]) -> Self {
-        Self {
-            val: U256::from_be_bytes(chunk),
-        }
-    }
-
-    fn from_usize(value: usize) -> Self {
-        Self {
-            val: U256::from_limbs([value as u64, 0, 0, 0]),
-        }
-    }
-
-    fn to_usize(&self) -> usize {
-        self.val.as_limbs()[0] as usize
-    }
-}
-
-impl Sub for Uint256 {
-    type Output = Self;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        Self {
-            val: self.val - rhs.val,
-        }
-    }
-}
-
-impl Add for Uint256 {
-    type Output = Self;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        Self {
-            val: self.val + rhs.val,
-        }
-    }
-}
-
-impl Div for Uint256 {
-    type Output = Self;
-
-    fn div(self, rhs: Self) -> Self::Output {
-        Self {
-            val: self.val / rhs.val,
-        }
-    }
-}
-
-impl Rem for Uint256 {
-    type Output = Self;
-
-    fn rem(self, rhs: Self) -> Self::Output {
-        Self {
-            val: self.val % rhs.val,
-        }
-    }
-}
-
-impl Base<8> for u64 {
-    fn is_zero(&self) -> bool {
-        *self == 0
-    }
-
-    fn zero() -> Self {
-        0
-    }
-
-    fn to_bytes_be(&self) -> [u8; 8] {
-        self.to_be_bytes()
-    }
-
-    fn from_bytes_be(chunk: [u8; 8]) -> Self {
-        u64::from_be_bytes(chunk)
-    }
-
-    fn from_usize(value: usize) -> Self {
-        value as u64
-    }
-
-    fn to_usize(&self) -> usize {
-        *self as usize
-    }
-}
-
-impl Base<4> for u32 {
-    fn is_zero(&self) -> bool {
-        *self == 0
-    }
-
-    fn zero() -> Self {
-        0
-    }
-
-    fn to_bytes_be(&self) -> [u8; 4] {
-        self.to_be_bytes()
-    }
-
-    fn from_bytes_be(chunk: [u8; 4]) -> Self {
-        u32::from_be_bytes(chunk)
-    }
-
-    fn from_usize(value: usize) -> Self {
-        value as u32
-    }
-
-    fn to_usize(&self) -> usize {
-        *self as usize
-    }
 }
 
 /// Raw memory base on [RBTree](rbtree::RBTree)
@@ -221,12 +70,12 @@ where
             let mut buf = [0u8; S];
 
             // Write the value into the buffer
-            buf[part_hi..cell_size].copy_from_slice(&val_hi.to_bytes_be()[0..part_lo]);
-            buf[0..part_hi].copy_from_slice(&val_lo.to_bytes_be()[part_lo..cell_size]);
+            buf[part_hi..cell_size].copy_from_slice(&val_hi.to_bytes()[0..part_lo]);
+            buf[0..part_hi].copy_from_slice(&val_lo.to_bytes()[part_lo..cell_size]);
 
             // Return the tupple of value and interaction
             (
-                V::from_bytes_be(buf),
+                V::from_bytes(buf),
                 CellInteraction::TwoCell(
                     Instruction::Read(self.increase_time(), addr_lo, val_lo),
                     Instruction::Read(self.increase_time(), addr_hi, val_hi),
@@ -250,17 +99,17 @@ where
             let part_lo = (address - addr_lo).to_usize();
             let part_hi = cell_size - part_lo;
 
-            let val = value.to_bytes_be();
+            let val = value.to_bytes();
 
             // Write the low part of value to the buffer
-            let mut buf = self.read_memory(addr_lo).to_bytes_be();
+            let mut buf = self.read_memory(addr_lo).to_bytes();
             buf[part_lo..cell_size].copy_from_slice(&val[0..part_hi]);
-            let val_lo = V::from_bytes_be(buf);
+            let val_lo = V::from_bytes(buf);
 
             // Write the high part of value to the buffer
-            let mut buf = self.read_memory(addr_hi).to_bytes_be();
+            let mut buf = self.read_memory(addr_hi).to_bytes();
             buf[0..part_lo].copy_from_slice(&val[part_hi..cell_size]);
-            let val_hi = V::from_bytes_be(buf);
+            let val_hi = V::from_bytes(buf);
 
             self.memory_map.replace_or_insert(addr_lo, val_lo);
             self.memory_map.replace_or_insert(addr_hi, val_hi);
