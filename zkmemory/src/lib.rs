@@ -27,8 +27,7 @@ mod tests {
         let mut sm = StateMachine256::new(256);
         let chunk = U256::from_bytes([5u8; 32]);
         sm.write(U256::from_usize(0), chunk);
-
-        assert_eq!(sm.read(U256::from_usize(0)), chunk);
+        assert_eq!(sm.read(U256::from_usize(0)).unwrap(), chunk);
     }
 
     #[test]
@@ -36,7 +35,7 @@ mod tests {
         let mut sm = StateMachine256::new(256);
         let chunk = U256::from_bytes([0u8; 32]);
 
-        assert_eq!(sm.read(U256::from_usize(32)), chunk);
+        assert_eq!(sm.read(U256::from_usize(32)).unwrap(), chunk);
     }
 
     #[test]
