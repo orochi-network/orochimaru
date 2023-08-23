@@ -1,40 +1,44 @@
-use zkmemory::base::{Base, U256};
-use zkmemory::machine::{RAMMachine, StateMachine256, StateMachine32};
+use zkmemory::base::{UsizeConvertible, U256};
+use zkmemory::config::ConfigArgs;
+use zkmemory::machine::{RAMMachine, StackMachine, StateMachine256, StateMachine32};
 // type inference lets us omit an explicit type signature (which
 // would be `RBTree<&str, &str>` in this example).
 
 fn main() {
     // Test the state machine of Uint256 values
-    let mut sm = StateMachine256::new(256);
+    let mut sm = StateMachine256::new(ConfigArgs::new(0, 1024, 32, 64, 32));
 
-    sm.write(U256::from_usize(0), U256::from_be_bytes([1u8; 32]))
-        .unwrap();
-    sm.write(U256::from_usize(32), U256::from_be_bytes([2u8; 32]))
-        .unwrap();
+    const BASE_ADDRESS: usize = 1024 * 1024 * 10;
+    sm.write(
+        U256::from_usize(BASE_ADDRESS),
+        U256::from_be_bytes([1u8; 32]),
+    )
+    .unwrap();
+    sm.write(
+        U256::from_usize(BASE_ADDRESS + 32),
+        U256::from_be_bytes([2u8; 32]),
+    )
+    .unwrap();
 
-    sm.write(U256::from_usize(6), U256::from_be_bytes([3u8; 32]))
-        .unwrap();
+    sm.write(
+        U256::from_usize(BASE_ADDRESS + 6),
+        U256::from_be_bytes([3u8; 32]),
+    )
+    .unwrap();
 
-    println!("{:?}", sm.read(U256::from_usize(7)).unwrap());
+    println!("{:?}", sm.read(U256::from_usize(BASE_ADDRESS + 7)).unwrap());
 
-    println!("{:?}", sm.read(U256::from_usize(0)).unwrap());
+    println!("{:?}", sm.read(U256::from_usize(BASE_ADDRESS + 0)).unwrap());
 
-    println!("{:?}", sm.read(U256::from_usize(32)).unwrap());
+    println!(
+        "{:?}",
+        sm.read(U256::from_usize(BASE_ADDRESS + 32)).unwrap()
+    );
+
+    sm.push(U256::from_usize(123)).unwrap();
+
+    sm.pop().unwrap();
 
     // Check the memory trace
     println!("{:#064x?}", sm);
-
-    // Test the state machine of u32 values
-    let mut sm = StateMachine32::new(32);
-
-    sm.write(0, u32::from_be_bytes([1u8; 4])).unwrap();
-    sm.write(4, u32::from_be_bytes([2u8; 4])).unwrap();
-    sm.write(6, u32::from_be_bytes([3u8; 4])).unwrap();
-
-    println!("{:#08x}", sm.read(2).unwrap());
-    println!("{:#08x}", sm.read(3).unwrap());
-    println!("{:#08x}", sm.read(7).unwrap());
-
-    // Check the memory trace
-    println!("{:#08?}", sm);
 }

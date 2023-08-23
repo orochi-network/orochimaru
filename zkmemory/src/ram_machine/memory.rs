@@ -5,9 +5,9 @@ use crate::{
 use rbtree::RBTree;
 
 /// Generic memory trait
-pub trait GenericMemory<const S: usize, K, V> {
+pub trait GenericMemory<K, V, const S: usize> {
     /// Create a new instance of memory
-    fn new(word_size: usize) -> Self;
+    fn new(cell_size: K) -> Self;
     /// Read a value from a memory address
     /// Return a [CellInteraction](crate::machine::CellInteraction)
     fn read(&mut self, address: K) -> (V, CellInteraction<K, V>);
@@ -21,7 +21,7 @@ pub trait GenericMemory<const S: usize, K, V> {
 
 /// Raw memory base on [RBTree](rbtree::RBTree)
 #[derive(Debug)]
-pub struct RawMemory<const S: usize, K, V>
+pub struct RawMemory<K, V, const S: usize>
 where
     K: Ord,
 {
@@ -31,18 +31,15 @@ where
 }
 
 /// Implementation of [GenericMemory] for [RawMemory]
-impl<const S: usize, K, V> GenericMemory<S, K, V> for RawMemory<S, K, V>
+impl<K, V, const S: usize> GenericMemory<K, V, S> for RawMemory<K, V, S>
 where
     K: Base<S>,
     V: Base<S>,
 {
-    fn new(word_size: usize) -> Self {
-        if word_size % 8 != 0 {
-            panic!("Word size is calculated in bits so it must be divied by 8")
-        }
+    fn new(cell_size: K) -> Self {
         Self {
             memory_map: RBTree::<K, V>::new(),
-            cell_size: K::from_usize(word_size / 8),
+            cell_size,
             time_log: 0,
         }
     }
@@ -93,7 +90,11 @@ where
         } else {
             // Get the address of 2 cells
             let (addr_lo, addr_hi) = self.compute_address(address, remain);
-
+            println!(
+                "addr_lo: {}, addr_hi: {}",
+                addr_lo.to_usize(),
+                addr_hi.to_usize()
+            );
             // Calculate memory address and offset
             let cell_size = self.cell_size().to_usize();
             let part_lo = (address - addr_lo).to_usize();
@@ -131,7 +132,7 @@ where
     }
 }
 
-impl<const S: usize, K, V> RawMemory<S, K, V>
+impl<K, V, const S: usize> RawMemory<K, V, S>
 where
     K: Base<S>,
     V: Base<S>,
