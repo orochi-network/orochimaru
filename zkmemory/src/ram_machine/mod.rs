@@ -1,5 +1,7 @@
 /// Base trait for generic type
 pub mod base;
+/// Define all errors of [StateMachine](crate::machine::StateMachine) and [RawMemory](crate::memory::RawMemory)
+pub mod error;
 /// A state machine with two instructions [Write](crate::machine::Instruction::Write) and [Read](crate::machine::Instruction::Read).
 /// This machine have configurable word size and address size. This crate provide following aliases:
 /// - [StateMachine256](crate::machine::StateMachine256) with 256 bits address and word size
