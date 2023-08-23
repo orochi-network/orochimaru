@@ -34,4 +34,5 @@ fn main() {
 
     // Check the memory trace
     println!("{:#08?}", sm);
+
 }

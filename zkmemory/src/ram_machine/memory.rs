@@ -221,8 +221,8 @@ where
             let mut buf = [0u8; S];
 
             // Write the value into the buffer
-            buf[part_lo..cell_size].copy_from_slice(&val_lo.to_bytes_be()[part_lo..cell_size]);
-            buf[0..part_hi].copy_from_slice(&val_lo.to_bytes_be()[0..part_hi]);
+            buf[part_hi..cell_size].copy_from_slice(&val_hi.to_bytes_be()[0..part_lo]);
+            buf[0..part_hi].copy_from_slice(&val_lo.to_bytes_be()[part_lo..cell_size]);
 
             // Return the tupple of value and interaction
             (
@@ -254,12 +254,12 @@ where
 
             // Write the low part of value to the buffer
             let mut buf = self.read_memory(addr_lo).to_bytes_be();
-            buf[part_lo..cell_size].copy_from_slice(&val[part_lo..cell_size]);
+            buf[part_lo..cell_size].copy_from_slice(&val[0..part_hi]);
             let val_lo = V::from_bytes_be(buf);
 
             // Write the high part of value to the buffer
             let mut buf = self.read_memory(addr_hi).to_bytes_be();
-            buf[0..part_hi].copy_from_slice(&val[0..part_hi]);
+            buf[0..part_lo].copy_from_slice(&val[part_hi..cell_size]);
             let val_hi = V::from_bytes_be(buf);
 
             self.memory_map.replace_or_insert(addr_lo, val_lo);
