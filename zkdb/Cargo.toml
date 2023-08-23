@@ -1,0 +1,18 @@
+[package]
+name = "zkdb"
+version = "0.1.0"
+description = "A Distributed And Provable Database"
+authors.workspace = true
+repository.workspace = true
+edition.workspace = true
+readme.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "zkdb"
+path = "src/lib.rs"
+
+[dependencies]
