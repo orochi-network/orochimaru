@@ -61,22 +61,43 @@ pub trait StackMachine<V> {
     fn pop(&mut self) -> Result<V, Error>;
 }
 
-/// Register Machine with two simple opcode (mov)
-pub trait RegisterMachine<R, V> {
-    /// Move a value from one register to another
-    fn mov(&mut self, to: R, from: R) -> Result<(), Error>;
-    /// Set a value to a register
-    fn set(&mut self, register: R, value: V) -> Result<(), Error>;
-    /// Read a value from a register
-    fn get(&mut self, register: R) -> Result<V, Error>;
+/// Virtual register structure
+#[derive(Debug, Clone, Copy)]
+pub struct Register<K: Base<S>, const S: usize>(usize, K);
+
+impl<K, const S: usize> Register<K, S>
+where
+    K: Base<S>,
+{
+    /// Create a new register
+    pub fn new(register_index: usize, register_address: K) -> Self {
+        Self(register_index, register_address)
+    }
+
+    /// Get the register address
+    pub fn address(&self) -> K {
+        self.1
+    }
+
+    /// Get the register index
+    pub fn index(&self) -> usize {
+        self.0
+    }
 }
 
-/// Virtual Register trait
-pub trait Register<K> {
-    /// Create a new instance of register
-    fn new(address: K) -> Self;
-    /// Get the underlying address of register
-    fn address(&self) -> K;
+/// Register Machine with two simple opcode (mov)
+pub trait RegisterMachine<K, V, const S: usize>
+where
+    K: Base<S>,
+{
+    /// Get address for a register
+    fn register(&self, register_number: usize) -> Register<K, S>;
+    /// Move a value from one register to another
+    fn mov(&mut self, to: Register<K, S>, from: Register<K, S>) -> Result<(), Error>;
+    /// Set a value to a register
+    fn set(&mut self, register: Register<K, S>, value: V) -> Result<(), Error>;
+    /// Read a value from a register
+    fn get(&mut self, register: Register<K, S>) -> Result<V, Error>;
 }
 
 /// State Machine with 256 bits address and word size
@@ -162,23 +183,21 @@ where
     }
 
     fn write(&mut self, address: K, value: V) -> Result<(), Error> {
-        println!("write: {:?} {:?}", address.to_usize(), value.to_usize());
-        println!("config: {:?}", self.config.memory_base.to_usize());
-        if address <= self.config.memory_base {
+        if address < self.config.memory_base {
             return Err(Error::MemoryAccessDeinied);
         }
         self.write_cell(address, value)
     }
 
     fn read(&mut self, address: K) -> Result<V, Error> {
-        if address <= self.config.memory_base {
+        if address < self.config.memory_base {
             return Err(Error::MemoryAccessDeinied);
         }
         self.read_cell(address)
     }
 }
 
-impl<const S: usize, K, V> StackMachine<V> for StateMachine<K, V, S>
+impl<K, V, const S: usize> StackMachine<V> for StateMachine<K, V, S>
 where
     K: Base<S>,
     V: Base<S>,
@@ -203,13 +222,12 @@ where
     }
 }
 
-impl<K, V, R, const S: usize> RegisterMachine<R, V> for StateMachine<K, V, S>
+impl<K, V, const S: usize> RegisterMachine<K, V, S> for StateMachine<K, V, S>
 where
     K: Base<S>,
     V: Base<S>,
-    R: Register<K>,
 {
-    fn mov(&mut self, to: R, from: R) -> Result<(), Error> {
+    fn mov(&mut self, to: Register<K, S>, from: Register<K, S>) -> Result<(), Error> {
         let register_value = self.read_cell(from.address());
         if register_value.is_ok() {
             match self.write_cell(to.address(), register_value.unwrap()) {
@@ -221,17 +239,24 @@ where
         }
     }
 
-    fn set(&mut self, register: R, value: V) -> Result<(), Error> {
+    fn set(&mut self, register: Register<K, S>, value: V) -> Result<(), Error> {
         match self.write_cell(register.address(), value) {
             Ok(_) => Ok(()),
             _ => Err(Error::RegisterUnableToWrite),
         }
     }
 
-    fn get(&mut self, register: R) -> Result<V, Error> {
+    fn get(&mut self, register: Register<K, S>) -> Result<V, Error> {
         match self.read_cell(register.address()) {
             Ok(value) => Ok(value),
             _ => Err(Error::RegisterUnableToRead),
         }
+    }
+
+    fn register(&self, register_index: usize) -> Register<K, S> {
+        Register::new(
+            register_index,
+            self.config.register_lo + (K::from_usize(register_index) * self.config.cell_size),
+        )
     }
 }
