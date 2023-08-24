@@ -59,6 +59,9 @@ pub trait StackMachine<V> {
 
     /// Pop a value from the stack
     fn pop(&mut self) -> Result<V, Error>;
+
+    /// Get the stack depth
+    fn stack_depth(&self) -> usize;
 }
 
 /// Virtual register structure
@@ -171,6 +174,12 @@ where
     V: Base<S>,
 {
     fn new(config_arugments: ConfigArgs<usize>) -> Self {
+        if config_arugments.cell_size != 32
+            && config_arugments.cell_size != 8
+            && config_arugments.cell_size != 4
+        {
+            panic!("Invalid cell size");
+        }
         let cfg = Config::new(config_arugments);
         let config = Config::<K>::from(cfg);
         Self {
@@ -202,6 +211,10 @@ where
     K: Base<S>,
     V: Base<S>,
 {
+    fn stack_depth(&self) -> usize {
+        self.stack_depth
+    }
+
     fn push(&mut self, value: V) -> Result<(), Error> {
         if self.stack_ptr >= self.config.stack_hi {
             return Err(Error::StackOverflow);

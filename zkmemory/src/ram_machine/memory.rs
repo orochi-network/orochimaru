@@ -90,11 +90,6 @@ where
         } else {
             // Get the address of 2 cells
             let (addr_lo, addr_hi) = self.compute_address(address, remain);
-            println!(
-                "addr_lo: {}, addr_hi: {}",
-                addr_lo.to_usize(),
-                addr_hi.to_usize()
-            );
             // Calculate memory address and offset
             let cell_size = self.cell_size().to_usize();
             let part_lo = (address - addr_lo).to_usize();

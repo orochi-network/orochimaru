@@ -22,11 +22,16 @@ pub struct Config<T> {
 
 /// Config arguments for RAM machine
 pub struct ConfigArgs<T> {
-    stack_base: T,
-    stack_depth: T,
-    no_register: T,
-    buffer_size: T,
-    cell_size: T,
+    /// Start address of stack
+    pub stack_base: T,
+    /// Stack depth
+    pub stack_depth: T,
+    /// Number of registers
+    pub no_register: T,
+    /// Buffer size
+    pub buffer_size: T,
+    /// Size of a memory cell
+    pub cell_size: T,
 }
 
 impl<T> ConfigArgs<T> {
@@ -45,6 +50,26 @@ impl<T> ConfigArgs<T> {
             buffer_size,
             cell_size,
         }
+    }
+}
+
+/// Default config
+pub struct DefaultConfig;
+
+impl DefaultConfig {
+    /// Create a default config for 256 bit machine
+    pub fn default256() -> ConfigArgs<usize> {
+        ConfigArgs::<usize>::new(0, 1024, 16, 64, 32)
+    }
+
+    /// Create a default config for 64 bit machine
+    pub fn default64() -> ConfigArgs<usize> {
+        ConfigArgs::<usize>::new(0, 1024, 16, 64, 8)
+    }
+
+    /// Create a default config for 32 bit machine
+    pub fn default32() -> ConfigArgs<usize> {
+        ConfigArgs::<usize>::new(0, 1024, 16, 64, 4)
     }
 }
 
