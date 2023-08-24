@@ -1,6 +1,6 @@
-use zkmemory::base::{Base, UsizeConvertible, U256};
+use zkmemory::base::{UsizeConvertible, U256};
 use zkmemory::config::ConfigArgs;
-use zkmemory::machine::{RAMMachine, Register, RegisterMachine, StackMachine, StateMachine256};
+use zkmemory::machine::{RAMMachine, RegisterMachine, StackMachine, StateMachine256};
 // type inference lets us omit an explicit type signature (which
 // would be `RBTree<&str, &str>` in this example).
 
