@@ -10,30 +10,12 @@ mod tests {
     use crate::base::{Base, UsizeConvertible, U256};
     use crate::config::{ConfigArgs, DefaultConfig};
     use crate::machine::{
-        RAMMachine, RegisterMachine, StackMachine, StateMachine256, StateMachine32, StateMachine64,
+        RAMMachine, RegisterMachine, StackMachine, StateMachine256, StateMachine32,
     };
 
     #[test]
-    #[should_panic]
-    fn sm256_invalid_init() {
-        StateMachine256::new(ConfigArgs::new(0, 1024, 0, 64, 31));
-    }
-
-    #[test]
-    #[should_panic]
-    fn sm64_invalid_init() {
-        StateMachine64::new(ConfigArgs::new(0, 1024, 0, 64, 7));
-    }
-
-    #[test]
-    #[should_panic]
-    fn sm32_invalid_init() {
-        StateMachine32::new(ConfigArgs::new(0, 1024, 0, 64, 3));
-    }
-
-    #[test]
     fn sm256_write_read_one_cell() {
-        let mut sm = StateMachine256::new(DefaultConfig::default256());
+        let mut sm = StateMachine256::new(DefaultConfig::default());
         let chunk = U256::from_bytes([5u8; 32]);
         assert!(sm.write(sm.base_address(), chunk).is_ok());
         let read_result = sm.read(sm.base_address());
@@ -43,7 +25,7 @@ mod tests {
 
     #[test]
     fn sm256_read_empty_cell() {
-        let mut sm = StateMachine256::new(DefaultConfig::default256());
+        let mut sm = StateMachine256::new(DefaultConfig::default());
         let chunk = U256::from_bytes([0u8; 32]);
         let read_result = sm.read(sm.base_address());
         assert!(read_result.is_ok());
@@ -52,7 +34,7 @@ mod tests {
 
     #[test]
     fn sm256_write_one_cell_read_two_cell() {
-        let mut sm = StateMachine256::new(DefaultConfig::default256());
+        let mut sm = StateMachine256::new(DefaultConfig::default());
         let chunk_1 = U256::from_bytes([5u8; 32]);
         let chunk_2 = U256::from_bytes([10u8; 32]);
         let base_addr = sm.base_address().to_usize();
@@ -71,7 +53,7 @@ mod tests {
 
     #[test]
     fn sm256_write_two_cell_read_one_cell() {
-        let mut sm = StateMachine256::new(DefaultConfig::default256());
+        let mut sm = StateMachine256::new(DefaultConfig::default());
         let base_addr = sm.base_address().to_usize();
 
         let chunk = U256::from_bytes([1u8; 32]);
@@ -97,19 +79,19 @@ mod tests {
     #[test]
     #[should_panic]
     fn sm32_read_prohibited_cell() {
-        let mut sm = StateMachine32::new(DefaultConfig::default32());
+        let mut sm = StateMachine32::new(DefaultConfig::default());
         assert_eq!(sm.read(64).unwrap(), 0u32);
     }
 
     #[test]
     fn sm32_read_empty_cell() {
-        let mut sm = StateMachine32::new(DefaultConfig::default32());
+        let mut sm = StateMachine32::new(DefaultConfig::default());
         assert_eq!(sm.read(sm.base_address() + 64).unwrap(), 0u32);
     }
 
     #[test]
     fn sm32_write_read_one_cell() {
-        let mut sm = StateMachine32::new(DefaultConfig::default32());
+        let mut sm = StateMachine32::new(DefaultConfig::default());
         let chunk = 12u32;
         assert!(sm.write(sm.base_address(), chunk).is_ok());
         assert_eq!(sm.read(sm.base_address()).unwrap(), 12u32);
@@ -117,7 +99,7 @@ mod tests {
 
     #[test]
     fn sm32_write_one_cell_read_two_cells() {
-        let mut sm = StateMachine32::new(DefaultConfig::default32());
+        let mut sm = StateMachine32::new(DefaultConfig::default());
         let chunk_1 = u32::from_bytes([7u8; 4]);
         let chunk_2 = u32::from_bytes([10u8; 4]);
         assert!(sm.write(sm.base_address(), chunk_1).is_ok());
@@ -130,7 +112,7 @@ mod tests {
 
     #[test]
     fn sm32_write_two_cells_read_one_cells() {
-        let mut sm = StateMachine32::new(DefaultConfig::default32());
+        let mut sm = StateMachine32::new(DefaultConfig::default());
         let chunk = u32::from_bytes([3u8; 4]);
         assert!(sm.write(sm.base_address() + 2u32, chunk).is_ok());
         assert_eq!(sm.read(sm.base_address()).unwrap(), 0x00000303u32);
@@ -177,7 +159,7 @@ mod tests {
 
     #[test]
     fn u32_stack_functional() {
-        let mut sm = StateMachine32::new(DefaultConfig::default32());
+        let mut sm = StateMachine32::new(DefaultConfig::default());
 
         assert!(sm.push(0x01020304).is_ok());
         assert!(sm.push(0xaabbccdd).is_ok());
@@ -191,14 +173,14 @@ mod tests {
     #[test]
     #[should_panic]
     fn u32_stack_underflow() {
-        let mut sm = StateMachine32::new(DefaultConfig::default32());
+        let mut sm = StateMachine32::new(DefaultConfig::default());
         sm.pop().unwrap();
     }
 
     #[test]
     #[should_panic]
     fn u32_stack_overflow() {
-        let mut sm = StateMachine32::new(ConfigArgs::new(0, 2, 0, 64, 4));
+        let mut sm = StateMachine32::new(ConfigArgs::new(0, 2, 0, 64));
         assert!(sm.push(0x01020304).is_ok());
         assert!(sm.push(0x01020304).is_ok());
         assert!(sm.push(0x01020304).is_ok());
@@ -207,7 +189,7 @@ mod tests {
 
     #[test]
     fn u32_register_functional() {
-        let mut sm = StateMachine32::new(DefaultConfig::default32());
+        let mut sm = StateMachine32::new(DefaultConfig::default());
 
         let r0 = sm.register(0);
         let r1 = sm.register(1);

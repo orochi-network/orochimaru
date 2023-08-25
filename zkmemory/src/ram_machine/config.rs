@@ -30,25 +30,16 @@ pub struct ConfigArgs<T> {
     pub no_register: T,
     /// Buffer size
     pub buffer_size: T,
-    /// Size of a memory cell
-    pub cell_size: T,
 }
 
 impl<T> ConfigArgs<T> {
     /// Create a new config arguments
-    pub fn new(
-        stack_base: T,
-        stack_depth: T,
-        no_register: T,
-        buffer_size: T,
-        cell_size: T,
-    ) -> Self {
+    pub fn new(stack_base: T, stack_depth: T, no_register: T, buffer_size: T) -> Self {
         Self {
             stack_base,
             stack_depth,
             no_register,
             buffer_size,
-            cell_size,
         }
     }
 }
@@ -58,18 +49,8 @@ pub struct DefaultConfig;
 
 impl DefaultConfig {
     /// Create a default config for 256 bit machine
-    pub fn default256() -> ConfigArgs<usize> {
-        ConfigArgs::<usize>::new(0, 1024, 16, 64, 32)
-    }
-
-    /// Create a default config for 64 bit machine
-    pub fn default64() -> ConfigArgs<usize> {
-        ConfigArgs::<usize>::new(0, 1024, 16, 64, 8)
-    }
-
-    /// Create a default config for 32 bit machine
-    pub fn default32() -> ConfigArgs<usize> {
-        ConfigArgs::<usize>::new(0, 1024, 16, 64, 4)
+    pub fn default() -> ConfigArgs<usize> {
+        ConfigArgs::<usize>::new(0, 1024, 16, 64)
     }
 }
 
@@ -78,11 +59,11 @@ where
     T: Mul<T, Output = T> + Add<T, Output = T> + Copy,
 {
     /// Create a new config for given arguments
-    pub fn new(args: ConfigArgs<T>) -> Self {
+    pub fn new(cell_size: T, args: ConfigArgs<T>) -> Self {
         let stack_lo = args.stack_base;
-        let stack_hi = stack_lo + (args.stack_depth * args.cell_size);
+        let stack_hi = stack_lo + (args.stack_depth * cell_size);
         let register_lo = stack_hi + args.buffer_size;
-        let register_hi = register_lo + (args.no_register * args.cell_size);
+        let register_hi = register_lo + (args.no_register * cell_size);
         let memory_base = register_hi + args.buffer_size;
         Self {
             stack_depth: args.stack_depth,
@@ -90,7 +71,7 @@ where
             stack_hi,
             register_lo,
             register_hi,
-            cell_size: args.cell_size,
+            cell_size: cell_size,
             memory_base,
         }
     }

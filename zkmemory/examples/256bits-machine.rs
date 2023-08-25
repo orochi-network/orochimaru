@@ -1,12 +1,12 @@
 use zkmemory::base::{UsizeConvertible, U256};
-use zkmemory::config::ConfigArgs;
+use zkmemory::config::DefaultConfig;
 use zkmemory::machine::{RAMMachine, RegisterMachine, StackMachine, StateMachine256};
 // type inference lets us omit an explicit type signature (which
 // would be `RBTree<&str, &str>` in this example).
 
 fn main() {
     // Test the state machine of Uint256 values
-    let mut sm = StateMachine256::new(ConfigArgs::new(0, 1024, 32, 64, 32));
+    let mut sm = StateMachine256::new(DefaultConfig::default());
 
     let base_address: usize = sm.base_address().to_usize();
     sm.write(

@@ -212,13 +212,7 @@ where
     V: Base<S>,
 {
     fn new(config_arugments: ConfigArgs<usize>) -> Self {
-        if config_arugments.cell_size != 32
-            && config_arugments.cell_size != 8
-            && config_arugments.cell_size != 4
-        {
-            panic!("Invalid cell size");
-        }
-        let cfg = Config::new(config_arugments);
+        let cfg = Config::new(K::CELL_SIZE, config_arugments);
         let config = Config::<K>::from(cfg);
         Self {
             memory: RawMemory::<K, V, S>::new(config.cell_size),
