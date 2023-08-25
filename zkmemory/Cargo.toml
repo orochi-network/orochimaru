@@ -2,9 +2,15 @@
 name = "zkmemory"
 version = "0.1.0"
 edition = "2021"
+description = "An universal memory prover in Zero-Knowledge Proof"
+authors.workspace = true
+repository.workspace = true
+readme = "README.md"
+license = "Apache-2.0"
+keywords = ["zkp", "zkmemory", "zkvm", "zkrisc", "ram"]
+categories = ["zkp", "cryptography", "vm", "ram"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 
 [lib]
 name = "zkmemory"
