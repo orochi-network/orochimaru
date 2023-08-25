@@ -47,4 +47,8 @@ fn main() {
 
     // Check the memory trace
     println!("{:#064x?}", sm);
+
+    let trace = sm.trace();
+
+    println!("{:#064x?}", trace);
 }

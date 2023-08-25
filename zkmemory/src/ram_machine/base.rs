@@ -15,6 +15,8 @@ pub trait Base<const S: usize, T = Self>:
     + Rem<T, Output = T>
     + Div<T, Output = T>
 {
+    /// The size of the cell
+    const CELL_SIZE: usize = S;
     /// Check if the value is zero
     fn is_zero(&self) -> bool;
     /// Get the zero value

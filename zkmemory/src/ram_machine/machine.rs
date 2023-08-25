@@ -14,6 +14,33 @@ pub enum Instruction<K, V> {
     Read(u64, K, V),
 }
 
+/// RAM machine execution trace record
+#[derive(Debug)]
+pub enum ExecutionTrace<K, V, const S: usize> {
+    /// Write instruction (address, time_log, stack_depth, value)
+    Write(K, u64, usize, V),
+    /// Read instruction (address, time_log, stack_depth, value)
+    Read(K, u64, usize, V),
+}
+
+impl<K, V, const S: usize> ExecutionTrace<K, V, S>
+where
+    K: Base<S>,
+    V: Base<S>,
+{
+    fn from(instruction: Instruction<K, V>, stack_depth: usize) -> Self {
+        match instruction {
+            Instruction::Write(time_log, address, value) => {
+                Self::Write(address, time_log, stack_depth, value)
+            }
+            Instruction::Read(time_log, address, value) => {
+                Self::Read(address, time_log, stack_depth, value)
+            }
+            _ => panic!("Invalid instruction type"),
+        }
+    }
+}
+
 /// RAM machine instruction set
 #[derive(Debug)]
 pub enum ExtendInstruction<R, K, V> {
@@ -119,7 +146,7 @@ where
     K: Base<S>,
 {
     memory: RawMemory<K, V, S>,
-    trace: Vec<Instruction<K, V>>,
+    trace: Vec<ExecutionTrace<K, V, S>>,
     config: Config<K>,
     stack_ptr: K,
     stack_depth: usize,
@@ -135,15 +162,23 @@ where
         self.config.memory_base
     }
 
+    /// Get memory execution trace
+    pub fn trace(&self) -> &Vec<ExecutionTrace<K, V, S>> {
+        self.trace.as_ref()
+    }
+
     fn write_cell(&mut self, address: K, value: V) -> Result<(), Error> {
         match self.memory.write(address, value) {
             CellInteraction::Cell(instruction) => {
-                self.trace.push(instruction);
+                self.trace
+                    .push(ExecutionTrace::from(instruction, self.stack_depth));
                 Ok(())
             }
             CellInteraction::TwoCell(instruction1, instruction2) => {
-                self.trace.push(instruction1);
-                self.trace.push(instruction2);
+                self.trace
+                    .push(ExecutionTrace::from(instruction1, self.stack_depth));
+                self.trace
+                    .push(ExecutionTrace::from(instruction2, self.stack_depth));
                 Ok(())
             }
             _ => Err(Error::MemoryInvalidInteraction),
@@ -154,12 +189,15 @@ where
         let (value, interaction) = self.memory.read(address);
         match interaction {
             CellInteraction::Cell(instruction) => {
-                self.trace.push(instruction);
+                self.trace
+                    .push(ExecutionTrace::from(instruction, self.stack_depth));
                 Ok(value)
             }
             CellInteraction::TwoCell(instruction1, instruction2) => {
-                self.trace.push(instruction1);
-                self.trace.push(instruction2);
+                self.trace
+                    .push(ExecutionTrace::from(instruction1, self.stack_depth));
+                self.trace
+                    .push(ExecutionTrace::from(instruction2, self.stack_depth));
                 Ok(value)
             }
             _ => Err(Error::MemoryInvalidInteraction),
