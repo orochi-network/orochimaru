@@ -16,7 +16,7 @@ pub enum Instruction<K, V> {
 
 /// RAM machine execution trace record
 #[derive(Debug)]
-pub enum ExecutionTrace<K, V, const S: usize> {
+pub enum TraceRecord<K, V, const S: usize> {
     /// Write instruction (address, time_log, stack_depth, value)
     Write(K, u64, usize, V),
     /// Read instruction (address, time_log, stack_depth, value)
@@ -27,7 +27,7 @@ pub enum ExecutionTrace<K, V, const S: usize> {
     Pop(K, u64, usize, V),
 }
 
-impl<K, V, const S: usize> ExecutionTrace<K, V, S>
+impl<K, V, const S: usize> TraceRecord<K, V, S>
 where
     K: Base<S>,
     V: Base<S>,
@@ -44,7 +44,7 @@ where
         }
     }
 
-    fn stack_from(instruction: Instruction<K, V>, stack_depth: usize) -> Self {
+    fn from_stack_op(instruction: Instruction<K, V>, stack_depth: usize) -> Self {
         match instruction {
             Instruction::Write(time_log, address, value) => {
                 Self::Push(address, time_log, stack_depth, value)
@@ -88,7 +88,7 @@ pub enum CellInteraction<K, V> {
 /// Random Access Memory Machine
 pub trait RAMMachine<K, V> {
     /// Create a new instance of RAM machine
-    fn new(config_arugments: ConfigArgs<usize>) -> Self;
+    fn new(config_arugments: ConfigArgs<K>) -> Self;
     /// Write a value to a memory address
     fn write(&mut self, address: K, value: V) -> Result<(), Error>;
     /// Read a value from a memory address
@@ -137,7 +137,7 @@ where
     K: Base<S>,
 {
     /// Get address for a register
-    fn register(&self, register_number: usize) -> Register<K, S>;
+    fn register(&self, register_number: usize) -> Result<Register<K, S>, Error>;
     /// Move a value from one register to another
     fn mov(&mut self, to: Register<K, S>, from: Register<K, S>) -> Result<(), Error>;
     /// Set a value to a register
@@ -162,8 +162,8 @@ where
     K: Base<S>,
 {
     memory: RawMemory<K, V, S>,
-    trace: Vec<ExecutionTrace<K, V, S>>,
-    config: Config<K>,
+    trace: Vec<TraceRecord<K, V, S>>,
+    config: Config<K, S>,
     stack_ptr: K,
     stack_depth: usize,
 }
@@ -175,11 +175,11 @@ where
 {
     /// Base address of memory
     pub fn base_address(&self) -> K {
-        self.config.memory_base
+        self.config.memory.low()
     }
 
     /// Get memory execution trace
-    pub fn trace(&self) -> &Vec<ExecutionTrace<K, V, S>> {
+    pub fn trace(&self) -> &Vec<TraceRecord<K, V, S>> {
         self.trace.as_ref()
     }
 
@@ -187,14 +187,14 @@ where
         match self.memory.write(address, value) {
             CellInteraction::Cell(instruction) => {
                 self.trace
-                    .push(ExecutionTrace::from(instruction, self.stack_depth));
+                    .push(TraceRecord::from(instruction, self.stack_depth));
                 Ok(())
             }
             CellInteraction::TwoCell(instruction1, instruction2) => {
                 self.trace
-                    .push(ExecutionTrace::from(instruction1, self.stack_depth));
+                    .push(TraceRecord::from(instruction1, self.stack_depth));
                 self.trace
-                    .push(ExecutionTrace::from(instruction2, self.stack_depth));
+                    .push(TraceRecord::from(instruction2, self.stack_depth));
                 Ok(())
             }
             _ => Err(Error::MemoryInvalidInteraction),
@@ -206,14 +206,14 @@ where
         match interaction {
             CellInteraction::Cell(instruction) => {
                 self.trace
-                    .push(ExecutionTrace::from(instruction, self.stack_depth));
+                    .push(TraceRecord::from(instruction, self.stack_depth));
                 Ok(value)
             }
             CellInteraction::TwoCell(instruction1, instruction2) => {
                 self.trace
-                    .push(ExecutionTrace::from(instruction1, self.stack_depth));
+                    .push(TraceRecord::from(instruction1, self.stack_depth));
                 self.trace
-                    .push(ExecutionTrace::from(instruction2, self.stack_depth));
+                    .push(TraceRecord::from(instruction2, self.stack_depth));
                 Ok(value)
             }
             _ => Err(Error::MemoryInvalidInteraction),
@@ -227,27 +227,26 @@ where
     K: Base<S>,
     V: Base<S>,
 {
-    fn new(config_arugments: ConfigArgs<usize>) -> Self {
-        let cfg = Config::new(K::CELL_SIZE, config_arugments);
-        let config = Config::<K>::from(cfg);
+    fn new(config_arugments: ConfigArgs<K>) -> Self {
+        let config = Config::<K, S>::new(K::from_usize(K::CELL_SIZE), config_arugments);
         Self {
             memory: RawMemory::<K, V, S>::new(config.cell_size),
             trace: Vec::new(),
-            config: Config::from(cfg),
+            config,
             stack_ptr: K::zero(),
             stack_depth: 0,
         }
     }
 
     fn write(&mut self, address: K, value: V) -> Result<(), Error> {
-        if address < self.config.memory_base {
+        if !self.config.memory.contain(address) {
             return Err(Error::MemoryAccessDeinied);
         }
         self.write_cell(address, value)
     }
 
     fn read(&mut self, address: K) -> Result<V, Error> {
-        if address < self.config.memory_base {
+        if !self.config.memory.contain(address) {
             return Err(Error::MemoryAccessDeinied);
         }
         self.read_cell(address)
@@ -264,7 +263,7 @@ where
     }
 
     fn push(&mut self, value: V) -> Result<(), Error> {
-        if self.stack_ptr >= self.config.stack_hi {
+        if self.stack_ptr >= self.config.stack.high() {
             return Err(Error::StackOverflow);
         }
         self.stack_ptr = self.stack_ptr + self.config.cell_size;
@@ -272,7 +271,7 @@ where
         match self.memory.write(self.stack_ptr, value) {
             CellInteraction::Cell(instruction) => {
                 self.trace
-                    .push(ExecutionTrace::stack_from(instruction, self.stack_depth));
+                    .push(TraceRecord::from_stack_op(instruction, self.stack_depth));
                 Ok(())
             }
             _ => Err(Error::MemoryInvalidInteraction),
@@ -280,7 +279,7 @@ where
     }
 
     fn pop(&mut self) -> Result<V, Error> {
-        if self.stack_ptr <= self.config.stack_lo {
+        if self.stack_ptr <= self.config.stack.low() {
             return Err(Error::StackUnderflow);
         }
         let address = self.stack_ptr;
@@ -290,7 +289,7 @@ where
         match interaction {
             CellInteraction::Cell(instruction) => {
                 self.trace
-                    .push(ExecutionTrace::stack_from(instruction, self.stack_depth));
+                    .push(TraceRecord::from_stack_op(instruction, self.stack_depth));
                 Ok(value)
             }
             _ => Err(Error::MemoryInvalidInteraction),
@@ -329,10 +328,13 @@ where
         }
     }
 
-    fn register(&self, register_index: usize) -> Register<K, S> {
-        Register::new(
-            register_index,
-            self.config.register_lo + (K::from_usize(register_index) * self.config.cell_size),
-        )
+    fn register(&self, register_index: usize) -> Result<Register<K, S>, Error> {
+        let register_address =
+            self.config.register.low() + (K::from_usize(register_index) * self.config.cell_size);
+        if register_address > self.config.register.high() {
+            Err(Error::RegisterUnableToAssign)
+        } else {
+            Ok(Register::new(register_index, register_address))
+        }
     }
 }

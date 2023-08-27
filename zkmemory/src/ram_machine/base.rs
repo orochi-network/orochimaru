@@ -15,6 +15,10 @@ pub trait Base<const S: usize, T = Self>:
     + Rem<T, Output = T>
     + Div<T, Output = T>
 {
+    /// The max value of the cell
+    const MAX: Self;
+    /// The min value of the cell
+    const MIN: Self;
     /// The size of the cell
     const CELL_SIZE: usize = S;
     /// Check if the value is zero
@@ -46,6 +50,10 @@ impl UsizeConvertible for U256 {
 }
 
 impl Base<32> for U256 {
+    const MAX: Self = U256::MAX;
+
+    const MIN: Self = U256::MIN;
+
     fn is_zero(&self) -> bool {
         self.eq(&U256::ZERO)
     }
@@ -74,6 +82,10 @@ impl UsizeConvertible for u64 {
 }
 
 impl Base<8> for u64 {
+    const MAX: Self = u64::MAX;
+
+    const MIN: Self = u64::MIN;
+
     fn is_zero(&self) -> bool {
         *self == 0
     }
@@ -102,6 +114,10 @@ impl UsizeConvertible for u32 {
 }
 
 impl Base<4> for u32 {
+    const MAX: Self = u32::MAX;
+
+    const MIN: Self = u32::MIN;
+
     fn is_zero(&self) -> bool {
         *self == 0
     }

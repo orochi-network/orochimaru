@@ -39,8 +39,8 @@ fn main() {
 
     sm.pop().unwrap();
 
-    let r0 = sm.register(0);
-    let r1 = sm.register(1);
+    let r0 = sm.register(0).unwrap();
+    let r1 = sm.register(1).unwrap();
 
     sm.set(r1, U256::from_be_bytes([9u8; 32])).unwrap();
     sm.mov(r0, r1).unwrap();

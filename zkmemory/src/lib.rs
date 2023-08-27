@@ -180,7 +180,12 @@ mod tests {
     #[test]
     #[should_panic]
     fn u32_stack_overflow() {
-        let mut sm = StateMachine32::new(ConfigArgs::new(0, 2, 0, 64));
+        let mut sm = StateMachine32::new(ConfigArgs {
+            head_layout: true,
+            stack_depth: 2,
+            no_register: 0,
+            buffer_size: 64,
+        });
         assert!(sm.push(0x01020304).is_ok());
         assert!(sm.push(0x01020304).is_ok());
         assert!(sm.push(0x01020304).is_ok());
@@ -191,8 +196,8 @@ mod tests {
     fn u32_register_functional() {
         let mut sm = StateMachine32::new(DefaultConfig::default());
 
-        let r0 = sm.register(0);
-        let r1 = sm.register(1);
+        let r0 = sm.register(0).unwrap();
+        let r1 = sm.register(1).unwrap();
 
         assert!(sm.set(r0, 0x01020304).is_ok());
         assert!(sm.set(r1, 0xaabbccdd).is_ok());

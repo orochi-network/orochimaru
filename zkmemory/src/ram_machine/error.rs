@@ -9,6 +9,8 @@ pub enum Error {
     RegisterUnableToRead,
     /// Register unable to write
     RegisterUnableToWrite,
+    /// Register unable to assign
+    RegisterUnableToAssign,
     /// Stack overflow
     StackOverflow,
     /// Stack underflow
@@ -25,6 +27,7 @@ impl core::fmt::Display for Error {
             Error::MemoryInvalidInteraction => write!(f, "Memory invalid interaction"),
             Error::RegisterUnableToRead => write!(f, "Register unable to read"),
             Error::RegisterUnableToWrite => write!(f, "Register unable to write"),
+            Error::RegisterUnableToAssign => write!(f, "Register unable to assign"),
             Error::StackOverflow => write!(f, "Stack overflow"),
             Error::StackUnderflow => write!(f, "Stack underflow"),
         }
