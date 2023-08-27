@@ -21,6 +21,10 @@ pub enum ExecutionTrace<K, V, const S: usize> {
     Write(K, u64, usize, V),
     /// Read instruction (address, time_log, stack_depth, value)
     Read(K, u64, usize, V),
+    /// Push instruction (address, time_log, stack_deep, value)
+    Push(K, u64, usize, V),
+    /// Pop instruction (address, time_log, stack_deep, value)
+    Pop(K, u64, usize, V),
 }
 
 impl<K, V, const S: usize> ExecutionTrace<K, V, S>
@@ -35,6 +39,18 @@ where
             }
             Instruction::Read(time_log, address, value) => {
                 Self::Read(address, time_log, stack_depth, value)
+            }
+            _ => panic!("Invalid instruction type"),
+        }
+    }
+
+    fn stack_from(instruction: Instruction<K, V>, stack_depth: usize) -> Self {
+        match instruction {
+            Instruction::Write(time_log, address, value) => {
+                Self::Push(address, time_log, stack_depth, value)
+            }
+            Instruction::Read(time_log, address, value) => {
+                Self::Pop(address, time_log, stack_depth, value)
             }
             _ => panic!("Invalid instruction type"),
         }
@@ -253,7 +269,14 @@ where
         }
         self.stack_ptr = self.stack_ptr + self.config.cell_size;
         self.stack_depth += 1;
-        self.write_cell(self.stack_ptr, value)
+        match self.memory.write(self.stack_ptr, value) {
+            CellInteraction::Cell(instruction) => {
+                self.trace
+                    .push(ExecutionTrace::stack_from(instruction, self.stack_depth));
+                Ok(())
+            }
+            _ => Err(Error::MemoryInvalidInteraction),
+        }
     }
 
     fn pop(&mut self) -> Result<V, Error> {
@@ -263,7 +286,15 @@ where
         let address = self.stack_ptr;
         self.stack_ptr = self.stack_ptr - self.config.cell_size;
         self.stack_depth -= 1;
-        self.read_cell(address)
+        let (value, interaction) = self.memory.read(address);
+        match interaction {
+            CellInteraction::Cell(instruction) => {
+                self.trace
+                    .push(ExecutionTrace::stack_from(instruction, self.stack_depth));
+                Ok(value)
+            }
+            _ => Err(Error::MemoryInvalidInteraction),
+        }
     }
 }
 
