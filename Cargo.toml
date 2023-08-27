@@ -1,5 +1,5 @@
 [workspace]
-members = ["libecvrf", "zkmemory", "node"]
+members = ["libecvrf", "zkmemory", "zkrisc", "zkdb", "node"]
 exclude = []
 resolver = "2"
 
@@ -11,7 +11,7 @@ repository = "https://github.com/orochi-network/orochimaru/"
 edition = "2021"
 readme = "README.md"
 license = "Apache-2.0"
-keywords = ["verifiable computation", "orochi", "zkp", "vrf", "cryptography", "mpc"]
+keywords = ["risc", "zkdb", "zkp", "vrf", "mpc"]
 categories = ["zkp", "cryptography", "distributed", "mpc"]
 
 [profile.bench]

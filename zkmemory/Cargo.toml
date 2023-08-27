@@ -2,13 +2,15 @@
 name = "zkmemory"
 version = "0.1.0"
 edition = "2021"
+description = "An universal memory prover in Zero-Knowledge Proof"
+authors.workspace = true
+repository.workspace = true
+readme = "README.md"
+license = "Apache-2.0"
+keywords = ["zkp", "zkmemory", "zkvm", "zkrisc", "ram"]
+categories = ["zkp", "cryptography", "vm", "ram"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[[bin]]
-default = "test"
-name = "test"
-path = "src/main.rs"
 
 [lib]
 name = "zkmemory"
@@ -16,7 +18,7 @@ path = "src/lib.rs"
 
 [dependencies]
 cargo-llvm-cov = "0.5.27"
+ethnum = "1.3.2"
 halo2_proofs = {git="https://github.com/privacy-scaling-explorations/halo2", tag="v2023_04_20"}
 hex = "0.4.3"
 rbtree = "0.1.5"
-revm-primitives = "1.1.2"
