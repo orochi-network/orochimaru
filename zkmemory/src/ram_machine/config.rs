@@ -91,6 +91,8 @@ where
                 (args.stack_depth + args.no_register + args.buffer_size + args.buffer_size)
                     * cell_size;
             let stack_lo = T::MAX - length;
+            let remain = stack_lo % cell_size;
+            let stack_lo = stack_lo - remain + cell_size;
             let stack_hi = stack_lo + (args.stack_depth * cell_size);
             let register_lo = stack_hi + args.buffer_size;
             let register_hi = register_lo + (args.no_register * cell_size);

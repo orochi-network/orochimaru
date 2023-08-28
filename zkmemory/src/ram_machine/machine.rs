@@ -57,23 +57,6 @@ where
     }
 }
 
-/// RAM machine instruction set
-#[derive(Debug)]
-pub enum ExtendInstruction<R, K, V> {
-    /// Invalid instruction
-    Invalid,
-    /// Push instruction
-    Push(V),
-    /// Pop instruction
-    Pop,
-    /// Move value from one register to another (to, from)
-    Move(R, R),
-    /// Set value to a register (register, value)
-    Set(R, V),
-    /// Get value from a register to an address (address, register)
-    Get(K, R),
-}
-
 /// Represents the interaction between a RAM machine and a memory cell.
 #[derive(Debug)]
 pub enum CellInteraction<K, V> {
@@ -131,13 +114,13 @@ where
     }
 }
 
-/// Register Machine with two simple opcode (mov)
+/// Register Machine with 3 simple opcodes (mov, set, get)
 pub trait RegisterMachine<K, V, const S: usize>
 where
     K: Base<S>,
 {
     /// Get address for a register
-    fn register(&self, register_number: usize) -> Result<Register<K, S>, Error>;
+    fn register(&self, register_index: usize) -> Result<Register<K, S>, Error>;
     /// Move a value from one register to another
     fn mov(&mut self, to: Register<K, S>, from: Register<K, S>) -> Result<(), Error>;
     /// Set a value to a register
@@ -233,7 +216,7 @@ where
             memory: RawMemory::<K, V, S>::new(config.cell_size),
             trace: Vec::new(),
             config,
-            stack_ptr: K::zero(),
+            stack_ptr: config.stack.low(),
             stack_depth: 0,
         }
     }
@@ -263,7 +246,7 @@ where
     }
 
     fn push(&mut self, value: V) -> Result<(), Error> {
-        if self.stack_ptr >= self.config.stack.high() {
+        if !self.config.stack.contain(self.stack_ptr) {
             return Err(Error::StackOverflow);
         }
         self.stack_ptr = self.stack_ptr + self.config.cell_size;
@@ -274,12 +257,16 @@ where
                     .push(TraceRecord::from_stack_op(instruction, self.stack_depth));
                 Ok(())
             }
+            CellInteraction::TwoCell(_, _) => {
+                println!("TwoCell");
+                Ok(())
+            }
             _ => Err(Error::MemoryInvalidInteraction),
         }
     }
 
     fn pop(&mut self) -> Result<V, Error> {
-        if self.stack_ptr <= self.config.stack.low() {
+        if !self.config.stack.contain(self.stack_ptr) {
             return Err(Error::StackUnderflow);
         }
         let address = self.stack_ptr;
