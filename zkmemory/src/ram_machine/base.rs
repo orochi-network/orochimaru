@@ -2,6 +2,7 @@ use core::ops::{Add, Div, Mul, Rem, Sub};
 use core::usize;
 use ethnum::AsU256;
 pub use ethnum::U256;
+use std::fmt::{Debug, Display};
 
 /// Base trait for memory address and value
 pub trait Base<const S: usize, T = Self>:
@@ -9,6 +10,8 @@ pub trait Base<const S: usize, T = Self>:
     + Copy
     + PartialEq
     + UsizeConvertible
+    + Display
+    + Debug
     + Add<T, Output = T>
     + Mul<T, Output = T>
     + Sub<T, Output = T>
