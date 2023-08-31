@@ -81,6 +81,12 @@ where
 }
 ```
 
+## Code coverage
+
+```text
+cargo llvm-cov --html --open
+```
+
 ## For more detail check `64bits-machine` example
 
 In this example we tried to simulate a 64bits machine with 64bits word size with 4 registers (`r0`, `r1`, `r2`, `r3`).
