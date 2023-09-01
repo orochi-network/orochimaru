@@ -1,6 +1,6 @@
 [package]
 name = "libecvrf"
-version = "1.1.1"
+version = "1.1.2"
 description = "A ECVRF that's friendly with EVM, based on curve secp256k1 and keccak256"
 edition = "2021"
 license = "Apache-2.0"
@@ -8,7 +8,7 @@ authors.workspace = true
 repository.workspace = true
 readme = "README.md"
 keywords = ["vrf", "ecvrf", "libecvrf", "randomness", "rng"]
-categories = ["ecvrf", "cryptography", "vrf", "rng"]
+categories = ["no-std", "cryptography", "algorithms"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

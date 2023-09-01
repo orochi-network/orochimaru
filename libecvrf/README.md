@@ -22,11 +22,12 @@ This library is a part of Orand a Decentralized RNG (or Public Randomness Beacon
 use libecvrf::{
     extends::ScalarExtend,
     secp256k1::{curve::Scalar, SecretKey},
+    util::thread_rng,
     ECVRF,
 };
 
 fn main() {
-    let secret_key = SecretKey::random(&mut rand::thread_rng());
+    let secret_key = SecretKey::random(&mut thread_rng());
     let ecvrf = ECVRF::new(secret_key);
     let alpha = Scalar::randomize();
 
@@ -39,7 +40,6 @@ fn main() {
 
     println!("result: {:#?}", smart_contract_proof);
 }
-
 ```
 
 ## License

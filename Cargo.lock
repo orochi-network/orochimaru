@@ -1286,7 +1286,7 @@ checksum = "b4668fb0ea861c1df094127ac5f1da3409a82116a4ba74fca2e58ef927159bb3"
 
 [[package]]
 name = "libecvrf"
-version = "1.1.1"
+version = "1.1.2"
 dependencies = [
  "hex",
  "libsecp256k1",
