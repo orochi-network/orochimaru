@@ -1,15 +1,38 @@
+//! This crate provides a simple RAM machine for use in the zkVM
+#![cfg_attr(not(feature = "std"), no_std)]
+#![deny(
+    unused,
+    warnings,
+    future_incompatible,
+    nonstandard_style,
+    rust_2018_idioms,
+    missing_docs,
+    unused_imports
+)]
+#![forbid(unsafe_code)]
+
 /// EC-VRF implementation in Rust
-#[deny(warnings, unused, nonstandard_style, missing_docs, unsafe_code)]
 mod ecvrf;
+pub use ecvrf::*;
 
-pub use ecvrf::{error, extends, hash, helper};
+/// EC-VRF error handling
+pub mod error;
 
-pub use ecvrf::ecvrf::*;
+/// Extended Affine, Jacobian, Scalar, Field
+pub mod extends;
 
+/// Curve hash
+pub mod hash;
+
+/// Helper functions
+pub mod helper;
+
+/// Re-export libsecp256k1
 pub mod secp256k1 {
     pub use libsecp256k1::*;
 }
 
+/// Re-export rand::thread_rng
 pub mod util {
     pub use rand::thread_rng;
 }

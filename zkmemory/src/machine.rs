@@ -2,6 +2,8 @@ use crate::base::{Base, U256};
 use crate::config::{Config, ConfigArgs};
 use crate::error::Error;
 use crate::memory::{GenericMemory, RawMemory};
+extern crate alloc;
+use alloc::vec::Vec;
 
 /// RAM machine instruction set
 #[derive(Debug)]
@@ -255,10 +257,6 @@ where
             CellInteraction::Cell(instruction) => {
                 self.trace
                     .push(TraceRecord::from_stack_op(instruction, self.stack_depth));
-                Ok(())
-            }
-            CellInteraction::TwoCell(_, _) => {
-                println!("TwoCell");
                 Ok(())
             }
             _ => Err(Error::MemoryInvalidInteraction),

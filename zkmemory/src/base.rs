@@ -1,8 +1,8 @@
+use core::fmt::{Debug, Display};
 use core::ops::{Add, Div, Mul, Rem, Sub};
 use core::usize;
 use ethnum::AsU256;
 pub use ethnum::U256;
-use std::fmt::{Debug, Display};
 
 /// Base trait for memory address and value
 pub trait Base<const S: usize, T = Self>:

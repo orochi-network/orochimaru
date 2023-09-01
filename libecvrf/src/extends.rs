@@ -1,4 +1,6 @@
+extern crate alloc;
 use crate::helper::random_bytes;
+use alloc::{string::String, vec::Vec};
 use libsecp256k1::curve::{Affine, Field, Jacobian, Scalar};
 use tiny_keccak::{Hasher, Keccak};
 

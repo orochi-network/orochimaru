@@ -1,9 +1,30 @@
-/// This crate provides a simple RAM machine for use in the zkVM
-#[deny(warnings, unused, nonstandard_style, missing_docs, unsafe_code)]
+//! This crate provides a simple RAM machine for use in the zkVM
+#![cfg_attr(not(feature = "std"), no_std)]
+#![deny(
+    unused,
+    warnings,
+    future_incompatible,
+    nonstandard_style,
+    rust_2018_idioms,
+    missing_docs,
+    unused_imports
+)]
+#![forbid(unsafe_code)]
 
+/// Base trait for generic type
+pub mod base;
+/// Define all configuration of [StateMachine](crate::machine::StateMachine) and [RawMemory](crate::memory::RawMemory)
+pub mod config;
+/// Define all errors of [StateMachine](crate::machine::StateMachine) and [RawMemory](crate::memory::RawMemory)
+pub mod error;
 /// A state machine with two instructions [Write](crate::machine::Instruction::Write) and [Read](crate::machine::Instruction::Read).
-mod ram_machine;
-pub use ram_machine::*;
+/// This machine have configurable word size and address size. This crate provide following aliases:
+/// - [StateMachine256](crate::machine::StateMachine256) with 256 bits address and word size
+/// - [StateMachine64](crate::machine::StateMachine64) with 64 bits address and word size
+/// - [StateMachine32](crate::machine::StateMachine32) with 32 bits address and word size
+pub mod machine;
+/// Raw memory as a key-value store base on [RBTree](rbtree::RBTree) that mapping address to value
+pub mod memory;
 
 #[cfg(test)]
 mod tests {
