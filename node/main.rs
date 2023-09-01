@@ -12,8 +12,8 @@ use hyper_util::rt::TokioIo;
 use libecvrf::{
     extends::{AffineExtend, ScalarExtend},
     helper::{get_address, random_bytes},
-    secp256k1::{curve::Scalar, PublicKey, SecretKey},
-    KeyPair, RawKeyPair, ECVRF,
+    secp256k1::{curve::Scalar, util::SECRET_KEY_SIZE, PublicKey, SecretKey},
+    KeyPair, RawKeyPair, Zeroable, ECVRF,
 };
 
 use node::{
@@ -364,26 +364,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             // Generate key if it didn't exist
             let mut hmac_secret = [0u8; 16];
             random_bytes(&mut hmac_secret);
-            let new_keypair = match env::var("SECRET_KEY") {
+            let mut new_keypair = match env::var("SECRET_KEY") {
                 // Get secret from .env file
                 Ok(r) => {
-                    let k: [u8; 32] = hex::decode(r.trim())
+                    let k: [u8; SECRET_KEY_SIZE] = hex::decode(r.trim())
                         .expect("Unable to decode secret key")
                         .try_into()
-                        .expect("Unable to convert secret key to [u8; 32]");
+                        .expect("Unable to convert secret key to [u8; SECRET_KEY_SIZE]");
                     RawKeyPair::from(&k)
                 }
                 // Generate new secret
                 Err(_) => RawKeyPair::from(KeyPair::new()),
             };
-            keyring
+            let insert_result = keyring
                 .insert(json!({
                 "username": ORAND_KEYRING_NAME,
                 "hmac_secret": hex::encode(hmac_secret),
                 "public_key": hex::encode(new_keypair.public_key), 
                 "secret_key": hex::encode(new_keypair.secret_key)}))
                 .await
-                .expect("Unable to insert new key to keyring table")
+                .expect("Unable to insert new key to keyring table");
+            /// Wipe raw keypair from memory
+            new_keypair.zeroize();
+            insert_result
         }
         Some(k) => k,
     };

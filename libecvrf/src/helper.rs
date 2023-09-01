@@ -93,9 +93,9 @@ pub fn ecmult_gen(context: &ECMultGenContext, ng: &Scalar) -> Affine {
 
 /// Calculate witness address from a Affine
 pub fn calculate_witness_address(witness: &Affine) -> [u8; 20] {
-    witness.keccak256()[12..32]
-        .try_into()
-        .expect("Unable to calculate witness address")
+    let mut result = [0u8; 20];
+    result.copy_from_slice(&witness.keccak256()[12..32]);
+    result
 }
 
 /// Has a Public Key and return a Ethereum address
@@ -103,9 +103,7 @@ pub fn get_address(pub_key: PublicKey) -> [u8; 20] {
     let mut affine_pub: Affine = pub_key.into();
     affine_pub.x.normalize();
     affine_pub.y.normalize();
-    affine_pub.keccak256()[12..32]
-        .try_into()
-        .expect("Unable to calculate address from public key")
+    calculate_witness_address(&affine_pub)
 }
 
 /// Random bytes array
