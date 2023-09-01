@@ -50,7 +50,8 @@ fn decode_name(val: String) -> String {
 
 impl JSONRPCMethod {
     pub fn from_json_string(json_string: &str) -> Self {
-        let json_rpc: JSONRPCPayload = serde_json::from_str(json_string).unwrap();
+        let json_rpc: JSONRPCPayload =
+            serde_json::from_str(json_string).expect("Invalid JSON string");
         match json_rpc.method.as_str() {
             "orand_getPublicEpoch" => Self::OrandGetEpoch(
                 decode_u32(json_rpc.params[0].clone()),

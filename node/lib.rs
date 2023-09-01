@@ -1,3 +1,5 @@
+/// EC-VRF implementation in Rust
+#[deny(warnings, unused, nonstandard_style, missing_docs, unsafe_code)]
 pub mod ethereum;
 mod sqlite;
 pub use sqlite::{keyring, prelude, randomness, receiver, sqlite_db};
