@@ -72,17 +72,10 @@ impl ScalarExtend for Scalar {
         if bytes.len() > 32 {
             panic!("Bytes length must be less than 32")
         }
+        let mut tmp_bytes = [0u8; 32];
+        tmp_bytes[0..bytes.len()].copy_from_slice(bytes);
         let mut r = Scalar::default();
-        assert!(
-            bool::from(
-                r.set_b32(
-                    bytes
-                        .try_into()
-                        .expect("Unable to convert &[u8] to &[u8;32]"),
-                ),
-            ),
-            "Unable to set bytes to Scalar"
-        );
+        r.set_b32(&tmp_bytes).unwrap_u8();
         r
     }
 

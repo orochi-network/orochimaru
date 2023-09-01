@@ -1,4 +1,4 @@
-//! This crate provides a simple RAM machine for use in the zkVM
+//! This crate provide ECVRF implementation in Rust.
 #![cfg_attr(not(feature = "std"), no_std)]
 #![deny(
     unused,
