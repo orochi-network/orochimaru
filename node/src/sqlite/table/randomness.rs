@@ -6,16 +6,20 @@ use sea_orm::{
 
 use super::ReceiverTable;
 
+/// Randomness table
 pub struct RandomnessTable<'a> {
+    /// Database connection
     pub connection: &'a DatabaseConnection,
 }
 
+/// Randomness related columns
 impl<'a> RandomnessTable<'a> {
-    // Create new instance of randomness
+    /// Create new instance of randomness
     pub fn new(connection: &'a DatabaseConnection) -> Self {
         Self { connection }
     }
 
+    /// Find randomness record by its network and address
     pub async fn find_recent_epoch(
         &self,
         network: u32,
@@ -44,6 +48,7 @@ impl<'a> RandomnessTable<'a> {
         }
     }
 
+    /// Find randomness record by its network and address
     pub async fn find_latest_epoch(
         &self,
         network: u32,
@@ -65,6 +70,7 @@ impl<'a> RandomnessTable<'a> {
         }
     }
 
+    /// Find randomness record by its network and address
     pub async fn insert(&self, json_record: serde_json::Value) -> Result<Model, DbErr> {
         let new_record = ActiveModel::from_json(json_record)?;
 

@@ -9,11 +9,11 @@ edition = "2021"
 
 [[bin]]
 name = "node"
-path = "main.rs"
+path = "src/main.rs"
 
 [lib]
 name = "node"
-path = "lib.rs"
+path = "src/lib.rs"
 
 [features]
 

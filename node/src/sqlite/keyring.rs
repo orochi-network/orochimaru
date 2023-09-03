@@ -3,24 +3,33 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
+/// Keyring table
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
 #[sea_orm(table_name = "keyring")]
 pub struct Model {
+    /// Primary key
     #[sea_orm(primary_key)]
     #[serde(skip_deserializing, skip_serializing)]
     pub id: u32,
+    /// Username
     pub username: String,
+    /// HMAC secret
     #[serde(skip_serializing)]
     pub hmac_secret: String,
+    /// Public key
     pub public_key: String,
+    /// Secret key
     #[serde(skip_serializing)]
     pub secret_key: String,
+    /// Created date
     #[serde(skip_deserializing)]
     pub created_date: String,
 }
 
+/// Key related columns
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    /// Relation between keyring and randomness
     #[sea_orm(has_many = "super::randomness::Entity")]
     Randomness,
 }
