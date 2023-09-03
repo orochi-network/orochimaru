@@ -3,5 +3,8 @@ pub mod keyring;
 pub mod prelude;
 pub mod randomness;
 pub mod receiver;
-pub mod sqlite_db;
+/// SQL Lite Database
+mod sqlite_db;
+pub use sqlite_db::*;
+/// SQL Lite Table
 pub mod table;

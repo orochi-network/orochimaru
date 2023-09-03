@@ -3,33 +3,51 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
+/// Randomness table
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
 #[sea_orm(table_name = "randomness")]
 pub struct Model {
+    /// Primary key
     #[sea_orm(primary_key)]
     #[serde(skip_deserializing, skip_serializing)]
     pub id: u32,
+    /// Keyring ID
     #[serde(skip_serializing)]
     pub keyring_id: u32,
+    /// Receiver ID
     #[serde(skip_serializing)]
     pub receiver_id: u32,
+    /// Epoch
     pub epoch: u32,
+    /// Alpha
     pub alpha: String,
+    /// Gamma
     pub gamma: String,
+    /// C
     pub c: String,
+    /// S
     pub s: String,
+    /// Y
     pub y: String,
+    /// Witness address
     pub witness_address: String,
+    /// Witness gamma
     pub witness_gamma: String,
+    /// Witness hash
     pub witness_hash: String,
+    /// Inverse z
     pub inverse_z: String,
+    /// Signature proof
     pub signature_proof: String,
+    /// Created date
     #[serde(skip_deserializing)]
     pub created_date: String,
 }
 
+/// Randomness related columns
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    /// Relation between randomness and receiver
     #[sea_orm(
         belongs_to = "super::receiver::Entity",
         from = "Column::ReceiverId",
@@ -38,6 +56,7 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     Receiver,
+    /// Relation between randomness and keyring
     #[sea_orm(
         belongs_to = "super::keyring::Entity",
         from = "Column::KeyringId",

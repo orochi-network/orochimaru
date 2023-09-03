@@ -4,21 +4,23 @@ use sea_orm::{
     QueryFilter,
 };
 
+/// Receiver table
 pub struct ReceiverTable<'a> {
     connection: &'a DatabaseConnection,
 }
 
 impl<'a> ReceiverTable<'a> {
-    // Create new instance of receiver table
+    /// Create new instance of receiver table
     pub fn new(connection: &'a DatabaseConnection) -> Self {
         Self { connection }
     }
 
+    /// Find receiver record by its network and address
     pub async fn find_by_id(&self, id: u32) -> Result<Option<Model>, DbErr> {
         Entity::find_by_id(id).one(self.connection).await
     }
 
-    // Find receiver record by its network and address
+    /// Find receiver record by its network and address
     pub async fn update(
         &self,
         record: &Model,
@@ -72,6 +74,7 @@ impl<'a> ReceiverTable<'a> {
         }*/
     }
 
+    /// Find receiver record by its network and address
     pub async fn find_one(&self, network: u32, address: &String) -> Result<Option<Model>, DbErr> {
         Entity::find()
             .filter(
@@ -83,7 +86,7 @@ impl<'a> ReceiverTable<'a> {
             .await
     }
 
-    // Insert data to receiver table
+    /// Insert data to receiver table
     pub async fn insert(&self, json_record: serde_json::Value) -> Result<Model, DbErr> {
         let new_record = ActiveModel::from_json(json_record)?;
         Entity::insert(new_record)

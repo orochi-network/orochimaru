@@ -1,9 +1,11 @@
+extern crate alloc;
 use crate::{
     extends::{AffineExtend, ScalarExtend},
     hash::{hash_points, hash_points_prefix, hash_to_curve, hash_to_curve_prefix},
     helper::*,
 };
 
+use alloc::string::String;
 use libsecp256k1::{
     curve::{Affine, ECMultContext, ECMultGenContext, Field, Jacobian, Scalar, AFFINE_G},
     util::{FULL_PUBLIC_KEY_SIZE, SECRET_KEY_SIZE},
@@ -83,6 +85,25 @@ impl From<SecretKey> for KeyPair {
             public_key: PublicKey::from_secret_key(&value),
             secret_key: value,
         }
+    }
+}
+
+impl From<&[u8; SECRET_KEY_SIZE]> for KeyPair {
+    fn from(value: &[u8; SECRET_KEY_SIZE]) -> Self {
+        let secret_instance = SecretKey::parse(value).expect("Can not parse secret key");
+        KeyPair {
+            public_key: PublicKey::from_secret_key(&secret_instance),
+            secret_key: secret_instance,
+        }
+    }
+}
+
+impl From<String> for KeyPair {
+    fn from(value: String) -> Self {
+        let mut secret_key = [0u8; SECRET_KEY_SIZE];
+        hex::decode_to_slice(value.trim(), &mut secret_key)
+            .expect("Unable to convert secret key to [u8; SECRET_KEY_SIZE]");
+        Self::from(&secret_key)
     }
 }
 

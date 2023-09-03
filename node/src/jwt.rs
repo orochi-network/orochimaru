@@ -1,3 +1,4 @@
+use crate::Error;
 use base64_url;
 use hex;
 use hmac::{Hmac, Mac};
@@ -9,18 +10,24 @@ use std::str;
 // Create alias for HMAC-SHA256
 type HmacSha256 = Hmac<Sha256>;
 
+/// JWT Payload
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct JWTPayload {
+    /// User name
     pub user: String,
+    /// Nonce
     pub nonce: u32,
+    /// Unix timestamp
     pub timestamp: u64,
 }
 
+/// JWT
 pub struct JWT {
     secret_key: Vec<u8>,
 }
 
 impl JWT {
+    /// Create new instance of JWT
     pub fn new(secret_hex_string: &String) -> Self {
         JWT {
             secret_key: hex::decode(secret_hex_string.replace("0x", "").replace("0X", ""))
@@ -28,23 +35,29 @@ impl JWT {
         }
     }
 
-    pub fn decode_payload(json_web_token: &String) -> Option<JWTPayload> {
+    /// Encode payload to JWT
+    pub fn decode_payload(json_web_token: &String) -> Result<JWTPayload, Error> {
         let split_jwt: Vec<&str> = json_web_token.trim().split(".").collect();
         if split_jwt.len() == 3 {
-            let decoded_payload =
-                base64_url::decode(&split_jwt[1]).expect("Unable to decode payload");
+            let decoded_payload = match base64_url::decode(&split_jwt[1]) {
+                Ok(payload) => payload,
+                Err(_) => return Err(Error("INVALID_PAYLOAD", "Unable to decode payload")),
+            };
             let regex_name = Regex::new(r#"^[a-zA-Z0-9\s]{3,40}$"#).expect("Unable to init Regex");
-            let jwt_payload: JWTPayload =
-                serde_json::from_slice(&decoded_payload).expect("Unable to deserialize payload");
+            let jwt_payload: JWTPayload = match serde_json::from_slice(&decoded_payload) {
+                Ok(payload) => payload,
+                Err(_) => return Err(Error("INVALID_PAYLOAD", "Unable to deserialize payload")),
+            };
             if regex_name.is_match(&jwt_payload.user) {
-                return Some(jwt_payload);
+                return Ok(jwt_payload);
             } else {
-                return None;
+                return Err(Error("INVALID_USERNAME", "Invalid username"));
             }
         }
-        None
+        Err(Error("INVALID_JWT", "Invalid JWT format"))
     }
 
+    /// Encode payload to JWT
     pub fn verify(&self, json_web_token: &String) -> bool {
         let split_jwt: Vec<&str> = json_web_token.trim().split(".").collect();
         if split_jwt.len() == 3 {
