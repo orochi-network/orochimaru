@@ -11,6 +11,15 @@ use libsecp256k1::{
 };
 use rand::thread_rng;
 
+/// Zeroable trait
+pub trait Zeroable {
+    /// Zeroize self
+    fn zeroize(&mut self);
+    /// Check self is zero or not
+    fn is_zero(&self) -> bool;
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 /// Key pair
 pub struct KeyPair {
     /// Public key
@@ -19,6 +28,7 @@ pub struct KeyPair {
     pub secret_key: SecretKey,
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 /// Raw key pair
 pub struct RawKeyPair {
     /// Raw public key
@@ -36,6 +46,42 @@ impl KeyPair {
         KeyPair {
             public_key,
             secret_key,
+        }
+    }
+}
+
+impl Zeroable for RawKeyPair {
+    fn zeroize(&mut self) {
+        for i in 0..self.public_key.len() {
+            self.public_key[i] ^= self.public_key[i];
+        }
+
+        for i in 0..self.secret_key.len() {
+            self.secret_key[i] ^= self.secret_key[i];
+        }
+    }
+
+    fn is_zero(&self) -> bool {
+        for i in 0..self.public_key.len() {
+            if self.public_key[i] != 0 {
+                return false;
+            }
+        }
+
+        for i in 0..self.secret_key.len() {
+            if self.secret_key[i] != 0 {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+impl From<SecretKey> for KeyPair {
+    fn from(value: SecretKey) -> Self {
+        KeyPair {
+            public_key: PublicKey::from_secret_key(&value),
+            secret_key: value,
         }
     }
 }
@@ -124,7 +170,7 @@ impl ECVRF<'_> {
     /// u_witness is a represent of u, used ecrecover to minimize gas cost
     /// we're also add projective EC add to make the proof compatible with
     /// on-chain verifier.
-    pub fn prove_contract(self, alpha: &Scalar) -> ECVRFContractProof {
+    pub fn prove_contract(&self, alpha: &Scalar) -> ECVRFContractProof {
         let mut pub_affine: Affine = self.public_key.into();
         let mut secret_key: Scalar = self.secret_key.into();
         pub_affine.x.normalize();
@@ -246,7 +292,7 @@ impl ECVRF<'_> {
     }
 
     /// Ordinary verifier
-    pub fn verify(self, alpha: &Scalar, vrf_proof: &ECVRFProof) -> bool {
+    pub fn verify(&self, alpha: &Scalar, vrf_proof: &ECVRFProof) -> bool {
         let mut pub_affine: Affine = self.public_key.into();
         pub_affine.x.normalize();
         pub_affine.y.normalize();

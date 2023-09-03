@@ -1,7 +1,9 @@
+extern crate alloc;
 use crate::{
     extends::{AffineExtend, ScalarExtend},
     helper::FIELD_SIZE,
 };
+use alloc::vec::Vec;
 use libsecp256k1::{
     curve::{Affine, Field, Jacobian, Scalar},
     ECMULT_GEN_CONTEXT,
