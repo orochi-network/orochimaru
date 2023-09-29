@@ -1,5 +1,19 @@
 # An universal memory prover in Zero-Knowledge Proof
 
+## Testing and Coverage
+
+You can run the tests with:
+
+```text
+cargo test
+```
+
+And also check the code coverage with:
+
+```text
+cargo llvm-cov --html --open
+```
+
 ## Overview
 
 The idea is to create an independent module that can be used by any zkVM. You might aware that the memory can be constructed as a simple state machine with $2$ instructions `READ` and `WRITE`, and configurable `WORD_SIZE`. Our memory state machine is only able access the exactly `WORD_SIZE` for every executed instruction. That is, if you want to access arbitrary data size, it must be translated to multiple accesses.

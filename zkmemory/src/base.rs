@@ -34,11 +34,11 @@ pub trait Base<const S: usize, T = Self>:
     fn from_bytes(bytes: [u8; S]) -> Self;
 }
 
-/// Convert from/to [usize]
+/// Convert from/to [usize](core::usize)
 pub trait UsizeConvertible {
-    /// Convert from [usize]
+    /// Convert from [usize](core::usize)
     fn from_usize(value: usize) -> Self;
-    /// Convert to [usize]
+    /// Convert to [usize](core::usize)
     fn to_usize(&self) -> usize;
 }
 

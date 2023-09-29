@@ -4,7 +4,8 @@ use crate::{
 };
 use rbtree::RBTree;
 
-/// Generic memory trait
+/// Generic memory trait, which is implemented by [RawMemory]
+/// We realize a memory as a key-value map of address and value
 pub trait GenericMemory<K, V, const S: usize> {
     /// Create a new instance of memory
     fn new(cell_size: K) -> Self;
@@ -19,7 +20,7 @@ pub trait GenericMemory<K, V, const S: usize> {
     fn len(&self) -> usize;
 }
 
-/// Raw memory base on [RBTree](rbtree::RBTree)
+/// [RawMemory] base on [RBTree](rbtree::RBTree)
 #[derive(Debug)]
 pub struct RawMemory<K, V, const S: usize>
 where
