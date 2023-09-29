@@ -14,6 +14,42 @@ And also check the code coverage with:
 cargo llvm-cov --html --open
 ```
 
+Right now, our code coverage is `80%`:
+
+```text
+running 17 tests
+test tests::sm256_read_empty_cell ... ok
+test tests::sm256_write_one_cell_read_two_cell ... ok
+test tests::sm256_write_read_one_cell ... ok
+test tests::sm256_write_two_cell_read_one_cell ... ok
+test tests::sm32_read_empty_cell ... ok
+test tests::sm32_read_prohibited_cell - should panic ... ok
+test tests::sm32_write_one_cell_read_two_cells ... ok
+test tests::sm32_write_read_one_cell ... ok
+test tests::sm32_write_two_cells_read_one_cells ... ok
+test tests::u256_arithmetic_test ... ok
+test tests::u256_test ... ok
+test tests::u32_register_functional ... ok
+test tests::u32_stack_functional ... ok
+test tests::u32_stack_overflow - should panic ... ok
+test tests::u32_stack_underflow - should panic ... ok
+test tests::u32_test ... ok
+test tests::u64_test ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Filename                      Regions    Missed Regions     Cover   Functions  Missed Functions  Executed       Lines      Missed Lines     Cover    Branches   Missed Branches     Cover
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+base.rs                            18                 0   100.00%          18                 0   100.00%          54                 0   100.00%           0                 0         -
+config.rs                          14                 5    64.29%           9                 4    55.56%          55                22    60.00%           0                 0         -
+error.rs                           13                11    15.38%           4                 3    25.00%          13                12     7.69%           0                 0         -
+lib.rs                             87                 1    98.85%          34                 0   100.00%         172                 1    99.42%           0                 0         -
+machine.rs                         74                24    67.57%          25                 8    68.00%         144                25    82.64%           0                 0         -
+memory.rs                          18                 2    88.89%           9                 2    77.78%          91                 4    95.60%           0                 0         -
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+TOTAL                             224                43    80.80%          99                17    82.83%         529                64    87.90%           0                 0         -
+```
+
 ## Overview
 
 The idea is to create an independent module that can be used by any zkVM. You might aware that the memory can be constructed as a simple state machine with $2$ instructions `READ` and `WRITE`, and configurable `WORD_SIZE`. Our memory state machine is only able access the exactly `WORD_SIZE` for every executed instruction. That is, if you want to access arbitrary data size, it must be translated to multiple accesses.
