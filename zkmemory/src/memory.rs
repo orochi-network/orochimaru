@@ -2,7 +2,17 @@ use crate::{
     base::Base,
     machine::{CellInteraction, Instruction},
 };
+use ff::Field;
+use rand_core::OsRng;
+use halo2_proofs::poly::EvaluationDomain;
+use halo2_proofs::poly::commitment::{Blind, ParamsProver};
+use halo2_proofs::poly::kzg::commitment::ParamsKZG;
+use halo2_proofs::arithmetic::lagrange_interpolate;
+use halo2curves::serde::SerdeObject;
+use halo2curves::bn256::{G1, Fr, Bn256};
 use rbtree::RBTree;
+extern crate alloc;
+use alloc::vec::Vec;
 
 /// Generic memory trait, which is implemented by [RawMemory]
 /// We realize a memory as a key-value map of address and value
@@ -18,6 +28,9 @@ pub trait GenericMemory<K, V, const S: usize> {
     fn cell_size(&self) -> K;
     /// Get the number of cells
     fn len(&self) -> usize;
+    /// Commit the polynomial that is interpolated by 
+    /// all current memory cells (memory state) as points in Bn256 curve
+    fn commit(&self) -> G1;
 }
 
 /// [RawMemory] base on [RBTree](rbtree::RBTree)
@@ -117,6 +130,37 @@ where
                 Instruction::Write(self.increase_time(), addr_hi, val_hi),
             )
         }
+    }
+
+    /// Commit the memory current state using KZG with Bn256 curve
+    fn commit(&self) -> G1 {
+
+        // Collect the keys and values of the memory
+        let mut point_x = Vec::new();
+        let mut evals_y: Vec<Fr> = Vec::new();
+
+        for (a, b) in self.memory_map.clone().into_iter() {
+            point_x.push(Fr::from_raw_bytes_unchecked(a.to_bytes().as_slice()));
+            evals_y.push(Fr::from_raw_bytes_unchecked(b.to_bytes().as_slice()));
+        }
+
+        // Since we will work with polynomials with degree t = 2^k, we need to 
+
+        // Use Lagrange interpolation to find the state polynomial
+        let state_poly = lagrange_interpolate(
+            point_x.as_slice(), 
+            evals_y.as_slice());
+        
+        // Params setup
+
+        let k: u32 = 6;
+        let params = ParamsKZG::<Bn256>::new(k);
+        let domain = EvaluationDomain::new(1, k);
+
+        let poly = domain.coeff_from_vec(state_poly);
+        let alpha = Blind(Fr::random(OsRng));
+
+        params.commit(&poly, alpha)
     }
 
     fn len(&self) -> usize {

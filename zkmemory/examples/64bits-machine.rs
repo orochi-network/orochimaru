@@ -114,6 +114,7 @@ fn main() {
         My64Instruction::Write(0x08, 0x0102030405060708),
         My64Instruction::Load(my64.r0, 0x8),
         My64Instruction::Write(0x00, 0x090a0b0c0d0e0f10),
+        My64Instruction::Write(0xffffffffffff0000, 0x090a0b0c0d0e0f10),
         My64Instruction::Load(my64.r1, 0x00),
         My64Instruction::Add(my64.r0, my64.r1),
         My64Instruction::Save(0x10, my64.r0),
