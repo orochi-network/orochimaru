@@ -42,6 +42,8 @@ where
     memory_map: RBTree<K, V>,
     cell_size: K,
     time_log: u64,
+    // Secret key used for commitment, 
+    kzg_secret_key: Blind<Fr>
 }
 
 /// Implementation of [GenericMemory] for [RawMemory]
@@ -55,6 +57,7 @@ where
             memory_map: RBTree::<K, V>::new(),
             cell_size,
             time_log: 0,
+            kzg_secret_key: Blind(Fr::random(OsRng))
         }
     }
 
@@ -144,23 +147,22 @@ where
             evals_y.push(Fr::from_raw_bytes_unchecked(b.to_bytes().as_slice()));
         }
 
-        // Since we will work with polynomials with degree t = 2^k, we need to 
+        // Since we will work with polynomials with degree t = 2^k, we need to raise
+        // the polynomial degree.
 
         // Use Lagrange interpolation to find the state polynomial
         let state_poly = lagrange_interpolate(
             point_x.as_slice(), 
             evals_y.as_slice());
         
-        // Params setup
-
-        let k: u32 = 6;
+        // Params setup 
+        let k: u32 = S.try_into().unwrap();
         let params = ParamsKZG::<Bn256>::new(k);
         let domain = EvaluationDomain::new(1, k);
 
         let poly = domain.coeff_from_vec(state_poly);
-        let alpha = Blind(Fr::random(OsRng));
 
-        params.commit(&poly, alpha)
+        params.commit(&poly, self.kzg_secret_key)
     }
 
     fn len(&self) -> usize {
