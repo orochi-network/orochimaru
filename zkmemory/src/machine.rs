@@ -71,7 +71,7 @@ pub enum CellInteraction<K, V> {
 }
 
 /// Random Access Memory Machine
-pub trait RAMMachine<K, V> {
+pub trait StateMachine<K, V> {
     /// Create a new instance of RAM machine
     fn new(config_arugments: ConfigArgs<K>) -> Self;
     /// Write a value to a memory address
@@ -206,8 +206,8 @@ where
     }
 }
 
-/// Implementation of RAMMachine for StateMachine
-impl<K, V, const S: usize> RAMMachine<K, V> for StateMachine<K, V, S>
+/// Implementation of StateMachine for StateMachine
+impl<K, V, const S: usize> StateMachine<K, V> for StateMachine<K, V, S>
 where
     K: Base<S>,
     V: Base<S>,

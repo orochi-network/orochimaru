@@ -1,7 +1,7 @@
 use zkmemory::base::Base;
 use zkmemory::config::ConfigArgs;
 use zkmemory::machine::{
-    RAMMachine, Register, RegisterMachine, StackMachine, StateMachine, TraceRecord,
+    Register, RegisterMachine, StackMachine, StateMachine, StateMachine, TraceRecord,
 };
 
 /// Define a 64 bits machine

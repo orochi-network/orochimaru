@@ -74,66 +74,42 @@ impl Base<32> for U256 {
     }
 }
 
-impl UsizeConvertible for u64 {
-    fn from_usize(value: usize) -> Self {
-        value as u64
-    }
+macro_rules! new_base {
+    ($primitive:ident, $byte_size: expr) => {
+        impl UsizeConvertible for $primitive {
+            fn from_usize(value: usize) -> Self {
+                value as $primitive
+            }
 
-    fn to_usize(&self) -> usize {
-        *self as usize
-    }
+            fn to_usize(&self) -> usize {
+                *self as usize
+            }
+        }
+
+        impl Base<$byte_size> for $primitive {
+            const MAX: Self = $primitive::MAX;
+
+            const MIN: Self = $primitive::MIN;
+
+            fn is_zero(&self) -> bool {
+                *self == 0
+            }
+
+            fn zero() -> Self {
+                0
+            }
+
+            fn to_bytes(&self) -> [u8; $byte_size] {
+                self.to_be_bytes()
+            }
+
+            fn from_bytes(bytes: [u8; $byte_size]) -> Self {
+                Self::from_be_bytes(bytes)
+            }
+        }
+    };
 }
 
-impl Base<8> for u64 {
-    const MAX: Self = u64::MAX;
-
-    const MIN: Self = u64::MIN;
-
-    fn is_zero(&self) -> bool {
-        *self == 0
-    }
-
-    fn zero() -> Self {
-        0
-    }
-
-    fn to_bytes(&self) -> [u8; 8] {
-        self.to_be_bytes()
-    }
-
-    fn from_bytes(bytes: [u8; 8]) -> Self {
-        Self::from_be_bytes(bytes)
-    }
-}
-
-impl UsizeConvertible for u32 {
-    fn from_usize(value: usize) -> Self {
-        value as u32
-    }
-
-    fn to_usize(&self) -> usize {
-        *self as usize
-    }
-}
-
-impl Base<4> for u32 {
-    const MAX: Self = u32::MAX;
-
-    const MIN: Self = u32::MIN;
-
-    fn is_zero(&self) -> bool {
-        *self == 0
-    }
-
-    fn zero() -> Self {
-        0
-    }
-
-    fn to_bytes(&self) -> [u8; 4] {
-        self.to_be_bytes()
-    }
-
-    fn from_bytes(bytes: [u8; 4]) -> Self {
-        Self::from_be_bytes(bytes)
-    }
-}
+new_base!(u64, 8);
+new_base!(u32, 4);
+new_base!(u16, 2);
