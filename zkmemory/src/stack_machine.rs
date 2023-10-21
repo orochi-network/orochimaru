@@ -1,11 +1,9 @@
-use crate::{abstract_machine::AbstractContext, base::Base, state_machine::AbstractStateMachine};
+use crate::{abstract_machine::AbstractContext, state_machine::AbstractStateMachine};
 
 /// Abstract stack machine
-pub trait AbstractStackMachine<K, V, const S: usize, const T: usize>
+pub trait AbstractStackMachine<K, V>
 where
-    K: Base<S>,
-    V: Base<T>,
-    Self: AbstractStateMachine<K, V, S, T>,
+    Self: AbstractStateMachine<K, V>,
 {
     /// Push the value to the stack and return stack_depth
     fn push(&mut self, value: V) -> usize {

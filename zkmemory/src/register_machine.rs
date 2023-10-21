@@ -29,7 +29,7 @@ pub trait AbstractRegisterMachine<K, V, const S: usize, const T: usize>
 where
     K: Base<S>,
     V: Base<T>,
-    Self: AbstractStateMachine<K, V, S, T>,
+    Self: AbstractStateMachine<K, V>,
 {
     /// Set the value of the register
     fn set(&mut self, register: Register<K, S>, value: V) {

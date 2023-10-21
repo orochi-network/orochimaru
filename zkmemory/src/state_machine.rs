@@ -1,16 +1,10 @@
 use crate::abstract_machine::AbstractMachine;
-use crate::base::Base;
 
 /// Abstract RAM machine
-pub trait AbstractStateMachine<K, V, const S: usize, const T: usize>
+pub trait AbstractStateMachine<K, V>
 where
-    K: Base<S>,
-    V: Base<T>,
-    Self: AbstractMachine<K, V, S, T>,
+    Self: AbstractMachine<K, V>,
 {
-    /// Create a new instance of [AbstractStateMachine]
-    fn new() -> Self;
-
     /// Read from memory
     fn dummy_read(&self, address: K) -> V;
 
@@ -24,5 +18,5 @@ where
     fn read(&self, address: K) -> V;
 
     /// Get the context
-    fn context(&mut self) -> &'_ mut <Self as AbstractMachine<K, V, S, T>>::Context;
+    fn context(&mut self) -> &'_ mut <Self as AbstractMachine<K, V>>::Context;
 }

@@ -1,12 +1,8 @@
-use crate::base::Base;
-
 /// Context of machine
-pub trait AbstractContext<M, K, V, const S: usize, const T: usize>
+pub trait AbstractContext<M, K, V>
 where
     Self: core::fmt::Debug + Sized,
-    K: Base<S>,
-    V: Base<T>,
-    M: AbstractMachine<K, V, S, T, Context = Self>,
+    M: AbstractMachine<K, V>,
 {
     /// Set the stack depth
     fn set_stack_depth(&mut self, stack_depth: usize);
@@ -28,23 +24,19 @@ where
 }
 
 /// Public trait for all instructions.
-pub trait AbstractInstruction<M, K, V, const S: usize, const T: usize>
+pub trait AbstractInstruction<M, K, V>
 where
     Self: core::fmt::Debug + Sized,
-    K: Base<S>,
-    V: Base<T>,
-    M: AbstractMachine<K, V, S, T, Instruction = Self>,
+    M: AbstractMachine<K, V>,
 {
     /// Execute the instruction on the context
     fn exec(&self, context: &'static mut M::Context);
 }
 
 /// Trace record
-pub trait AbstractTraceRecord<M: AbstractMachine<K, V, S, T>, K, V, const S: usize, const T: usize>
+pub trait AbstractTraceRecord<M: AbstractMachine<K, V>, K, V>
 where
-    K: Base<S>,
-    V: Base<T>,
-    Self: Ord + PartialOrd + PartialEq + Eq + Sized,
+    Self: Ord + PartialOrd + PartialEq + Eq + Sized + core::fmt::Debug,
 {
     /// Create new instance of [TraceRecord](AbstractMachine::TraceRecord) from [AbstractMachine::Instruction]
     fn from_instruction(instruction: M::Instruction) -> Self;
@@ -57,15 +49,13 @@ where
 }
 
 /// The abstract machine that will be implemented by particular machine
-pub trait AbstractMachine<K, V, const S: usize, const T: usize>
+pub trait AbstractMachine<K, V>
 where
     Self: Sized,
-    K: Base<S>,
-    V: Base<T>,
 {
     /// Context of machine
-    type Context: AbstractContext<Self, K, V, S, T>;
+    type Context: AbstractContext<Self, K, V>;
 
     /// Instruction set
-    type Instruction: AbstractInstruction<Self, K, V, S, T>;
+    type Instruction: AbstractInstruction<Self, K, V>;
 }

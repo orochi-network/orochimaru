@@ -1,23 +1,19 @@
-#![recursion_limit = "1024"]
-
-use std::marker::PhantomData;
+#![recursion_limit = "256"]
 
 use ethnum::U256;
 use rbtree::RBTree;
+use std::marker::PhantomData;
 use zkmemory::abstract_machine::{AbstractContext, AbstractInstruction, AbstractMachine};
 use zkmemory::base::{Base, UsizeConvertible};
-
 use zkmemory::register_machine::AbstractRegisterMachine;
 use zkmemory::stack_machine::AbstractStackMachine;
 use zkmemory::state_machine::AbstractStateMachine;
 
 #[derive(Debug)]
-pub enum Instruction<M, K, V, const S: usize, const T: usize>
+pub enum MyInstruction<M, K, V, const S: usize, const T: usize>
 where
     K: Base<S>,
     V: Base<T>,
-    M: AbstractMachine<K, V, S, T, Instruction = Self> + AbstractStateMachine<K, V, S, T>,
-    Self: AbstractInstruction<M, K, V, S, T>,
 {
     Read(K, V),
     Write(K, V),
@@ -25,12 +21,10 @@ where
 }
 
 #[derive(Debug)]
-pub(crate) struct Context<M, K, V, const S: usize, const T: usize>
+pub struct MyContext<M, K, V, const S: usize, const T: usize>
 where
     K: Base<S>,
     V: Base<T>,
-    M: AbstractMachine<K, V, S, T, Context = Self> + AbstractStateMachine<K, V, S, T>,
-    Self: AbstractContext<M, K, V, S, T>,
 {
     pub(crate) time_log: usize,
     pub(crate) stack_base: K,
@@ -40,15 +34,24 @@ where
     phantom_v: PhantomData<V>,
 }
 
-impl<M, K, V, const S: usize, const T: usize> AbstractContext<M, K, V, S, T>
-    for Context<M, K, V, S, T>
+/// RAM Machine
+#[derive(Debug)]
+pub struct StateMachine<K, V, const S: usize, const T: usize>
 where
     K: Base<S>,
     V: Base<T>,
-    M: AbstractMachine<K, V, S, T, Context = Self> + AbstractStateMachine<K, V, S, T>,
-    Self: core::fmt::Debug,
-    M::Instruction: AbstractInstruction<M, K, V, S, T>,
-    M::Context: AbstractContext<M, K, V, S, T>,
+{
+    memory: RBTree<K, V>,
+    context: MyContext<Self, K, V, S, T>,
+    pub(crate) cell_size: K,
+}
+
+impl<M, K, V, const S: usize, const T: usize> AbstractContext<M, K, V> for MyContext<M, K, V, S, T>
+where
+    Self: core::fmt::Debug + Sized,
+    K: Base<S>,
+    V: Base<T>,
+    M: AbstractMachine<K, V>,
 {
     fn set_stack_depth(&mut self, stack_depth: usize) {
         todo!()
@@ -70,36 +73,59 @@ where
         todo!()
     }
 
-    fn apply(&'static mut self, instruction: &<M as AbstractMachine<K, V, S, T>>::Instruction) {
+    fn apply(&'static mut self, instruction: &<M as AbstractMachine<K, V>>::Instruction) {
         todo!()
     }
 }
 
-/// RAM Machine
-#[derive(Debug)]
-pub struct StateMachine<K, V, const S: usize, const T: usize>
+impl<M, K, V, const S: usize, const T: usize> AbstractInstruction<M, K, V>
+    for MyInstruction<M, K, V, S, T>
 where
+    Self: core::fmt::Debug + Sized,
     K: Base<S>,
     V: Base<T>,
-    Self: AbstractMachine<K, V, S, T> + AbstractStateMachine<K, V, S, T>,
-    <Self as AbstractMachine<K, V, S, T>>::Instruction: AbstractInstruction<Self, K, V, S, T>,
-    <Self as AbstractMachine<K, V, S, T>>::Context: AbstractContext<Self, K, V, S, T>,
+    M: AbstractMachine<K, V>,
 {
-    memory: RBTree<K, V>,
-
-    context: <Self as AbstractMachine<K, V, S, T>>::Context,
-
-    pub(crate) cell_size: K,
+    fn exec(&self, context: &'static mut <M as AbstractMachine<K, V>>::Context) {
+        todo!()
+    }
 }
 
-impl<K, V, const S: usize, const T: usize> AbstractStateMachine<K, V, S, T>
-    for StateMachine<K, V, S, T>
+impl<K, V, const S: usize, const T: usize> AbstractMachine<K, V> for StateMachine<K, V, S, T>
 where
     K: Base<S>,
     V: Base<T>,
-    Self: AbstractMachine<K, V, S, T>,
-    <Self as AbstractMachine<K, V, S, T>>::Instruction: AbstractInstruction<Self, K, V, S, T>,
-    <Self as AbstractMachine<K, V, S, T>>::Context: AbstractContext<Self, K, V, S, T>,
+{
+    type Context = MyContext<Self, K, V, S, T>;
+    type Instruction = MyInstruction<Self, K, V, S, T>;
+}
+
+impl<K, V, const S: usize, const T: usize> StateMachine<K, V, S, T>
+where
+    K: Base<S>,
+    V: Base<T>,
+{
+    fn new() -> Self {
+        Self {
+            memory: RBTree::new(),
+            context: MyContext {
+                time_log: 0,
+                stack_base: K::zero(),
+                stack_depth: 0,
+                stack_ptr: K::zero(),
+                phantom_m: PhantomData,
+                phantom_v: PhantomData,
+            },
+            cell_size: K::from_usize(K::CELL_SIZE),
+        }
+    }
+}
+
+impl<K, V, const S: usize, const T: usize> AbstractStateMachine<K, V> for StateMachine<K, V, S, T>
+where
+    K: Base<S>,
+    V: Base<T>,
+    Self: AbstractMachine<K, V>,
 {
     fn read(&self, address: K) -> V {
         let remain = address % self.cell_size;
@@ -168,11 +194,7 @@ where
         (base, base + self.cell_size)
     }
 
-    fn context(&mut self) -> &'_ mut <Self as AbstractMachine<K, V, S, T>>::Context {
-        todo!()
-    }
-
-    fn new() -> Self {
+    fn context(&mut self) -> &'_ mut <Self as AbstractMachine<K, V>>::Context {
         todo!()
     }
 }
@@ -182,54 +204,21 @@ impl<K, V, const S: usize, const T: usize> AbstractRegisterMachine<K, V, S, T>
 where
     K: Base<S>,
     V: Base<T>,
-    Self: AbstractStateMachine<K, V, S, T>,
+    Self: AbstractStateMachine<K, V>,
 {
 }
 
-impl<K, V, const S: usize, const T: usize> AbstractStackMachine<K, V, S, T>
-    for StateMachine<K, V, S, T>
+impl<K, V, const S: usize, const T: usize> AbstractStackMachine<K, V> for StateMachine<K, V, S, T>
 where
     K: Base<S>,
     V: Base<T>,
-    Self: AbstractStateMachine<K, V, S, T> + AbstractMachine<K, V, S, T>,
-    <Self as AbstractMachine<K, V, S, T>>::Instruction: AbstractInstruction<Self, K, V, S, T>,
-    <Self as AbstractMachine<K, V, S, T>>::Context: AbstractContext<Self, K, V, S, T>,
+    Self: AbstractStateMachine<K, V>,
 {
-}
-
-impl<M, K, V, const S: usize, const T: usize> AbstractInstruction<M, K, V, S, T>
-    for Instruction<M, K, V, S, T>
-where
-    K: Base<S>,
-    V: Base<T>,
-    M: AbstractMachine<K, V, S, T, Instruction = Self>
-        + AbstractStateMachine<K, V, S, T>
-        + core::fmt::Debug,
-    Self: AbstractInstruction<M, K, V, S, T>,
-{
-    fn exec(&self, context: &'static mut <M as AbstractMachine<K, V, S, T>>::Context) {
-        todo!()
-    }
-}
-
-impl<K, V, const S: usize, const T: usize> AbstractMachine<K, V, S, T> for StateMachine<K, V, S, T>
-where
-    K: Base<S>,
-    V: Base<T>,
-    <Self as AbstractMachine<K, V, S, T>>::Instruction: AbstractInstruction<Self, K, V, S, T>
-    <Self as AbstractMachine<K, V, S, T>>::Context: AbstractContext<Self, K, V, S, T>
-{
-    type Context = Context<Self, K, V, S, T>;
-
-    type Instruction = Instruction<Self, K, V, S, T>;
 }
 
 fn main() {
     let mut a = StateMachine::<U256, U256, 32, 32>::new();
-
     a.write(U256::from_usize(0), U256::from_usize(123));
-
-    
 
     /*
     // Test the state machine of Uint256 values
