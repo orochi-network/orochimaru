@@ -5,7 +5,7 @@ use ethnum::AsU256;
 pub use ethnum::U256;
 
 /// Base trait for memory address and value
-pub trait Base<const S: usize, T = Self>:
+pub trait Base<const S: usize = 0, T = Self>:
     Ord
     + Copy
     + PartialEq
@@ -22,8 +22,10 @@ pub trait Base<const S: usize, T = Self>:
     const MAX: Self;
     /// The min value of the cell
     const MIN: Self;
+    /// Cell size in Base
+    const WORD_SIZE: Self;
     /// The size of the cell
-    const CELL_SIZE: usize = S;
+    const WORD_USIZE: usize = S;
     /// Check if the value is zero
     fn is_zero(&self) -> bool;
     /// Get the zero value
@@ -56,6 +58,8 @@ impl Base<32> for U256 {
     const MAX: Self = U256::MAX;
 
     const MIN: Self = U256::MIN;
+
+    const WORD_SIZE: Self = U256::new(32);
 
     fn is_zero(&self) -> bool {
         self.eq(&U256::ZERO)
@@ -90,6 +94,8 @@ macro_rules! new_base {
             const MAX: Self = $primitive::MAX;
 
             const MIN: Self = $primitive::MIN;
+
+            const WORD_SIZE: Self = $byte_size as $primitive;
 
             fn is_zero(&self) -> bool {
                 *self == 0

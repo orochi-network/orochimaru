@@ -17,18 +17,8 @@ pub mod base;
 pub mod config;
 /// Define all errors of [StateMachine](crate::machine::StateMachine) and [RawMemory](crate::memory::RawMemory)
 pub mod error;
-
 /// Definition of abstract machine (instruction, trace and context)
-pub mod abstract_machine;
-
-/// Definition of generic state machine
-pub mod state_machine;
-
-/// Definition of register machine
-pub mod register_machine;
-
-/// Definition of stack machine
-pub mod stack_machine;
+pub mod machine;
 
 #[cfg(test)]
 mod tests {
