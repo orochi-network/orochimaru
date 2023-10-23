@@ -134,7 +134,7 @@ where
     fn get_key_value_vec(&mut self, lo: K, hi: K) -> Vec<(K, V)> {
         let mut kv_vec = Vec::new();
         let mut index = lo;
-        while index <= hi {
+        while index < hi {
             kv_vec.push((index, self.read_memory(index)));
             index = index + self.cell_size();
         }
