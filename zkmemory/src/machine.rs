@@ -74,6 +74,8 @@ pub enum CellInteraction<K, V> {
 pub trait RAMMachine<K, V> {
     /// Create a new instance of RAM machine
     fn new(config_arugments: ConfigArgs<K>) -> Self;
+    /// Create a new instance of RAM machine with limited, configurable memory size
+    fn new_custom(config_arugments: ConfigArgs<K>, no_memory_cell: usize) -> Self;
     /// Write a value to a memory address
     fn write(&mut self, address: K, value: V) -> Result<(), Error>;
     /// Read a value from a memory address
@@ -163,6 +165,11 @@ where
         self.config.memory.low()
     }
 
+    /// Highesh address of memory section
+    pub fn terminal_address(&self) -> K {
+        self.config.memory.high()
+    }
+
     /// Get memory execution trace
     pub fn trace(&self) -> &Vec<TraceRecord<K, V, S>> {
         self.trace.as_ref()
@@ -214,6 +221,18 @@ where
 {
     fn new(config_arugments: ConfigArgs<K>) -> Self {
         let config = Config::<K, S>::new(K::from_usize(K::CELL_SIZE), config_arugments);
+        Self {
+            memory: RawMemory::<K, V, S>::new(config.cell_size),
+            trace: Vec::new(),
+            config,
+            stack_ptr: config.stack.low(),
+            stack_depth: 0,
+        }
+    }
+
+    /// New RAM machine with limited memory section size
+    fn new_custom(config_arugments: ConfigArgs<K>, no_memory_cell: usize) -> Self {
+        let config = Config::<K, S>::new_custom(K::from_usize(K::CELL_SIZE), config_arugments, K::from_usize(no_memory_cell));
         Self {
             memory: RawMemory::<K, V, S>::new(config.cell_size),
             trace: Vec::new(),

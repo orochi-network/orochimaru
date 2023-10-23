@@ -107,4 +107,38 @@ where
             }
         }
     }
+
+    /// Create a new config for given arguments 
+    /// Extra parameter : number of cells in the memory section
+    pub fn new_custom(cell_size: T, args: ConfigArgs<T>, no_memory_cell: T) -> Self {
+        if args.head_layout {
+            let stack_lo = T::MIN;
+            let stack_hi = stack_lo + (args.stack_depth * cell_size);
+            let register_lo = stack_hi + args.buffer_size;
+            let register_hi = register_lo + (args.no_register * cell_size);
+            let memory_lo = register_hi + args.buffer_size;
+            let memory_hi = memory_lo + (no_memory_cell * cell_size);
+            Self {
+                cell_size: cell_size,
+                stack_depth: args.stack_depth,
+                stack: AllocatedSection(stack_lo, stack_hi),
+                register: AllocatedSection(register_lo, register_hi),
+                memory: AllocatedSection(memory_lo, memory_hi),
+            }
+        } else {
+            let memory_lo = T::MIN;
+            let memory_hi = memory_lo + (no_memory_cell * cell_size);
+            let stack_lo = memory_hi + args.buffer_size;
+            let stack_hi = stack_lo + (args.stack_depth * cell_size);
+            let register_lo = stack_hi + args.buffer_size;
+            let register_hi = register_lo + (args.no_register * cell_size);
+            Self {
+                cell_size: cell_size,
+                stack_depth: args.stack_depth,
+                stack: AllocatedSection(stack_lo, stack_hi),
+                register: AllocatedSection(register_lo, register_hi),
+                memory: AllocatedSection(memory_lo, memory_hi),
+            }
+        }
+    }
 }
