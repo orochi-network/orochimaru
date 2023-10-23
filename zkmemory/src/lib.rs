@@ -25,6 +25,8 @@ pub mod error;
 pub mod machine;
 /// Raw memory as a key-value store base on [RBTree](rbtree::RBTree) that mapping address to value
 pub mod memory;
+/// A KZG module that can commit to a polynomial representing the memory state
+pub mod kzg;
 
 #[cfg(test)]
 mod tests {

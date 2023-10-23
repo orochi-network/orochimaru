@@ -36,9 +36,6 @@ impl My64Machine<u64, u64, 8> {
             no_register: 4,
             buffer_size: 16,
         });
-        println!("{}", sm.base_address());
-        println!("{}", sm.terminal_address());
-        println!("{}", u64::MAX);
         let r0 = sm.register(0).expect("Unable to create new register r0");
         let r1 = sm.register(1).expect("Unable to create new register r1");
         let r2 = sm.register(2).expect("Unable to create new register r2");

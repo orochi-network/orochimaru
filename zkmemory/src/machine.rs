@@ -170,6 +170,16 @@ where
         self.config.memory.high()
     }
 
+    /// Get the total number of cells in the memory section
+    pub fn no_cells_mem_section(&self) -> K {
+        (self.terminal_address() - self.base_address()) / K::from_usize(K::CELL_SIZE)
+    }
+
+    /// Get all cells in the RAM from address lo to address hi as a vector of tuples (K, V)
+    pub fn get_cells(&mut self, lo: K, hi: K) -> Vec<(K, V)> {
+        self.memory.get_key_value_vec(lo, hi)
+    }
+
     /// Get memory execution trace
     pub fn trace(&self) -> &Vec<TraceRecord<K, V, S>> {
         self.trace.as_ref()

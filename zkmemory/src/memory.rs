@@ -2,6 +2,8 @@ use crate::{
     base::Base,
     machine::{CellInteraction, Instruction},
 };
+extern crate alloc;
+use alloc::vec::Vec;
 use rbtree::RBTree;
 
 /// Generic memory trait, which is implemented by [RawMemory]
@@ -18,6 +20,8 @@ pub trait GenericMemory<K, V, const S: usize> {
     fn cell_size(&self) -> K;
     /// Get the number of cells
     fn len(&self) -> usize;
+    /// Get all cells of the memory as a vector of tuples (K, V)
+    fn get_key_value_vec(&mut self, lo: K, hi: K) -> Vec<(K, V)>;
 }
 
 /// [RawMemory] base on [RBTree](rbtree::RBTree)
@@ -126,6 +130,17 @@ where
     fn cell_size(&self) -> K {
         self.cell_size
     }
+
+    fn get_key_value_vec(&mut self, lo: K, hi: K) -> Vec<(K, V)> {
+        let mut kv_vec = Vec::new();
+        let mut index = lo;
+        while index <= hi {
+            kv_vec.push((index, self.read_memory(index)));
+            index = index + self.cell_size();
+        }
+        kv_vec
+    } 
+
 }
 
 impl<K, V, const S: usize> RawMemory<K, V, S>
