@@ -1,8 +1,10 @@
+extern crate alloc;
 use crate::{base::Base, error::Error};
+use alloc::vec::Vec;
 use rbtree::RBTree;
 
-/// Basic Memory Operation
-pub enum MemoryOpcode {
+/// Basic Memory Instruction
+pub enum MemoryInstruction {
     /// Write to memory
     Write,
 
@@ -13,11 +15,11 @@ pub enum MemoryOpcode {
 /// Cell interaction enum where K is the address and V is the value
 pub enum CellInteraction<K, V> {
     /// Interactive with a single cell
-    SingleCell(MemoryOpcode, K, V),
+    SingleCell(MemoryInstruction, K, V),
 
     /// Interactive with 2 cells
     /// Opcode concated(K,V) lo(K,V) hi(K,V)
-    DoubleCell(MemoryOpcode, K, V, K, V, K, V),
+    DoubleCell(MemoryInstruction, K, V, K, V, K, V),
 }
 
 /// Context of machine
@@ -31,10 +33,10 @@ where
     fn memory(&mut self) -> &'_ mut RBTree<K, V>;
 
     /// Set the stack depth
-    fn set_stack_depth(&mut self, stack_depth: usize);
+    fn set_stack_depth(&mut self, stack_depth: u64);
 
     /// Set the time log
-    fn set_time_log(&mut self, time_log: usize);
+    fn set_time_log(&mut self, time_log: u64);
 
     /// Set the stack pointer
     fn set_stack_ptr(&mut self, stack_ptr: K);
@@ -43,10 +45,10 @@ where
     fn stack_ptr(&self) -> K;
 
     /// Get the stack depth
-    fn stack_depth(&self) -> usize;
+    fn stack_depth(&self) -> u64;
 
     /// Get the time log
-    fn time_log(&self) -> usize;
+    fn time_log(&self) -> u64;
 
     /// Apply an instruction to the context
     fn apply(&mut self, instruction: &mut M::Instruction);
@@ -64,15 +66,37 @@ where
 }
 
 /// Trace record
+/// TIME_LOG, STACK_DEPTH, INSTRUCTION, ADDRESS, VALUE,  
 pub trait AbstractTraceRecord<M: AbstractMachine<K, V>, K, V>
 where
     K: Ord,
     Self: Ord,
 {
-    /// Create new instance of [TraceRecord](AbstractMachine::TraceRecord) from [AbstractMachine::Instruction]
-    fn from_instruction(instruction: M::Instruction) -> Self;
+    /// Create a new trace record
+    fn new(
+        time_log: u64,
+        stack_depth: u64,
+        instruction: MemoryInstruction,
+        address: K,
+        value: V,
+    ) -> Self;
 
-    /// Get instruction details
+    /// Get the program counter
+    fn pc(&self) -> u64;
+
+    /// Get the time log
+    fn time_log(&self) -> u64;
+
+    /// Get the stack depth
+    fn stack_depth(&self) -> u64;
+
+    /// Get the address
+    fn address(&self) -> K;
+
+    /// Get the value
+    fn value(&self) -> V;
+
+    /// Get the instruction
     fn instruction(&self) -> M::Instruction;
 }
 
@@ -88,14 +112,26 @@ where
     /// Instruction set
     type Instruction: AbstractInstruction<Self, K, V>;
 
+    /// Trace record
+    type TraceRecord: AbstractTraceRecord<Self, K, V>;
+
     /// Get the context of abstract machine
     fn context(&mut self) -> &'_ mut Self::Context;
+
+    /// Get the read only context of abstract machine
+    fn ro_context(&self) -> &'_ Self::Context;
 
     /// Get the WORD_SIZE of the addresss pace
     fn word_size(&self) -> K;
 
     /// Get the base address of the address space
     fn register_start(&self) -> K;
+
+    /// Push the trace record to the trace
+    fn track(&mut self, trace: Self::TraceRecord);
+
+    /// Get the execution trace
+    fn trace(&self) -> &'_ Vec<Self::TraceRecord>;
 }
 
 /// Abstract RAM machine
@@ -112,9 +148,17 @@ where
             // Read on a cell
             let result = self.dummy_read(address);
 
+            self.track(Self::TraceRecord::new(
+                self.ro_context().time_log(),
+                self.ro_context().stack_depth(),
+                MemoryInstruction::Read,
+                address,
+                result,
+            ));
+
             // Return single cell read
             Ok(CellInteraction::SingleCell(
-                MemoryOpcode::Read,
+                MemoryInstruction::Read,
                 address,
                 result,
             ))
@@ -134,9 +178,26 @@ where
             buf[part_hi..cell_size].copy_from_slice(&val_hi.to_bytes()[0..part_lo]);
             buf[0..part_hi].copy_from_slice(&val_lo.to_bytes()[part_lo..cell_size]);
 
+            // @TODO: Read in the middle of 2 cells need to be translated correctly
+            self.track(Self::TraceRecord::new(
+                self.ro_context().time_log(),
+                self.ro_context().stack_depth(),
+                MemoryInstruction::Read,
+                addr_lo,
+                val_lo,
+            ));
+
+            self.track(Self::TraceRecord::new(
+                self.ro_context().time_log(),
+                self.ro_context().stack_depth(),
+                MemoryInstruction::Read,
+                addr_hi,
+                val_hi,
+            ));
+
             // Return double cells read
             Ok(CellInteraction::DoubleCell(
-                MemoryOpcode::Read,
+                MemoryInstruction::Read,
                 address,
                 V::from_bytes(buf),
                 addr_lo,
@@ -154,9 +215,17 @@ where
             // Write on a cell
             self.context().memory().insert(address, value);
 
+            self.track(Self::TraceRecord::new(
+                self.ro_context().time_log(),
+                self.ro_context().stack_depth(),
+                MemoryInstruction::Write,
+                address,
+                value,
+            ));
+
             // Return single cell write
             Ok(CellInteraction::SingleCell(
-                MemoryOpcode::Write,
+                MemoryInstruction::Write,
                 address,
                 value,
             ))
@@ -183,9 +252,26 @@ where
             self.context().memory().replace_or_insert(addr_lo, val_lo);
             self.context().memory().replace_or_insert(addr_hi, val_hi);
 
+            // @TODO: Write in the middle of 2 cells need to be translated correctly
+            self.track(Self::TraceRecord::new(
+                self.ro_context().time_log(),
+                self.ro_context().stack_depth(),
+                MemoryInstruction::Write,
+                addr_lo,
+                val_lo,
+            ));
+
+            self.track(Self::TraceRecord::new(
+                self.ro_context().time_log(),
+                self.ro_context().stack_depth(),
+                MemoryInstruction::Write,
+                addr_hi,
+                val_hi,
+            ));
+
             // Return double cells write
             Ok(CellInteraction::DoubleCell(
-                MemoryOpcode::Write,
+                MemoryInstruction::Write,
                 address,
                 value,
                 addr_lo,
@@ -219,7 +305,7 @@ where
     Self: AbstractMemoryMachine<K, V, S, T>,
 {
     /// Push the value to the stack and return stack_depth
-    fn push(&mut self, value: V) -> Result<(usize, CellInteraction<K, V>), Error> {
+    fn push(&mut self, value: V) -> Result<(u64, CellInteraction<K, V>), Error> {
         let mut stack_depth = self.context().stack_depth();
         stack_depth += 1;
         self.context().set_stack_depth(stack_depth);
@@ -232,7 +318,7 @@ where
     }
 
     /// Get value from the stack and return stack_depth and value
-    fn pop(&mut self) -> Result<(usize, CellInteraction<K, V>), Error> {
+    fn pop(&mut self) -> Result<(u64, CellInteraction<K, V>), Error> {
         let mut stack_depth = self.context().stack_depth();
         stack_depth -= 1;
         self.context().set_stack_depth(stack_depth);
