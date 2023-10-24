@@ -87,8 +87,8 @@ where
         let mut field_point_vec: Vec<(Fr, Fr)> = Vec::new();
         for (point, value) in points.into_iter() {
             field_point_vec.push((
-                self.be_bytes_to_field(point.to_bytes().as_mut_slice()), 
-                self.be_bytes_to_field(value.to_bytes().as_mut_slice())));
+                self.be_bytes_to_field(point.zfill32().as_mut_slice()), 
+                self.be_bytes_to_field(value.zfill32().as_mut_slice())));
         }
         field_point_vec
     }

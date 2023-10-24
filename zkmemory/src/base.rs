@@ -32,6 +32,8 @@ pub trait Base<const S: usize, T = Self>:
     fn to_bytes(&self) -> [u8; S];
     /// Convert from big endian bytes
     fn from_bytes(bytes: [u8; S]) -> Self;
+    /// Fill to 32 bytes from any bases that are less than 32
+    fn zfill32(&self) -> [u8; 32];
 }
 
 /// Convert from/to [usize](core::usize)
@@ -72,6 +74,10 @@ impl Base<32> for U256 {
     fn from_bytes(bytes: [u8; 32]) -> Self {
         Self::from_be_bytes(bytes)
     }
+
+    fn zfill32(&self) -> [u8; 32] {
+        self.to_be_bytes()
+    }
 }
 
 impl UsizeConvertible for u64 {
@@ -104,6 +110,13 @@ impl Base<8> for u64 {
     fn from_bytes(bytes: [u8; 8]) -> Self {
         Self::from_be_bytes(bytes)
     }
+
+    fn zfill32(&self) -> [u8; 32] {
+        let bytes = self.to_bytes();
+        let mut buffer = [0u8; 32];
+        buffer[24..].copy_from_slice(&bytes);
+        buffer
+    }
 }
 
 impl UsizeConvertible for u32 {
@@ -135,5 +148,12 @@ impl Base<4> for u32 {
 
     fn from_bytes(bytes: [u8; 4]) -> Self {
         Self::from_be_bytes(bytes)
+    }
+
+    fn zfill32(&self) -> [u8; 32] {
+        let bytes = self.to_bytes();
+        let mut buffer = [0u8; 32];
+        buffer[28..].copy_from_slice(&bytes);
+        buffer
     }
 }
