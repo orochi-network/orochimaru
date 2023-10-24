@@ -1,4 +1,5 @@
 //! This crate provides a simple RAM machine for use in the zkVM
+#![recursion_limit = "256"]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![deny(
     unused,

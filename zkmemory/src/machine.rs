@@ -1,5 +1,24 @@
-use crate::base::Base;
+use crate::{base::Base, error::Error};
 use rbtree::RBTree;
+
+/// Basic Memory Operation
+pub enum MemoryOpcode {
+    /// Write to memory
+    Write,
+
+    /// Read from memory
+    Read,
+}
+
+/// Cell interaction enum where K is the address and V is the value
+pub enum CellInteraction<K, V> {
+    /// Interactive with a single cell
+    SingleCell(MemoryOpcode, K, V),
+
+    /// Interactive with 2 cells
+    /// Opcode concated(K,V) lo(K,V) hi(K,V)
+    DoubleCell(MemoryOpcode, K, V, K, V, K, V),
+}
 
 /// Context of machine
 pub trait AbstractContext<M, K, V>
@@ -8,23 +27,29 @@ where
     Self: core::fmt::Debug + Sized,
     M: AbstractMachine<K, V>,
 {
+    /// Get the memory
+    fn memory(&mut self) -> &'_ mut RBTree<K, V>;
+
     /// Set the stack depth
     fn set_stack_depth(&mut self, stack_depth: usize);
-
-    /// Get the stack depth
-    fn get_stack_depth(&self) -> usize;
-
-    /// Get the time log
-    fn get_time_log(&self) -> usize;
 
     /// Set the time log
     fn set_time_log(&mut self, time_log: usize);
 
+    /// Set the stack pointer
+    fn set_stack_ptr(&mut self, stack_ptr: K);
+
     /// Get the stack pointer
     fn stack_ptr(&self) -> K;
 
+    /// Get the stack depth
+    fn stack_depth(&self) -> usize;
+
+    /// Get the time log
+    fn time_log(&self) -> usize;
+
     /// Apply an instruction to the context
-    fn apply(&'static mut self, instruction: &M::Instruction);
+    fn apply(&mut self, instruction: &mut M::Instruction);
 }
 
 /// Public trait for all instructions.
@@ -35,7 +60,7 @@ where
     M: AbstractMachine<K, V>,
 {
     /// Execute the instruction on the context
-    fn exec(&self, context: &'static mut M::Context);
+    fn exec(&self, context: &mut M::Context);
 }
 
 /// Trace record
@@ -49,9 +74,6 @@ where
 
     /// Get instruction details
     fn instruction(&self) -> M::Instruction;
-
-    /// Get context details at this time
-    fn context(&self) -> M::Context;
 }
 
 /// The abstract machine that will be implemented by particular machine
@@ -69,26 +91,33 @@ where
     /// Get the context of abstract machine
     fn context(&mut self) -> &'_ mut Self::Context;
 
-    /// Get the memory
-    fn memory(&mut self) -> &'_ mut RBTree<K, V>;
-
     /// Get the WORD_SIZE of the addresss pace
     fn word_size(&self) -> K;
+
+    /// Get the base address of the address space
+    fn register_start(&self) -> K;
 }
 
 /// Abstract RAM machine
-pub trait AbstractStateMachine<K, V, const S: usize, const T: usize>
+pub trait AbstractMemoryMachine<K, V, const S: usize, const T: usize>
 where
     K: Base<S>,
     V: Base<T>,
     Self: AbstractMachine<K, V>,
 {
     /// Read from memory
-    fn read(&mut self, address: K) -> V {
+    fn read(&mut self, address: K) -> Result<CellInteraction<K, V>, Error> {
         let remain = address % self.word_size();
         if remain.is_zero() {
             // Read on a cell
-            self.dummy_read(address)
+            let result = self.dummy_read(address);
+
+            // Return single cell read
+            Ok(CellInteraction::SingleCell(
+                MemoryOpcode::Read,
+                address,
+                result,
+            ))
         } else {
             // Get the address of 2 cells
             let (addr_lo, addr_hi) = self.compute_address(address, remain);
@@ -101,20 +130,36 @@ where
             let part_hi = cell_size - part_lo;
             let mut buf = [0u8; T];
 
-            // Write the value into the buffer
+            // Concat values from 2 cells
             buf[part_hi..cell_size].copy_from_slice(&val_hi.to_bytes()[0..part_lo]);
             buf[0..part_hi].copy_from_slice(&val_lo.to_bytes()[part_lo..cell_size]);
 
-            V::from_bytes(buf)
+            // Return double cells read
+            Ok(CellInteraction::DoubleCell(
+                MemoryOpcode::Read,
+                address,
+                V::from_bytes(buf),
+                addr_lo,
+                val_lo,
+                addr_hi,
+                val_hi,
+            ))
         }
     }
 
     /// Write to memory
-    fn write(&mut self, address: K, value: V) {
+    fn write(&mut self, address: K, value: V) -> Result<CellInteraction<K, V>, Error> {
         let remain = address % self.word_size();
         if remain.is_zero() {
             // Write on a cell
-            self.memory().insert(address, value);
+            self.context().memory().insert(address, value);
+
+            // Return single cell write
+            Ok(CellInteraction::SingleCell(
+                MemoryOpcode::Write,
+                address,
+                value,
+            ))
         } else {
             // Get the address of 2 cells
             let (addr_lo, addr_hi) = self.compute_address(address, remain);
@@ -135,14 +180,25 @@ where
             buf[0..part_lo].copy_from_slice(&val[part_hi..cell_size]);
             let val_hi = V::from_bytes(buf);
 
-            self.memory().replace_or_insert(addr_lo, val_lo);
-            self.memory().replace_or_insert(addr_hi, val_hi);
+            self.context().memory().replace_or_insert(addr_lo, val_lo);
+            self.context().memory().replace_or_insert(addr_hi, val_hi);
+
+            // Return double cells write
+            Ok(CellInteraction::DoubleCell(
+                MemoryOpcode::Write,
+                address,
+                value,
+                addr_lo,
+                val_lo,
+                addr_hi,
+                val_hi,
+            ))
         }
     }
 
     /// Read from memory
     fn dummy_read(&mut self, address: K) -> V {
-        match self.memory().get(&address) {
+        match self.context().memory().get(&address) {
             Some(r) => r.clone(),
             None => V::zero(),
         }
@@ -160,38 +216,42 @@ pub trait AbstractStackMachine<K, V, const S: usize, const T: usize>
 where
     K: Base<S>,
     V: Base<T>,
-    Self: AbstractStateMachine<K, V, S, T>,
+    Self: AbstractMemoryMachine<K, V, S, T>,
 {
     /// Push the value to the stack and return stack_depth
-    fn push(&mut self, value: V) -> usize {
-        let mut stack_depth = self.context().get_stack_depth();
+    fn push(&mut self, value: V) -> Result<(usize, CellInteraction<K, V>), Error> {
+        let mut stack_depth = self.context().stack_depth();
         stack_depth += 1;
         self.context().set_stack_depth(stack_depth);
         let address = self.context().stack_ptr();
-        self.write(address, value);
 
-        stack_depth
+        match self.write(address, value) {
+            Ok(v) => Ok((stack_depth, v)),
+            Err(e) => return Err(e),
+        }
     }
 
     /// Get value from the stack and return stack_depth and value
-    fn pop(&mut self) -> (usize, V) {
-        let mut stack_depth = self.context().get_stack_depth();
+    fn pop(&mut self) -> Result<(usize, CellInteraction<K, V>), Error> {
+        let mut stack_depth = self.context().stack_depth();
         stack_depth -= 1;
         self.context().set_stack_depth(stack_depth);
         let address = self.context().stack_ptr();
-        let value = self.read(address);
 
-        (stack_depth, value)
+        match self.read(address) {
+            Ok(v) => Ok((stack_depth, v)),
+            Err(e) => return Err(e),
+        }
     }
 }
 
 /// Virtual register structure
 #[derive(Debug, Clone, Copy)]
-pub struct Register<K: Base<S>, const S: usize>(usize, K);
+pub struct Register<K>(usize, K);
 
-impl<K, const S: usize> Register<K, S>
+impl<K> Register<K>
 where
-    K: Base<S>,
+    K: Copy,
 {
     /// Create a new register
     pub fn new(register_index: usize, register_address: K) -> Self {
@@ -214,26 +274,29 @@ pub trait AbstractRegisterMachine<K, V, const S: usize, const T: usize>
 where
     K: Base<S>,
     V: Base<T>,
-    Self: AbstractStateMachine<K, V, S, T>,
+    Self: AbstractMemoryMachine<K, V, S, T>,
 {
     /// Set the value of the register
-    fn set(&mut self, register: Register<K, S>, value: V) {
-        self.write(register.address(), value);
+    fn set(&mut self, register: Register<K>, value: V) -> Result<CellInteraction<K, V>, Error> {
+        self.write(register.address(), value)
     }
 
     /// Get the value of the register
-    fn get(&mut self, register: Register<K, S>) -> V {
+    fn get(&mut self, register: Register<K>) -> Result<CellInteraction<K, V>, Error> {
         self.read(register.address())
     }
+
+    /// Create new register from index
+    fn new_register(&self, register_index: usize) -> Option<Register<K>>;
 }
 
 #[macro_export]
-/// Export macro for implementing [AbstractStateMachine](crate::state_machine::AbstractStateMachine) trait
+/// Export macro for implementing [AbstractMemoryMachine](crate::state_machine::AbstractMemoryMachine) trait
 macro_rules! impl_state_machine {
     ($machine_struct: ident) => {
-        use zkmemory::machine::AbstractStateMachine;
+        use zkmemory::machine::AbstractMemoryMachine;
 
-        impl<K, V, const S: usize, const T: usize> AbstractStateMachine<K, V, S, T>
+        impl<K, V, const S: usize, const T: usize> AbstractMemoryMachine<K, V, S, T>
             for $machine_struct<K, V, S, T>
         where
             K: Base<S>,
@@ -255,8 +318,17 @@ macro_rules! impl_register_machine {
         where
             K: Base<S>,
             V: Base<T>,
-            Self: AbstractStateMachine<K, V, S, T>,
+            Self: AbstractMemoryMachine<K, V, S, T>,
         {
+            fn new_register(
+                &self,
+                register_index: usize,
+            ) -> Option<zkmemory::machine::Register<K>> {
+                Some(Register::new(
+                    register_index,
+                    self.register_start() + K::from_usize(register_index) * K::WORD_SIZE,
+                ))
+            }
         }
     };
 }
@@ -272,7 +344,7 @@ macro_rules! impl_stack_machine {
         where
             K: Base<S>,
             V: Base<T>,
-            Self: AbstractStateMachine<K, V, S, T>,
+            Self: AbstractMemoryMachine<K, V, S, T>,
         {
         }
     };
