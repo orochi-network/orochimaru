@@ -4,12 +4,27 @@ use alloc::vec::Vec;
 use rbtree::RBTree;
 
 /// Basic Memory Instruction
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum MemoryInstruction {
     /// Write to memory
     Write,
 
     /// Read from memory
     Read,
+}
+
+/// Trace record struct of [AbstractTraceRecord](crate::machine::AbstractTraceRecord)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TraceRecord<K, V, const S: usize, const T: usize>
+where
+    K: Base<S>,
+    V: Base<T>,
+{
+    time_log: u64,
+    stack_depth: u64,
+    instruction: MemoryInstruction,
+    address: K,
+    value: V,
 }
 
 /// Cell interaction enum where K is the address and V is the value
@@ -80,9 +95,6 @@ where
         address: K,
         value: V,
     ) -> Self;
-
-    /// Get the program counter
-    fn pc(&self) -> u64;
 
     /// Get the time log
     fn time_log(&self) -> u64;
@@ -306,10 +318,11 @@ where
 {
     /// Push the value to the stack and return stack_depth
     fn push(&mut self, value: V) -> Result<(u64, CellInteraction<K, V>), Error> {
-        let mut stack_depth = self.context().stack_depth();
-        stack_depth += 1;
+        // Update stack depth and stack pointer
+        let stack_depth = self.ro_context().stack_depth() + 1;
         self.context().set_stack_depth(stack_depth);
-        let address = self.context().stack_ptr();
+        let address = self.ro_context().stack_ptr() + self.word_size();
+        self.context().set_stack_ptr(address);
 
         match self.write(address, value) {
             Ok(v) => Ok((stack_depth, v)),
@@ -319,10 +332,11 @@ where
 
     /// Get value from the stack and return stack_depth and value
     fn pop(&mut self) -> Result<(u64, CellInteraction<K, V>), Error> {
-        let mut stack_depth = self.context().stack_depth();
-        stack_depth -= 1;
+        // Update stack depth and stack pointer
+        let stack_depth = self.ro_context().stack_depth() - 1;
         self.context().set_stack_depth(stack_depth);
-        let address = self.context().stack_ptr();
+        let address = self.ro_context().stack_ptr() - self.word_size();
+        self.context().set_stack_ptr(address);
 
         match self.read(address) {
             Ok(v) => Ok((stack_depth, v)),
@@ -374,6 +388,84 @@ where
 
     /// Create new register from index
     fn new_register(&self, register_index: usize) -> Option<Register<K>>;
+}
+
+impl<M, K, V, const S: usize, const T: usize> AbstractTraceRecord<M, K, V>
+    for TraceRecord<K, V, S, T>
+where
+    K: Base<S>,
+    V: Base<T>,
+    M: AbstractMachine<K, V, Instruction = MemoryInstruction>,
+{
+    fn new(
+        time_log: u64,
+        stack_depth: u64,
+        instruction: MemoryInstruction,
+        address: K,
+        value: V,
+    ) -> Self {
+        Self {
+            time_log,
+            stack_depth,
+            instruction,
+            address,
+            value,
+        }
+    }
+
+    fn time_log(&self) -> u64 {
+        self.time_log
+    }
+
+    fn stack_depth(&self) -> u64 {
+        self.stack_depth
+    }
+
+    fn address(&self) -> K {
+        self.address
+    }
+
+    fn value(&self) -> V {
+        self.value
+    }
+
+    fn instruction(&self) -> <M as AbstractMachine<K, V>>::Instruction {
+        self.instruction
+    }
+}
+
+impl<K, V, const S: usize, const T: usize> PartialOrd for TraceRecord<K, V, S, T>
+where
+    K: Base<S>,
+    V: Base<T>,
+{
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        match self.address.partial_cmp(&other.address) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        match self.instruction.partial_cmp(&other.instruction) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        match self.time_log.partial_cmp(&other.time_log) {
+            Some(core::cmp::Ordering::Equal) => {
+                panic!("Time log never been equal")
+            }
+            ord => return ord,
+        }
+    }
+}
+
+impl<K, V, const S: usize, const T: usize> Ord for TraceRecord<K, V, S, T>
+where
+    K: Base<S>,
+    V: Base<T>,
+{
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.partial_cmp(other)
+            .expect("Two trace records wont be equal")
+    }
 }
 
 #[macro_export]
