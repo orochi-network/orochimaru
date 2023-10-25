@@ -506,7 +506,7 @@ macro_rules! impl_register_machine {
             ) -> Option<zkmemory::machine::Register<K>> {
                 Some(Register::new(
                     register_index,
-                    self.register_start() + K::from_usize(register_index) * K::WORD_SIZE,
+                    self.register_start() + K::from(register_index) * K::WORD_SIZE,
                 ))
             }
         }

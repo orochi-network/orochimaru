@@ -1,7 +1,7 @@
 use ethnum::U256;
 use rbtree::RBTree;
 use std::marker::PhantomData;
-use zkmemory::base::{Base, UsizeConvertible};
+use zkmemory::base::{Base, B256};
 use zkmemory::machine::TraceRecord;
 use zkmemory::{
     impl_register_machine, impl_stack_machine, impl_state_machine,
@@ -122,18 +122,18 @@ where
     pub fn new() -> Self {
         Self {
             memory: RBTree::new(),
-            word_size: K::from_usize(32),
+            word_size: K::from(32),
             time_log: 0,
-            stack_start: K::from_usize(0),
-            stack_end: K::from_usize(0),
+            stack_start: K::from(0),
+            stack_end: K::from(0),
             stack_depth: 0,
-            stack_ptr: K::from_usize(0),
-            register_start: K::from_usize(0),
-            register_end: K::from_usize(0),
-            r0: Register::new(0, K::from_usize(0)),
-            r1: Register::new(1, K::from_usize(0)),
-            r2: Register::new(2, K::from_usize(0)),
-            r3: Register::new(3, K::from_usize(0)),
+            stack_ptr: K::from(0),
+            register_start: K::from(0),
+            register_end: K::from(0),
+            r0: Register::new(0, K::from(0)),
+            r1: Register::new(1, K::from(0)),
+            r2: Register::new(2, K::from(0)),
+            r3: Register::new(3, K::from(0)),
         }
     }
 }
@@ -177,8 +177,8 @@ impl_stack_machine!(StateMachine);
 impl_state_machine!(StateMachine);
 
 fn main() {
-    let mut a = StateMachine::<U256, U256, 32, 32>::new();
-    a.write(U256::from_usize(0), U256::from_usize(123)).unwrap();
+    let mut a = StateMachine::<B256, B256, 32, 32>::new();
+    a.write(B256::from(0), B256::from(123)).unwrap();
 
     /*
     // Test the state machine of Uint256 values

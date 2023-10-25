@@ -101,12 +101,12 @@ impl<T: Mul<Output = T>> Mul for Uint<T> {
 
 macro_rules! new_base {
     (U256, $byte_size: expr) => {
-        impl Base<32> for Uint<U256> {
+        impl Base<$byte_size> for Uint<U256> {
             const MAX: Self = Self(U256::MAX);
 
             const MIN: Self = Self(U256::MIN);
 
-            const WORD_SIZE: Self = Self(U256::new(32));
+            const WORD_SIZE: Self = Self(U256::new($byte_size));
 
             fn is_zero(&self) -> bool {
                 self.0 == U256::ZERO
@@ -153,14 +153,14 @@ macro_rules! new_base {
             }
         }
 
-        impl Into<[u8; 32]> for Uint<U256> {
-            fn into(self) -> [u8; 32] {
+        impl Into<[u8; $byte_size]> for Uint<U256> {
+            fn into(self) -> [u8; $byte_size] {
                 self.0.to_be_bytes()
             }
         }
 
-        impl From<[u8; 32]> for Uint<U256> {
-            fn from(value: [u8; 32]) -> Self {
+        impl From<[u8; $byte_size]> for Uint<U256> {
+            fn from(value: [u8; $byte_size]) -> Self {
                 Self(U256::from_be_bytes(value))
             }
         }
@@ -236,3 +236,14 @@ new_base!(U256, 32);
 new_base!(u64, 8);
 new_base!(u32, 4);
 new_base!(u16, 2);
+
+/// Uint256 is a wrapper of [U256](ethnum::U256) to implement [Base](crate::base::Base)
+pub type B256 = Uint<U256>;
+/// Uint128 is a wrapper of [u128](core::u128) to implement [Base](crate::base::Base)
+pub type B128 = Uint<u128>;
+/// Uint64 is a wrapper of [u64](core::u64) to implement [Base](crate::base::Base)
+pub type B64 = Uint<u64>;
+/// Uint32 is a wrapper of [u32](core::u32) to implement [Base](crate::base::Base)
+pub type B32 = Uint<u32>;
+/// Uint16 is a wrapper of [u16](core::u16) to implement [Base](crate::base::Base)
+pub type B16 = Uint<u16>;
