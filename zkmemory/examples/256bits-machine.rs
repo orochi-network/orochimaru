@@ -2,6 +2,7 @@ use ethnum::U256;
 use rbtree::RBTree;
 use std::marker::PhantomData;
 use zkmemory::base::{Base, UsizeConvertible};
+use zkmemory::machine::TraceRecord;
 use zkmemory::{
     impl_register_machine, impl_stack_machine, impl_state_machine,
     machine::{AbstractContext, AbstractInstruction, AbstractMachine, Register},
@@ -42,12 +43,12 @@ where
 {
     memory: RBTree<K, V>,
     word_size: K,
-    time_log: usize,
+    time_log: u64,
 
     // Stack
     stack_start: K,
     stack_end: K,
-    stack_depth: usize,
+    stack_depth: u64,
     stack_ptr: K,
 
     // Register
@@ -68,11 +69,11 @@ where
     V: Base<T>,
     M: AbstractMachine<K, V>,
 {
-    fn set_stack_depth(&mut self, stack_depth: usize) {
+    fn set_stack_depth(&mut self, stack_depth: u64) {
         self.stack_depth = stack_depth;
     }
 
-    fn stack_depth(&self) -> usize {
+    fn stack_depth(&self) -> u64 {
         self.stack_depth
     }
 
@@ -80,11 +81,11 @@ where
         self.stack_ptr
     }
 
-    fn time_log(&self) -> usize {
+    fn time_log(&self) -> u64 {
         self.time_log
     }
 
-    fn set_time_log(&mut self, time_log: usize) {
+    fn set_time_log(&mut self, time_log: u64) {
         self.time_log = time_log;
     }
 
@@ -144,6 +145,7 @@ where
 {
     type Context = Self;
     type Instruction = MyInstruction<Self, K, V, S, T>;
+    type TraceRecord = TraceRecord<K, V, S, T>;
 
     fn context(&mut self) -> &'_ mut Self::Context {
         self
@@ -155,6 +157,18 @@ where
 
     fn register_start(&self) -> K {
         self.register_start
+    }
+
+    fn ro_context(&self) -> &'_ Self::Context {
+        todo!()
+    }
+
+    fn track(&mut self, trace: Self::TraceRecord) {
+        todo!()
+    }
+
+    fn trace(&self) -> &'_ Vec<Self::TraceRecord> {
+        todo!()
     }
 }
 

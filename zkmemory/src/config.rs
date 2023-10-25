@@ -59,9 +59,9 @@ impl DefaultConfig {
     pub fn default<const S: usize, T: Base<S>>() -> ConfigArgs<T> {
         ConfigArgs {
             head_layout: true,
-            stack_depth: T::from_usize(1024),
-            no_register: T::from_usize(16),
-            buffer_size: T::from_usize(32),
+            stack_depth: T::from(1024),
+            no_register: T::from(16),
+            buffer_size: T::from(32),
         }
     }
 }

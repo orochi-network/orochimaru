@@ -109,7 +109,7 @@ where
     fn value(&self) -> V;
 
     /// Get the instruction
-    fn instruction(&self) -> M::Instruction;
+    fn instruction(&self) -> MemoryInstruction;
 }
 
 /// The abstract machine that will be implemented by particular machine
@@ -181,14 +181,16 @@ where
             // Get the 2 cells
             let val_lo = self.dummy_read(addr_lo);
             let val_hi = self.dummy_read(addr_hi);
-            let cell_size = self.word_size().to_usize();
-            let part_lo = (address - addr_lo).to_usize();
+            let cell_size = self.word_size().into();
+            let part_lo = (address - addr_lo).into();
             let part_hi = cell_size - part_lo;
             let mut buf = [0u8; T];
 
             // Concat values from 2 cells
-            buf[part_hi..cell_size].copy_from_slice(&val_hi.to_bytes()[0..part_lo]);
-            buf[0..part_hi].copy_from_slice(&val_lo.to_bytes()[part_lo..cell_size]);
+            buf[part_hi..cell_size]
+                .copy_from_slice(&<V as Into<[u8; T]>>::into(val_hi)[0..part_lo]);
+            buf[0..part_hi]
+                .copy_from_slice(&<V as Into<[u8; T]>>::into(val_lo)[part_lo..cell_size]);
 
             // @TODO: Read in the middle of 2 cells need to be translated correctly
             self.track(Self::TraceRecord::new(
@@ -211,7 +213,7 @@ where
             Ok(CellInteraction::DoubleCell(
                 MemoryInstruction::Read,
                 address,
-                V::from_bytes(buf),
+                V::from(buf),
                 addr_lo,
                 val_lo,
                 addr_hi,
@@ -245,21 +247,21 @@ where
             // Get the address of 2 cells
             let (addr_lo, addr_hi) = self.compute_address(address, remain);
             // Calculate memory address and offset
-            let cell_size = self.word_size().to_usize();
-            let part_lo = (address - addr_lo).to_usize();
+            let cell_size = self.word_size().into();
+            let part_lo = (address - addr_lo).into();
             let part_hi = cell_size - part_lo;
 
-            let val = value.to_bytes();
+            let val: [u8; T] = value.into();
 
             // Write the low part of value to the buffer
-            let mut buf = self.dummy_read(addr_lo).to_bytes();
+            let mut buf: [u8; T] = self.dummy_read(addr_lo).into();
             buf[part_lo..cell_size].copy_from_slice(&val[0..part_hi]);
-            let val_lo = V::from_bytes(buf);
+            let val_lo = V::from(buf);
 
             // Write the high part of value to the buffer
-            let mut buf = self.dummy_read(addr_hi).to_bytes();
+            let mut buf: [u8; T] = self.dummy_read(addr_hi).into();
             buf[0..part_lo].copy_from_slice(&val[part_hi..cell_size]);
-            let val_hi = V::from_bytes(buf);
+            let val_hi = V::from(buf);
 
             self.context().memory().replace_or_insert(addr_lo, val_lo);
             self.context().memory().replace_or_insert(addr_hi, val_hi);
@@ -395,7 +397,7 @@ impl<M, K, V, const S: usize, const T: usize> AbstractTraceRecord<M, K, V>
 where
     K: Base<S>,
     V: Base<T>,
-    M: AbstractMachine<K, V, Instruction = MemoryInstruction>,
+    M: AbstractMachine<K, V>,
 {
     fn new(
         time_log: u64,
@@ -429,7 +431,7 @@ where
         self.value
     }
 
-    fn instruction(&self) -> <M as AbstractMachine<K, V>>::Instruction {
+    fn instruction(&self) -> MemoryInstruction {
         self.instruction
     }
 }
