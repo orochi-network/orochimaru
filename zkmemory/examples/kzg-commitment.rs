@@ -25,6 +25,10 @@ fn main() {
     println!("{:?}", kzg_scheme.commit_memory_state());
     println!("{:?}", kzg_scheme.commit_memory_state_2());
 
+    // Verify poly
+    let commitment = kzg_scheme.commit_memory_state();
+    println!("{:?}", kzg_scheme.verify_poly(commitment));
+
 
     let mut sm64 = StateMachine64::new_custom(ConfigArgs { 
         head_layout: false, 
@@ -68,5 +72,7 @@ fn main() {
     // Commit the memory state in 2 ways
     println!("{:?}", kzg_scheme_32.commit_memory_state());
     println!("{:?}", kzg_scheme_32.commit_memory_state_2());
+
+    
 
 }

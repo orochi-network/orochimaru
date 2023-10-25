@@ -1,18 +1,12 @@
-use halo2_proofs::arithmetic::lagrange_interpolate;
+use halo2_proofs::arithmetic::{lagrange_interpolate, best_multiexp, kate_division};
+use halo2_proofs::poly::{EvaluationDomain, Polynomial, Coeff};
+use halo2_proofs::poly::commitment::ParamsProver;
+use halo2_proofs::poly::kzg::commitment::ParamsKZG;
 use halo2curves::bn256::{Bn256, Fr, G1, G1Affine};
 use crate::base::Base;
-use halo2_proofs::poly::{EvaluationDomain, Polynomial, Coeff};
-use halo2_proofs::poly::kzg::commitment::ParamsKZG;
-use halo2_proofs::poly::commitment::ParamsProver;
-use rand_core::OsRng;
-use halo2_proofs::poly::commitment::Blind;
-use halo2curves::ff::Field;
-use halo2_proofs::arithmetic::best_multiexp;
-
+use crate::machine::StateMachine;
 extern crate alloc;
 use alloc::vec::Vec;
-
-use crate::machine::StateMachine;
 
 #[derive(Debug)]
 /// A KZG Module using curve Bn256
@@ -24,7 +18,8 @@ where
     params: ParamsKZG<Bn256>,
     domain: EvaluationDomain<Fr>,
     machine: StateMachine<K, V, S>,
-    common_reference_string: Vec<G1Affine>
+    common_reference_string: Vec<G1Affine>,
+    //common_reference_string_g2: Vec<G2Affine>,
 }
 impl<K, V, const S: usize> KZGMemoryCommitment<K, V, S>
 where
@@ -35,11 +30,14 @@ where
     pub fn init(k: u32, machine: StateMachine<K, V, S>) -> Self {
         let params = ParamsKZG::<Bn256>::new(k);
         let crs = Vec::from(params.get_g());
+        //let crs_g2 = Vec::from(params.crs_g2());
+
         Self {
             params: params,
             domain: EvaluationDomain::new(1, k),
             machine: machine,
-            common_reference_string: crs
+            common_reference_string: crs,
+            //common_reference_string_g2: crs_g2
         }
     }
 
@@ -47,16 +45,18 @@ where
     pub fn get_cells_from_ram(&mut self) -> Vec<(K, V)> {
         self.machine.get_cells(self.machine.base_address(), self.machine.terminal_address())
     }
-
-    /// Commit to a polynomial represented in coefficients
-    pub fn commit_polynomial(&self, poly: Polynomial<Fr, Coeff>) -> G1 {
-        let alpha = Blind(Fr::random(OsRng));
-        self.params.commit(&poly, alpha)
+    /// Commit to a polynomial, the result is in G1
+    pub fn commit_polynomial_in_g1(&self, poly: Polynomial<Fr, Coeff>) -> G1 {
+        let mut scalars = Vec::with_capacity(poly.len());
+        scalars.extend(poly.iter());
+        let bases = &self.common_reference_string;
+        let size = scalars.len();
+        assert!(bases.len() >= size);
+        best_multiexp(&scalars, &bases[0..size])
     }
 
-    /// Another function used to commit the polynomial
-    /// This function copies the code from Halo2 for debugging only
-    pub fn commit_polynomial_2(&self, poly: Polynomial<Fr, Coeff>) -> G1 {
+    /// Commit to a polynomial, the result is in G2
+    pub fn commit_polynomial_in_g2(&self, poly: Polynomial<Fr, Coeff>) -> G1 {
         let mut scalars = Vec::with_capacity(poly.len());
         scalars.extend(poly.iter());
         let bases = &self.common_reference_string;
@@ -98,7 +98,7 @@ where
         let cells = self.get_cells_from_ram();
         let points_vec = self.base_to_field_elements(cells);
         let state_poly = self.lagrange_from_points(points_vec);
-        let commitment = self.commit_polynomial(state_poly);
+        let commitment = self.commit_polynomial_in_g1(state_poly);
         commitment
     }
 
@@ -107,7 +107,7 @@ where
         let cells = self.get_cells_from_ram();
         let points_vec = self.base_to_field_elements(cells);
         let state_poly = self.lagrange_from_points(points_vec);
-        let commitment = self.commit_polynomial_2(state_poly);
+        let commitment = self.commit_polynomial_in_g1(state_poly);
         commitment
     }
 
@@ -117,4 +117,24 @@ where
         let points_vec = self.base_to_field_elements(cells);
         self.lagrange_from_points(points_vec)
     }
+
+    /// Verify the polynomial state is valid
+    pub fn verify_poly(&mut self, commitment: G1) -> bool {
+        let state_commitment = self.commit_memory_state();
+        state_commitment == commitment
+    }
+
+    /// Create a witness to the current memory state
+    pub fn create_witness(&mut self, index: K) -> G1 {
+        let state_poly = self.get_poly_state();
+        let index = self.be_bytes_to_field(index.zfill32().as_mut_slice());
+        let quotient_poly = self.domain.coeff_from_vec(kate_division(state_poly.into_iter(), index));
+        self.commit_polynomial_in_g1(quotient_poly)
+    }
+
+    // /// Verify the wiitness to the current memory state
+    // pub fn verify_witness(&mut self, commitment_poly: G1, witness: G1, index: K) -> bool {
+    //     true
+    // }
+
 }
