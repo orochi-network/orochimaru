@@ -21,9 +21,8 @@ fn main() {
     // Define the KZG scheme for the state machine
     let mut kzg_scheme = KZGMemoryCommitment::init(5u32, sm256);
 
-    // Commit the current memory state in 2 ways
+    // Commit the current memory state
     println!("{:?}", kzg_scheme.commit_memory_state());
-    println!("{:?}", kzg_scheme.commit_memory_state_2());
 
     // Verify poly
     let commitment = kzg_scheme.commit_memory_state();
@@ -47,9 +46,8 @@ fn main() {
 
     let mut kzg_scheme_64 = KZGMemoryCommitment::init(5u32, sm64);
 
-    // Commit the memory state in 2 ways
+    // Commit the memory state
     println!("{:?}", kzg_scheme_64.commit_memory_state());
-    println!("{:?}", kzg_scheme_64.commit_memory_state_2());
 
     
     let mut sm32 = StateMachine32::new_custom(ConfigArgs { 
@@ -69,10 +67,7 @@ fn main() {
 
     let mut kzg_scheme_32 = KZGMemoryCommitment::init(5u32, sm32);
 
-    // Commit the memory state in 2 ways
+    // Commit the memory state
     println!("{:?}", kzg_scheme_32.commit_memory_state());
-    println!("{:?}", kzg_scheme_32.commit_memory_state_2());
-
-    
 
 }
