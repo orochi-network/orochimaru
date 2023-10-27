@@ -64,9 +64,6 @@ where
 
     /// Get the time log
     fn time_log(&self) -> u64;
-
-    /// Apply an instruction to the context
-    fn apply(&mut self, instruction: &mut M::Instruction);
 }
 
 /// Public trait for all instructions.
@@ -77,7 +74,7 @@ where
     M: AbstractMachine<K, V>,
 {
     /// Execute the instruction on the context
-    fn exec(&self, context: &mut M::Context);
+    fn exec(&self, machine: &mut M::Machine);
 }
 
 /// Trace record
@@ -118,6 +115,9 @@ where
     Self: Sized,
     K: Ord,
 {
+    /// The type of machine
+    type Machine: AbstractMachine<K, V>;
+
     /// Context of machine
     type Context: AbstractContext<Self, K, V>;
 
@@ -143,7 +143,10 @@ where
     fn track(&mut self, trace: Self::TraceRecord);
 
     /// Get the execution trace
-    fn trace(&self) -> &'_ Vec<Self::TraceRecord>;
+    fn trace(&self) -> Vec<Self::TraceRecord>;
+
+    /// Get the execution trace
+    fn exec(&mut self, instruction: &Self::Instruction);
 }
 
 /// Abstract RAM machine
@@ -159,14 +162,15 @@ where
         if remain.is_zero() {
             // Read on a cell
             let result = self.dummy_read(address);
-
+            let time_log = self.ro_context().time_log();
             self.track(Self::TraceRecord::new(
-                self.ro_context().time_log(),
+                time_log,
                 self.ro_context().stack_depth(),
                 MemoryInstruction::Read,
                 address,
                 result,
             ));
+            self.context().set_time_log(time_log + 1);
 
             // Return single cell read
             Ok(CellInteraction::SingleCell(
@@ -177,7 +181,7 @@ where
         } else {
             // Get the address of 2 cells
             let (addr_lo, addr_hi) = self.compute_address(address, remain);
-
+            let time_log = self.ro_context().time_log();
             // Get the 2 cells
             let val_lo = self.dummy_read(addr_lo);
             let val_hi = self.dummy_read(addr_hi);
@@ -194,7 +198,7 @@ where
 
             // @TODO: Read in the middle of 2 cells need to be translated correctly
             self.track(Self::TraceRecord::new(
-                self.ro_context().time_log(),
+                time_log,
                 self.ro_context().stack_depth(),
                 MemoryInstruction::Read,
                 addr_lo,
@@ -202,12 +206,13 @@ where
             ));
 
             self.track(Self::TraceRecord::new(
-                self.ro_context().time_log(),
+                time_log + 1,
                 self.ro_context().stack_depth(),
                 MemoryInstruction::Read,
                 addr_hi,
                 val_hi,
             ));
+            self.context().set_time_log(time_log + 2);
 
             // Return double cells read
             Ok(CellInteraction::DoubleCell(
@@ -226,16 +231,17 @@ where
     fn write(&mut self, address: K, value: V) -> Result<CellInteraction<K, V>, Error> {
         let remain = address % self.word_size();
         if remain.is_zero() {
+            let time_log = self.ro_context().time_log();
             // Write on a cell
             self.context().memory().insert(address, value);
-
             self.track(Self::TraceRecord::new(
-                self.ro_context().time_log(),
+                time_log,
                 self.ro_context().stack_depth(),
                 MemoryInstruction::Write,
                 address,
                 value,
             ));
+            self.context().set_time_log(time_log + 1);
 
             // Return single cell write
             Ok(CellInteraction::SingleCell(
@@ -246,6 +252,7 @@ where
         } else {
             // Get the address of 2 cells
             let (addr_lo, addr_hi) = self.compute_address(address, remain);
+            let time_log = self.ro_context().time_log();
             // Calculate memory address and offset
             let cell_size = self.word_size().into();
             let part_lo = (address - addr_lo).into();
@@ -268,7 +275,7 @@ where
 
             // @TODO: Write in the middle of 2 cells need to be translated correctly
             self.track(Self::TraceRecord::new(
-                self.ro_context().time_log(),
+                time_log,
                 self.ro_context().stack_depth(),
                 MemoryInstruction::Write,
                 addr_lo,
@@ -276,12 +283,14 @@ where
             ));
 
             self.track(Self::TraceRecord::new(
-                self.ro_context().time_log(),
+                time_log + 1,
                 self.ro_context().stack_depth(),
                 MemoryInstruction::Write,
                 addr_hi,
                 val_hi,
             ));
+
+            self.context().set_time_log(time_log + 2);
 
             // Return double cells write
             Ok(CellInteraction::DoubleCell(

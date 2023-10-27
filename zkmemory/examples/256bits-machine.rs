@@ -1,14 +1,14 @@
-use ethnum::U256;
 use rbtree::RBTree;
 use std::marker::PhantomData;
 use zkmemory::base::{Base, B256};
-use zkmemory::machine::TraceRecord;
+use zkmemory::config::{AllocatedSection, Config, ConfigArgs, DefaultConfig};
+use zkmemory::machine::{CellInteraction, TraceRecord};
 use zkmemory::{
     impl_register_machine, impl_stack_machine, impl_state_machine,
     machine::{AbstractContext, AbstractInstruction, AbstractMachine, Register},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum MyInstruction<M, K, V, const S: usize, const T: usize>
 where
     K: Base<S>,
@@ -32,7 +32,11 @@ where
     Save(K, Register<K>),
     /// Invalid instruction
     Invalid(PhantomData<M>),
+    /// Add two registers, register 1 = register 1 + register 2
+    Add(Register<K>, Register<K>),
 }
+
+pub type Instruction = MyInstruction<StateMachine<B256, B256, 32, 32>, B256, B256, 32, 32>;
 
 /// RAM Machine
 #[derive(Debug)]
@@ -41,23 +45,26 @@ where
     K: Base<S>,
     V: Base<T>,
 {
+    // Memory
     memory: RBTree<K, V>,
+    memory_allocated: AllocatedSection<K>,
     word_size: K,
     time_log: u64,
 
     // Stack
-    stack_start: K,
-    stack_end: K,
+    stack_allocated: AllocatedSection<K>,
     stack_depth: u64,
     stack_ptr: K,
 
     // Register
-    register_start: K,
-    register_end: K,
+    register_allocated: AllocatedSection<K>,
     r0: Register<K>,
     r1: Register<K>,
     r2: Register<K>,
     r3: Register<K>,
+
+    // Trace
+    execution_trace: RBTree<TraceRecord<K, V, S, T>, PhantomData<()>>,
 }
 
 impl<M, K, V, const S: usize, const T: usize> AbstractContext<M, K, V> for StateMachine<K, V, S, T>
@@ -67,7 +74,7 @@ where
         + AbstractMachine<K, V, Context = M::Context, Instruction = M::Instruction>,
     K: Base<S>,
     V: Base<T>,
-    M: AbstractMachine<K, V>,
+    M: AbstractMachine<K, V, Machine = StateMachine<K, V, S, T>>,
 {
     fn set_stack_depth(&mut self, stack_depth: u64) {
         self.stack_depth = stack_depth;
@@ -89,10 +96,6 @@ where
         self.time_log = time_log;
     }
 
-    fn apply(&mut self, instruction: &mut M::Instruction) {
-        instruction.exec(self.context());
-    }
-
     fn set_stack_ptr(&mut self, stack_ptr: K) {
         self.stack_ptr = stack_ptr;
     }
@@ -108,9 +111,86 @@ where
     Self: core::fmt::Debug + Sized,
     K: Base<S>,
     V: Base<T>,
-    M: AbstractMachine<K, V>,
+    M: AbstractMachine<K, V, Machine = StateMachine<K, V, S, T>>,
 {
-    fn exec(&self, context: &mut M::Context) {}
+    fn exec(&self, machine: &mut M::Machine) {
+        match self {
+            MyInstruction::Invalid(_) => {
+                panic!("Invalid instruction")
+            }
+            MyInstruction::Read(addr, _) => {
+                machine.read(*addr).expect("Unable to read to memory");
+            }
+            MyInstruction::Write(addr, val) => {
+                machine
+                    .write(*addr, *val)
+                    .expect("Unable to write to memory");
+            }
+            MyInstruction::Push(value) => {
+                machine.push(*value).expect("Unable to push value to stack");
+            }
+            MyInstruction::Pop(_) => {
+                machine.pop().expect("Unable to pop value from stack");
+            }
+            MyInstruction::Mov(reg1, reg2) => {
+                match machine.get(*reg2).expect("Unable to access register 1") {
+                    CellInteraction::SingleCell(_, _, value) => {
+                        machine.set(*reg1, value).expect("Unable to set register 2");
+                    }
+                    _ => panic!("Register unable to be two cells"),
+                }
+                // Mov value from register 2 to register 1
+            }
+            MyInstruction::Swap(reg) => {
+                match machine.pop().expect("Unable to pop value from stack") {
+                    (_, CellInteraction::SingleCell(op, addr, value)) => {
+                        machine
+                            .push(value)
+                            .expect("Unable to push register's value to stack");
+                        machine.set(*reg, value).expect("Unable to set register");
+                    }
+                    _ => panic!("Stack unable to be two cells"),
+                };
+            }
+            MyInstruction::Load(reg, addr) => {
+                match machine.read(*addr).expect("Unable to read memory") {
+                    CellInteraction::SingleCell(_, _, value) => {
+                        machine.set(*reg, value).expect("Unable to set register");
+                    }
+                    CellInteraction::DoubleCell(_, _, cvalue, _, _, _, _) => {
+                        machine.set(*reg, cvalue).expect("Unable to set register");
+                    }
+                };
+            }
+            MyInstruction::Save(_, reg) => {
+                match machine.get(*reg).expect("Unable to access register") {
+                    CellInteraction::SingleCell(_, addr, value) => {
+                        machine
+                            .write(addr, value)
+                            .expect("Unable to write to memory");
+                    }
+                    _ => panic!("Register unable to be two cells"),
+                }
+            }
+            MyInstruction::Add(reg1, reg2) => {
+                match machine.get(*reg1).expect("Unable to access register 1") {
+                    CellInteraction::SingleCell(_, _, value1) => {
+                        match machine.get(*reg2).expect("Unable to access register 2") {
+                            CellInteraction::SingleCell(_, _, value2) => {
+                                machine
+                                    .set(*reg1, value1 + value2)
+                                    .expect("Unable to set register 1");
+                            }
+                            _ => panic!("Register unable to be two cells"),
+                        }
+                    }
+                    CellInteraction::DoubleCell(op, kc, vc, klo, vlo, khi, vhi) => {
+                        println!("{:?} {} {} {} {} {} {}", op, kc, vc, klo, vlo, khi, vhi);
+                    }
+                }
+            }
+        }
+    }
 }
 
 impl<K, V, const S: usize, const T: usize> StateMachine<K, V, S, T>
@@ -119,21 +199,29 @@ where
     V: Base<T>,
 {
     /// Create a new RAM machine
-    pub fn new() -> Self {
+    pub fn new(config: ConfigArgs<K>) -> Self {
+        let config = Config::new(K::WORD_SIZE, config);
         Self {
+            // Memory section
             memory: RBTree::new(),
-            word_size: K::from(32),
+            memory_allocated: config.memory,
+            word_size: config.word_size,
             time_log: 0,
-            stack_start: K::from(0),
-            stack_end: K::from(0),
-            stack_depth: 0,
-            stack_ptr: K::from(0),
-            register_start: K::from(0),
-            register_end: K::from(0),
-            r0: Register::new(0, K::from(0)),
-            r1: Register::new(1, K::from(0)),
-            r2: Register::new(2, K::from(0)),
-            r3: Register::new(3, K::from(0)),
+
+            // Stack
+            stack_allocated: config.stack,
+            stack_depth: config.stack_depth.into(),
+            stack_ptr: K::zero(),
+
+            // Register
+            register_allocated: config.register,
+            r0: config.create_register(0),
+            r1: config.create_register(1),
+            r2: config.create_register(2),
+            r3: config.create_register(3),
+
+            // Execution trace
+            execution_trace: RBTree::new(),
         }
     }
 }
@@ -143,6 +231,7 @@ where
     K: Base<S>,
     V: Base<T>,
 {
+    type Machine = Self;
     type Context = Self;
     type Instruction = MyInstruction<Self, K, V, S, T>;
     type TraceRecord = TraceRecord<K, V, S, T>;
@@ -156,19 +245,23 @@ where
     }
 
     fn register_start(&self) -> K {
-        self.register_start
+        self.register_allocated.low()
     }
 
     fn ro_context(&self) -> &'_ Self::Context {
-        todo!()
+        self
     }
 
     fn track(&mut self, trace: Self::TraceRecord) {
-        todo!()
+        self.execution_trace.insert(trace, PhantomData);
     }
 
-    fn trace(&self) -> &'_ Vec<Self::TraceRecord> {
-        todo!()
+    fn trace(&self) -> Vec<Self::TraceRecord> {
+        self.execution_trace.keys().map(|x| x.clone()).collect()
+    }
+
+    fn exec(&mut self, instruction: &Self::Instruction) {
+        instruction.exec(self);
     }
 }
 
@@ -177,54 +270,20 @@ impl_stack_machine!(StateMachine);
 impl_state_machine!(StateMachine);
 
 fn main() {
-    let mut a = StateMachine::<B256, B256, 32, 32>::new();
-    a.write(B256::from(0), B256::from(123)).unwrap();
+    let mut machine = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default());
 
-    /*
-    // Test the state machine of Uint256 values
-    let mut sm = StateMachine256::new(DefaultConfig::default());
+    let program = vec![
+        Instruction::Write(B256::from(16), B256::from(1025)),
+        Instruction::Load(machine.r0, B256::from(16)),
+        Instruction::Push(B256::from(3735013596u64)),
+        Instruction::Swap(machine.r1),
+        Instruction::Add(machine.r0, machine.r1),
+        Instruction::Save(B256::from(0), machine.r0),
+    ];
 
-    let base_address: usize = sm.base_address().to_usize();
-    sm.write(
-        U256::from_usize(base_address),
-        U256::from_be_bytes([1u8; 32]),
-    )
-    .unwrap();
-    sm.write(
-        U256::from_usize(base_address + 32),
-        U256::from_be_bytes([2u8; 32]),
-    )
-    .unwrap();
+    for instruction in program {
+        machine.exec(&instruction);
+    }
 
-    sm.write(
-        U256::from_usize(base_address + 6),
-        U256::from_be_bytes([3u8; 32]),
-    )
-    .unwrap();
-
-    println!("{:?}", sm.read(U256::from_usize(base_address + 7)).unwrap());
-
-    println!("{:?}", sm.read(U256::from_usize(base_address + 0)).unwrap());
-
-    println!(
-        "{:?}",
-        sm.read(U256::from_usize(base_address + 32)).unwrap()
-    );
-
-    sm.push(U256::from_usize(123)).unwrap();
-
-    sm.pop().unwrap();
-
-    let r0 = sm.register(0).unwrap();
-    let r1 = sm.register(1).unwrap();
-
-    sm.set(r1, U256::from_be_bytes([9u8; 32])).unwrap();
-    sm.mov(r0, r1).unwrap();
-
-    // Check the memory trace
-    println!("{:#064x?}", sm);
-
-    let trace = sm.trace();
-
-    println!("{:#064x?}", trace); */
+    println!("Memory: {:?}", machine.trace());
 }
