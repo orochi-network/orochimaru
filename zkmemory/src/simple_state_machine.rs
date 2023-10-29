@@ -282,6 +282,7 @@ where
     fn exec(&mut self, instruction: &Self::Instruction) {
         instruction.exec(self);
     }
+
 }
 
 impl_register_machine!(StateMachine);

@@ -1,4 +1,5 @@
 extern crate alloc;
+
 use crate::{base::Base, error::Error};
 use alloc::vec::Vec;
 use rbtree::RBTree;
@@ -256,19 +257,19 @@ where
             let time_log = self.ro_context().time_log();
             // Calculate memory address and offset
             let cell_size = self.word_size().into();
-            let part_lo = (address - addr_lo).into();
+            let part_lo: usize = (address - addr_lo).into();
             let part_hi = cell_size - part_lo;
 
             let val: [u8; T] = value.into();
 
             // Write the low part of value to the buffer
             let mut buf: [u8; T] = self.dummy_read(addr_lo).into();
-            buf[0..part_lo].copy_from_slice(&val[0..part_hi]);
+            buf[part_lo..cell_size].copy_from_slice(&val[0..part_hi]);
             let val_lo = V::from(buf);
 
             // Write the high part of value to the buffer
             let mut buf: [u8; T] = self.dummy_read(addr_hi).into();
-            buf[part_lo..cell_size].copy_from_slice(&val[part_hi..cell_size]);
+            buf[0..part_lo].copy_from_slice(&val[part_hi..cell_size]);
             let val_hi = V::from(buf);
 
             self.context().memory().replace_or_insert(addr_lo, val_lo);
@@ -306,7 +307,7 @@ where
         }
     }
 
-    /// Read from memory
+    /// Read from memory (only read one whole cell)
     fn dummy_read(&mut self, address: K) -> V {
         match self.context().memory().get(&address) {
             Some(r) => r.clone(),

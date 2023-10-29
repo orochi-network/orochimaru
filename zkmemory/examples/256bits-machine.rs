@@ -1,6 +1,6 @@
 use zkmemory::base::B256;
 use zkmemory::config::DefaultConfig;
-use zkmemory::machine::{AbstractMachine, AbstractContext};
+use zkmemory::machine::{AbstractMachine,AbstractMemoryMachine};
 use zkmemory::simple_state_machine::{StateMachine, Instruction};
 
 fn main() {
@@ -27,6 +27,8 @@ fn main() {
     for x in machine.trace().into_iter() {
         println!("{:?}", x);
     }
+
+    machine.exec(&Instruction::Read(B256::from(32776)));
 
 
 }

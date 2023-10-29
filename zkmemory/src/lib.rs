@@ -25,109 +25,59 @@ pub mod simple_state_machine;
 
 #[cfg(test)]
 mod tests {
-    use crate::base::B256;
+    use crate::base::{B256, Base};
     use crate::config::DefaultConfig;
-    use crate::machine::AbstractMachine;
+    use crate::machine::{AbstractMachine, AbstractMemoryMachine};
     use crate::simple_state_machine::{StateMachine, Instruction};
     #[test]
-    fn sm256_write_load_one_cell() {
-        
+    fn sm256_write_read_one_cell() {
+        // Test sm256 write to one cell
+        let mut sm256 = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default());
+        let chunk = B256::from([8u8; 32]);
+        sm256.exec(&Instruction::Write(B256::from(64), chunk));
+        let read_result = sm256.dummy_read(B256::from(64));
+        assert_eq!(chunk, read_result);
+    }
+
+    #[test]
+    fn sm256_read_empty_cell() {
+        let mut sm256 = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default());
+        let chunk = B256::zero();
+        let read_result = sm256.dummy_read(B256::from(128));
+        assert_eq!(chunk, read_result);
+    }
+
+    #[test]
+    fn sm256_write_read_two_cells() {
+        let mut sm256 = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default());
+        let chunk_hi = [132u8; 18];
+        let chunk_lo = [7u8; 14];
+        let write_addr = 78;
+        let write_chunk: [u8; 32] = [chunk_hi.as_slice(), chunk_lo.as_slice()]
+                                    .concat()
+                                    .try_into()
+                                    .unwrap();
+        let expected_hi: [u8; 32] = [[0u8; 14].as_slice(), chunk_hi.as_slice()]
+                                    .concat()
+                                    .try_into()
+                                    .unwrap();
+        let expected_lo: [u8; 32] = [chunk_lo.as_slice(), [0u8; 18].as_slice()]
+                                    .concat()
+                                    .try_into()
+                                    .unwrap();
+        sm256.exec(&Instruction::Write(B256::from(write_addr), B256::from(write_chunk)));
+        let read_chunk_hi = sm256.dummy_read(B256::from(64));
+        let read_chunk_lo = sm256.dummy_read(B256::from(96));
+        assert_eq!(B256::from(expected_hi), read_chunk_hi);
+        assert_eq!(B256::from(expected_lo), read_chunk_lo);
     }
 
     // #[test]
-    // fn sm256_read_empty_cell() {
-    //     let mut sm = StateMachine256::new(DefaultConfig::default());
-    //     let chunk = U256::from_bytes([0u8; 32]);
-    //     let read_result = sm.read(sm.base_address());
-    //     assert!(read_result.is_ok());
-    //     assert_eq!(read_result.unwrap(), chunk);
-    // }
-
-    // #[test]
-    // fn sm256_write_one_cell_read_two_cell() {
-    //     let mut sm = StateMachine256::new(DefaultConfig::default());
-    //     let chunk_1 = U256::from_bytes([5u8; 32]);
-    //     let chunk_2 = U256::from_bytes([10u8; 32]);
-    //     let base_addr = sm.base_address().to_usize();
-
-    //     let expected: [u8; 32] = [[5u8; 17].as_slice(), [10u8; 15].as_slice()]
-    //         .concat()
-    //         .try_into()
-    //         .unwrap();
-
-    //     assert!(sm.write(U256::from_usize(base_addr), chunk_1).is_ok());
-    //     assert!(sm.write(U256::from_usize(base_addr + 32), chunk_2).is_ok());
-    //     let read_result = sm.read(U256::from_usize(base_addr + 15));
-    //     assert!(read_result.is_ok());
-    //     assert_eq!(read_result.unwrap(), U256::from_bytes(expected));
-    // }
-
-    // #[test]
-    // fn sm256_write_two_cell_read_one_cell() {
-    //     let mut sm = StateMachine256::new(DefaultConfig::default());
-    //     let base_addr = sm.base_address().to_usize();
-
-    //     let chunk = U256::from_bytes([1u8; 32]);
-    //     assert!(sm.write(U256::from_usize(base_addr + 23), chunk).is_ok());
-    //     let expected_lo: [u8; 32] = [[0u8; 23].as_slice(), [1u8; 9].as_slice()]
-    //         .concat()
-    //         .try_into()
-    //         .unwrap();
-    //     let expected_hi: [u8; 32] = [[1u8; 23].as_slice(), [0u8; 9].as_slice()]
-    //         .concat()
-    //         .try_into()
-    //         .unwrap();
-
-    //     let read_result_lo = sm.read(U256::from_usize(base_addr));
-    //     let read_result_hi = sm.read(U256::from_usize(base_addr + 32));
-
-    //     assert!(read_result_lo.is_ok());
-    //     assert!(read_result_hi.is_ok());
-    //     assert_eq!(read_result_lo.unwrap(), U256::from_bytes(expected_lo));
-    //     assert_eq!(read_result_hi.unwrap(), U256::from_bytes(expected_hi));
-    // }
-
-    // #[test]
     // #[should_panic]
-    // fn sm32_read_prohibited_cell() {
-    //     let mut sm = StateMachine32::new(DefaultConfig::default());
+    // fn sm256_read_prohibited_cell() {
+    //     let mut sm = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default());
+    //     let buffer_section = sm.
     //     assert_eq!(sm.read(64).unwrap(), 0u32);
-    // }
-
-    // #[test]
-    // fn sm32_read_empty_cell() {
-    //     let mut sm = StateMachine32::new(DefaultConfig::default());
-    //     assert_eq!(sm.read(sm.base_address() + 64).unwrap(), 0u32);
-    // }
-
-    // #[test]
-    // fn sm32_write_read_one_cell() {
-    //     let mut sm = StateMachine32::new(DefaultConfig::default());
-    //     let chunk = 12u32;
-    //     assert!(sm.write(sm.base_address(), chunk).is_ok());
-    //     assert_eq!(sm.read(sm.base_address()).unwrap(), 12u32);
-    // }
-
-    // #[test]
-    // fn sm32_write_one_cell_read_two_cells() {
-    //     let mut sm = StateMachine32::new(DefaultConfig::default());
-    //     let chunk_1 = u32::from_bytes([7u8; 4]);
-    //     let chunk_2 = u32::from_bytes([10u8; 4]);
-    //     assert!(sm.write(sm.base_address(), chunk_1).is_ok());
-    //     assert!(sm.write(sm.base_address() + 4u32, chunk_2).is_ok());
-    //     assert_eq!(
-    //         sm.read(sm.base_address() + 3u32).unwrap(),
-    //         u32::from_be_bytes([7u8, 10, 10, 10])
-    //     );
-    // }
-
-    // #[test]
-    // fn sm32_write_two_cells_read_one_cells() {
-    //     let mut sm = StateMachine32::new(DefaultConfig::default());
-    //     let chunk = u32::from_bytes([3u8; 4]);
-    //     assert!(sm.write(sm.base_address() + 2u32, chunk).is_ok());
-    //     assert_eq!(sm.read(sm.base_address()).unwrap(), 0x00000303u32);
-    //     assert_eq!(sm.read(sm.base_address() + 4u32).unwrap(), 0x03030000u32);
     // }
 
     // #[test]
