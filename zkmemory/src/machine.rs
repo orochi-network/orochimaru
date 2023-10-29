@@ -27,6 +27,7 @@ where
     value: V,
 }
 
+#[derive(Debug)]
 /// Cell interaction enum where K is the address and V is the value
 pub enum CellInteraction<K, V> {
     /// Interactive with a single cell
@@ -483,7 +484,7 @@ where
 /// Export macro for implementing [AbstractMemoryMachine](crate::state_machine::AbstractMemoryMachine) trait
 macro_rules! impl_state_machine {
     ($machine_struct: ident) => {
-        use zkmemory::machine::AbstractMemoryMachine;
+        use crate::machine::AbstractMemoryMachine;
 
         impl<K, V, const S: usize, const T: usize> AbstractMemoryMachine<K, V, S, T>
             for $machine_struct<K, V, S, T>
@@ -500,7 +501,7 @@ macro_rules! impl_state_machine {
 /// Export macro for implementing [AbstractRegisterMachine](crate::register_machine::AbstractRegisterMachine) trait
 macro_rules! impl_register_machine {
     ($machine_struct: ident) => {
-        use zkmemory::machine::AbstractRegisterMachine;
+        use crate::machine::AbstractRegisterMachine;
 
         impl<K, V, const S: usize, const T: usize> AbstractRegisterMachine<K, V, S, T>
             for $machine_struct<K, V, S, T>
@@ -512,7 +513,7 @@ macro_rules! impl_register_machine {
             fn new_register(
                 &self,
                 register_index: usize,
-            ) -> Option<zkmemory::machine::Register<K>> {
+            ) -> Option<crate::machine::Register<K>> {
                 Some(Register::new(
                     register_index,
                     self.register_start() + K::from(register_index) * K::WORD_SIZE,
@@ -526,7 +527,7 @@ macro_rules! impl_register_machine {
 /// Export macro for implementing [AbstractStackMachine](crate::stack_machine::AbstractStackMachine) trait
 macro_rules! impl_stack_machine {
     ($machine_struct: ident) => {
-        use zkmemory::machine::AbstractStackMachine;
+        use crate::machine::AbstractStackMachine;
 
         impl<K, V, const S: usize, const T: usize> AbstractStackMachine<K, V, S, T>
             for $machine_struct<K, V, S, T>

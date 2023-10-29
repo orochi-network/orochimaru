@@ -62,7 +62,7 @@ impl DefaultConfig {
             head_layout: true,
             stack_depth: T::from(1024),
             no_register: T::from(32),
-            buffer_size: T::from(8),
+            buffer_size: T::from(32),
         }
     }
 }

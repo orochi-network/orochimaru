@@ -20,18 +20,19 @@ pub mod config;
 pub mod error;
 /// Definition of abstract machine (instruction, trace and context)
 pub mod machine;
+/// A simple state machine used for testing and for building examples
+pub mod simple_state_machine;
 
 #[cfg(test)]
 mod tests {
-    use crate::base::{Base, UsizeConvertible, U256};
+    use crate::base::{B256, B128, B64, B32, B16};
     use crate::config::{ConfigArgs, DefaultConfig};
-    use crate::machine::{
-        RegisterMachine, StackMachine, StateMachine, StateMachine256, StateMachine32,
-    };
+    use crate::machine::{AbstractContext, AbstractInstruction, AbstractMachine, Register};
+    use crate::{impl_register_machine, impl_stack_machine, impl_state_machine};
 
     #[test]
     fn sm256_write_read_one_cell() {
-        let mut sm = StateMachine256::new(DefaultConfig::default());
+        let mut sm = AbstractMemoryMachine::new(DefaultConfig::default());
         let chunk = U256::from_bytes([5u8; 32]);
         assert!(sm.write(sm.base_address(), chunk).is_ok());
         let read_result = sm.read(sm.base_address());
