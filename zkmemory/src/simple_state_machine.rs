@@ -20,7 +20,7 @@ where
     V: Base<T>,
 {
     /// Read from memory
-    Read(K, V),
+    Read(K),
     /// Write to memory
     Write(K, V),
     /// Push to stack
@@ -129,7 +129,7 @@ where
             MyInstruction::Invalid(_) => {
                 panic!("Invalid instruction")
             }
-            MyInstruction::Read(addr, _) => {
+            MyInstruction::Read(addr) => {
                 machine.read(*addr).expect("Unable to read to memory");
             }
             MyInstruction::Write(addr, val) => {

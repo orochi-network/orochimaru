@@ -263,12 +263,12 @@ where
 
             // Write the low part of value to the buffer
             let mut buf: [u8; T] = self.dummy_read(addr_lo).into();
-            buf[part_lo..cell_size].copy_from_slice(&val[0..part_hi]);
+            buf[0..part_lo].copy_from_slice(&val[0..part_hi]);
             let val_lo = V::from(buf);
 
             // Write the high part of value to the buffer
             let mut buf: [u8; T] = self.dummy_read(addr_hi).into();
-            buf[0..part_lo].copy_from_slice(&val[part_hi..cell_size]);
+            buf[part_lo..cell_size].copy_from_slice(&val[part_hi..cell_size]);
             let val_hi = V::from(buf);
 
             self.context().memory().replace_or_insert(addr_lo, val_lo);

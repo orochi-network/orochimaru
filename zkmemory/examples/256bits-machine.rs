@@ -1,12 +1,6 @@
-use rbtree::RBTree;
-use std::marker::PhantomData;
-use zkmemory::base::{Base, B256};
-use zkmemory::config::{AllocatedSection, Config, ConfigArgs, DefaultConfig};
-use zkmemory::machine::{CellInteraction, TraceRecord};
-use zkmemory::{
-    impl_register_machine, impl_stack_machine, impl_state_machine,
-    machine::{AbstractContext, AbstractInstruction, AbstractMachine, Register},
-};
+use zkmemory::base::B256;
+use zkmemory::config::DefaultConfig;
+use zkmemory::machine::{AbstractMachine, AbstractContext};
 use zkmemory::simple_state_machine::{StateMachine, Instruction};
 
 fn main() {
@@ -29,7 +23,7 @@ fn main() {
         machine.exec(&instruction);
     }
 
-    // Print the trace record (prettified)
+    // Print the trace record (prettified), sorted by ascending address by default
     for x in machine.trace().into_iter() {
         println!("{:?}", x);
     }
