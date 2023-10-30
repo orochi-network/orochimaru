@@ -29,6 +29,31 @@ mod tests {
     use crate::config::DefaultConfig;
     use crate::machine::{AbstractMachine, AbstractMemoryMachine};
     use crate::simple_state_machine::{StateMachine, Instruction};
+
+    #[test]
+    fn u256_struct_test() {
+        let chunk_zero = B256::zero();
+        let bytes1 = [9u8; 32];
+        let chunk1 = B256::from(bytes1);
+        let bytes_convert: [u8; 32] = chunk1.try_into().unwrap();
+        assert_eq!(bytes_convert, bytes1);
+        assert!(chunk_zero.is_zero());
+        assert!(!chunk1.is_zero());
+    }
+
+    #[test]
+    fn u256_arithmetic_test() {
+        let chunk_1 = B256::from([34u8; 32]);
+        let chunk_2 = B256::from([17u8; 32]);
+        let chunk_3 = B256::from(5);
+        let chunk_4 = B256::from(156);
+        assert_eq!(chunk_1 + chunk_2, B256::from([51u8; 32]));
+        assert_eq!(chunk_1 - chunk_2, B256::from([17u8; 32]));
+        assert_eq!(chunk_4 * chunk_3, B256::from(156 * 5));
+        assert_eq!(chunk_4 / chunk_3, B256::from(156 / 5));
+        assert_eq!(chunk_4 % chunk_3, B256::from(156 % 5));
+    }
+
     #[test]
     fn sm256_write_read_one_cell() {
         // Test sm256 write to one cell
@@ -70,6 +95,7 @@ mod tests {
                                     .try_into()
                                     .unwrap();
         sm256.exec(&Instruction::Write(B256::from(write_addr), B256::from(write_chunk)));
+        sm256.exec(&Instruction::Read(base_addr + B256::from(78)));
         let read_chunk_hi = sm256.dummy_read(base_addr + B256::from(64));
         let read_chunk_lo = sm256.dummy_read(base_addr + B256::from(96));
         assert_eq!(B256::from(expected_hi), read_chunk_hi);
@@ -81,6 +107,7 @@ mod tests {
     #[should_panic]
     fn sm256_read_prohibited_cell() {
         let mut sm256 = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default());
+        sm256.show_sections_maps();
         sm256.exec(&Instruction::Read(B256::from(32784)));
     }
 
@@ -141,33 +168,23 @@ mod tests {
         sm256.exec(&Instruction::Load(sm256.r0, base_addr));
         sm256.exec(&Instruction::Load(sm256.r1, base_addr + B256::from(32)));
         sm256.exec(&Instruction::Add(sm256.r0, sm256.r1));
-        sm256.exec(&Instruction::Save(base_addr + B256::from(64), sm256.r0));
+        sm256.exec(&Instruction::Mov(sm256.r3, sm256.r0));
+        sm256.exec(&Instruction::Save(base_addr + B256::from(64), sm256.r3));
         let read_chunk = sm256.dummy_read(base_addr + B256::from(64));
         assert_eq!(read_chunk, B256::from(100000));
     }
 
     #[test]
-    fn u256_struct_test() {
-        let chunk_zero = B256::zero();
-        let bytes1 = [9u8; 32];
-        let chunk1 = B256::from(bytes1);
-        let bytes_convert: [u8; 32] = chunk1.try_into().unwrap();
-        assert_eq!(bytes_convert, bytes1);
-        assert!(chunk_zero.is_zero());
-        assert!(!chunk1.is_zero());
-    }
+    fn sm256_register_stack_functional_test() {
 
-    #[test]
-    fn u256_arithmetic_test() {
-        let chunk_1 = B256::from([34u8; 32]);
-        let chunk_2 = B256::from([17u8; 32]);
-        let chunk_3 = B256::from(5);
-        let chunk_4 = B256::from(156);
-        assert_eq!(chunk_1 + chunk_2, B256::from([51u8; 32]));
-        assert_eq!(chunk_1 - chunk_2, B256::from([17u8; 32]));
-        assert_eq!(chunk_4 * chunk_3, B256::from(156 * 5));
-        assert_eq!(chunk_4 / chunk_3, B256::from(156 / 5));
-        assert_eq!(chunk_4 % chunk_3, B256::from(156 % 5));
+        let mut sm256 = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default());
+        let chunk = B256::from([85u8; 32]);
+        let base_addr = sm256.base_address();
+        sm256.exec(&Instruction::Push(chunk));
+        sm256.exec(&Instruction::Swap(sm256.r0));
+        sm256.exec(&Instruction::Save(base_addr, sm256.r0));
+        let read_chunk = sm256.dummy_read(base_addr);
+        assert_eq!(read_chunk, chunk);
     }
 
     #[test]
@@ -185,8 +202,8 @@ mod tests {
     fn u128_arithmetic_test() {
         let chunk_1 = B128::from([19u8; 16]);
         let chunk_2 = B128::from([5u8; 16]);
-        let chunk_3 = B128::from(7);
-        let chunk_4 = B128::from(34);
+        let chunk_3 = B128::from(7i32);
+        let chunk_4 = B128::from(34u64);
         assert_eq!(chunk_1 + chunk_2, B128::from([24u8; 16]));
         assert_eq!(chunk_1 - chunk_2, B128::from([14u8; 16]));
         assert_eq!(chunk_4 * chunk_3, B128::from(34 * 7));
@@ -198,7 +215,7 @@ mod tests {
     #[test]
     fn u64_struct_test() {
         let chunk_zero = B64::zero();
-        let bytes1 = [9u8; 8];
+        let bytes1 = [1u8; 8];
         let chunk1 = B64::from(bytes1);
         let bytes_convert: [u8; 8] = chunk1.try_into().unwrap();
         assert_eq!(bytes_convert, bytes1);
@@ -208,21 +225,21 @@ mod tests {
 
     #[test]
     fn u64_arithmetic_test() {
-        let chunk_1 = B64::from([34u8; 8]);
-        let chunk_2 = B64::from([17u8; 8]);
-        let chunk_3 = B64::from(5);
-        let chunk_4 = B64::from(156);
-        assert_eq!(chunk_1 + chunk_2, B64::from([51u8; 8]));
-        assert_eq!(chunk_1 - chunk_2, B64::from([17u8; 8]));
-        assert_eq!(chunk_4 * chunk_3, B64::from(156 * 5));
-        assert_eq!(chunk_4 / chunk_3, B64::from(156 / 5));
-        assert_eq!(chunk_4 % chunk_3, B64::from(156 % 5));
+        let chunk_1 = B64::from([61u8; 8]);
+        let chunk_2 = B64::from([16u8; 8]);
+        let chunk_3 = B64::from(12);
+        let chunk_4 = B64::from(99);
+        assert_eq!(chunk_1 + chunk_2, B64::from([77u8; 8]));
+        assert_eq!(chunk_1 - chunk_2, B64::from([45u8; 8]));
+        assert_eq!(chunk_4 * chunk_3, B64::from(99 * 12));
+        assert_eq!(chunk_4 / chunk_3, B64::from(99 / 12));
+        assert_eq!(chunk_4 % chunk_3, B64::from(99 % 12));
     }
 
     #[test]
     fn u32_struct_test() {
         let chunk_zero = B64::zero();
-        let bytes1 = [9u8; 8];
+        let bytes1 = [59u8; 8];
         let chunk1 = B64::from(bytes1);
         let bytes_convert: [u8; 8] = chunk1.try_into().unwrap();
         assert_eq!(bytes_convert, bytes1);

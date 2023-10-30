@@ -350,8 +350,11 @@ where
         // Update stack depth and stack pointer
         let stack_depth = self.ro_context().stack_depth() + 1;
         self.context().set_stack_depth(stack_depth);
-        let address = self.ro_context().stack_ptr() + self.word_size();
-        self.context().set_stack_ptr(address);
+
+        // Push first then update the stack pointer
+        let address = self.ro_context().stack_ptr();
+        let next_address = address + self.word_size();
+        self.context().set_stack_ptr(next_address);
 
         match self.write(address, value) {
             Ok(v) => Ok((stack_depth, v)),

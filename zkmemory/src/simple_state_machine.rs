@@ -28,7 +28,7 @@ where
     Push(V),
     /// Pop from stack
     Pop(V),
-    /// Move from register to register
+    /// Move from register to register (Mov(r2, r1) moves the value of r1 to r2)
     Mov(Register<K>, Register<K>),
     /// Swap value from top stack  to register
     Swap(Register<K>),
