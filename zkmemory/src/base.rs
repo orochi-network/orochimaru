@@ -233,6 +233,7 @@ macro_rules! new_base {
 }
 
 new_base!(U256, 32);
+new_base!(u128, 16);
 new_base!(u64, 8);
 new_base!(u32, 4);
 new_base!(u16, 2);

@@ -25,7 +25,7 @@ pub mod simple_state_machine;
 
 #[cfg(test)]
 mod tests {
-    use crate::base::{B256, Base};
+    use crate::base::{B256, B64, B32, B128, Base};
     use crate::config::DefaultConfig;
     use crate::machine::{AbstractMachine, AbstractMemoryMachine};
     use crate::simple_state_machine::{StateMachine, Instruction};
@@ -72,51 +72,110 @@ mod tests {
         assert_eq!(B256::from(expected_lo), read_chunk_lo);
     }
 
-    // #[test]
-    // #[should_panic]
-    // fn sm256_read_prohibited_cell() {
-    //     let mut sm = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default());
-    //     let buffer_section = sm.
-    //     assert_eq!(sm.read(64).unwrap(), 0u32);
-    // }
+    /// This test is not completed yet
+    #[test]
+    #[should_panic]
+    fn sm256_read_prohibited_cell() {
+        unimplemented!("Working on panic when reading to the buffer section")
+    }
 
-    // #[test]
-    // fn u256_test() {
-    //     let chunk_1 = U256::from_bytes([9u8; 32]);
-    //     let chunk_2 = U256::from_usize(10);
-    //     assert_eq!(chunk_1.to_bytes(), [9u8; 32]);
-    //     assert_eq!(U256::zero(), U256::from_bytes([0u8; 32]));
-    //     assert_eq!(chunk_2.to_usize(), 10 as usize);
-    //     assert!(!chunk_1.is_zero());
-    // }
+    #[test]
+    fn u256_struct_test() {
+        let chunk_zero = B256::zero();
+        let bytes1 = [9u8; 32];
+        let chunk1 = B256::from(bytes1);
+        let bytes_convert: [u8; 32] = chunk1.try_into().unwrap();
+        assert_eq!(bytes_convert, bytes1);
+        assert!(chunk_zero.is_zero());
+        assert!(!chunk1.is_zero());
+    }
 
-    // #[test]
-    // /// The testcases above already covered Add, Sub and Rem. This test case covers Div
-    // fn u256_arithmetic_test() {
-    //     let chunk_1 = U256::from_bytes([34u8; 32]);
-    //     let chunk_2 = U256::from_bytes([17u8; 32]);
-    //     assert_eq!(chunk_1 / chunk_2, U256::from_usize(2));
-    // }
+    #[test]
+    fn u256_arithmetic_test() {
+        let chunk_1 = B256::from([34u8; 32]);
+        let chunk_2 = B256::from([17u8; 32]);
+        let chunk_3 = B256::from(5);
+        let chunk_4 = B256::from(156);
+        assert_eq!(chunk_1 + chunk_2, B256::from([51u8; 32]));
+        assert_eq!(chunk_1 - chunk_2, B256::from([17u8; 32]));
+        assert_eq!(chunk_4 * chunk_3, B256::from(156 * 5));
+        assert_eq!(chunk_4 / chunk_3, B256::from(156 / 5));
+        assert_eq!(chunk_4 % chunk_3, B256::from(156 % 5));
+    }
 
-    // #[test]
-    // fn u32_test() {
-    //     let chunk_1 = u32::from_bytes([73u8; 4]);
-    //     let chunk_2 = u32::from_usize(103);
-    //     assert_eq!(chunk_1.to_bytes(), [73u8; 4]);
-    //     assert_eq!(u32::zero(), u32::from_bytes([0u8; 4]));
-    //     assert_eq!(chunk_2.to_usize(), 103 as usize);
-    //     assert!(!chunk_1.is_zero());
-    // }
+    #[test]
+    fn u128_struct_test() {
+        let chunk_zero = B128::zero();
+        let bytes1 = [9u8; 16];
+        let chunk1 = B128::from(bytes1);
+        let bytes_convert: [u8; 16] = chunk1.try_into().unwrap();
+        assert_eq!(bytes_convert, bytes1);
+        assert!(chunk_zero.is_zero());
+        assert!(!chunk1.is_zero());
+    }
 
-    // #[test]
-    // fn u64_test() {
-    //     let chunk_1 = u64::from_bytes([15u8; 8]);
-    //     let chunk_2 = u64::from_usize(235);
-    //     assert_eq!(chunk_1.to_bytes(), [15u8; 8]);
-    //     assert_eq!(u64::zero(), u64::from_bytes([0u8; 8]));
-    //     assert_eq!(chunk_2.to_usize(), 235 as usize);
-    //     assert!(!chunk_1.is_zero());
-    // }
+    #[test]
+    fn u128_arithmetic_test() {
+        let chunk_1 = B128::from([19u8; 16]);
+        let chunk_2 = B128::from([5u8; 16]);
+        let chunk_3 = B128::from(7);
+        let chunk_4 = B128::from(34);
+        assert_eq!(chunk_1 + chunk_2, B128::from([24u8; 16]));
+        assert_eq!(chunk_1 - chunk_2, B128::from([14u8; 16]));
+        assert_eq!(chunk_4 * chunk_3, B128::from(34 * 7));
+        assert_eq!(chunk_4 / chunk_3, B128::from(34 / 7));
+        assert_eq!(chunk_4 % chunk_3, B128::from(34 % 7));
+    }
+
+
+    #[test]
+    fn u64_struct_test() {
+        let chunk_zero = B64::zero();
+        let bytes1 = [9u8; 8];
+        let chunk1 = B64::from(bytes1);
+        let bytes_convert: [u8; 8] = chunk1.try_into().unwrap();
+        assert_eq!(bytes_convert, bytes1);
+        assert!(chunk_zero.is_zero());
+        assert!(!chunk1.is_zero());
+    }
+
+    #[test]
+    fn u64_arithmetic_test() {
+        let chunk_1 = B64::from([34u8; 8]);
+        let chunk_2 = B64::from([17u8; 8]);
+        let chunk_3 = B64::from(5);
+        let chunk_4 = B64::from(156);
+        assert_eq!(chunk_1 + chunk_2, B64::from([51u8; 8]));
+        assert_eq!(chunk_1 - chunk_2, B64::from([17u8; 8]));
+        assert_eq!(chunk_4 * chunk_3, B64::from(156 * 5));
+        assert_eq!(chunk_4 / chunk_3, B64::from(156 / 5));
+        assert_eq!(chunk_4 % chunk_3, B64::from(156 % 5));
+    }
+
+    #[test]
+    fn u32_struct_test() {
+        let chunk_zero = B64::zero();
+        let bytes1 = [9u8; 8];
+        let chunk1 = B64::from(bytes1);
+        let bytes_convert: [u8; 8] = chunk1.try_into().unwrap();
+        assert_eq!(bytes_convert, bytes1);
+        assert!(chunk_zero.is_zero());
+        assert!(!chunk1.is_zero());
+    }
+
+    #[test]
+    /// The testcases above already covered Add, Sub and Rem. This test case covers Div
+    fn u32_arithmetic_test() {
+        let chunk_1 = B32::from([34u8; 4]);
+        let chunk_2 = B32::from([17u8; 4]);
+        let chunk_3 = B32::from(5);
+        let chunk_4 = B32::from(156);
+        assert_eq!(chunk_1 + chunk_2, B32::from([51u8; 4]));
+        assert_eq!(chunk_1 - chunk_2, B32::from([17u8; 4]));
+        assert_eq!(chunk_4 * chunk_3, B32::from(156 * 5));
+        assert_eq!(chunk_4 / chunk_3, B32::from(156 / 5));
+        assert_eq!(chunk_4 % chunk_3, B32::from(156 % 5));
+    }
 
     // #[test]
     // fn u32_stack_functional() {
