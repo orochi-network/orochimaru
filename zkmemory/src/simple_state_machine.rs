@@ -2,6 +2,7 @@ use rbtree::RBTree;
 extern crate std;
 use std::marker::PhantomData;
 use std::println;
+use crate::error::Error;
 use crate::base::{Base, B256};
 use crate::config::{AllocatedSection, Config, ConfigArgs};
 use crate::machine::{CellInteraction, TraceRecord};
@@ -114,6 +115,19 @@ where
     fn memory(&mut self) -> &'_ mut RBTree<K, V> {
         &mut self.memory
     }
+
+    fn stack_addr(&self) -> (K, K) {
+        (self.stack_allocated.low(), self.stack_allocated.high())
+    }
+
+    fn memory_addr(&self) -> (K, K) {
+        (self.memory_allocated.low(), self.stack_allocated.high())
+    }
+
+    fn register_addr(&self) -> (K, K) {
+        (self.register_allocated.low(), self.stack_allocated.high())
+    }
+
 }
 
 impl<M, K, V, const S: usize, const T: usize> AbstractInstruction<M, K, V>
@@ -130,12 +144,21 @@ where
                 panic!("Invalid instruction")
             }
             MyInstruction::Read(addr) => {
-                machine.read(*addr).expect("Unable to read to memory");
+                if !machine.memory_allocated.contain(*addr) {
+                    panic!("{}", Error::MemoryAccessDeinied);
+                }
+                else {
+                    machine.read(*addr).expect("Unable to read to memory");
+                }
             }
             MyInstruction::Write(addr, val) => {
-                machine
-                    .write(*addr, *val)
+                if !machine.memory_allocated.contain(*addr) {
+                    panic!("{}", Error::MemoryAccessDeinied);
+                }
+                else {
+                    machine.write(*addr, *val)
                     .expect("Unable to write to memory");
+                }
             }
             MyInstruction::Push(value) => {
                 machine.push(*value).expect("Unable to push value to stack");
@@ -281,6 +304,10 @@ where
 
     fn exec(&mut self, instruction: &Self::Instruction) {
         instruction.exec(self);
+    }
+
+    fn base_address(&self) -> K {
+        self.memory_allocated.low()
     }
 
 }

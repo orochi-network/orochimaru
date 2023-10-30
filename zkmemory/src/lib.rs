@@ -34,8 +34,10 @@ mod tests {
         // Test sm256 write to one cell
         let mut sm256 = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default());
         let chunk = B256::from([8u8; 32]);
-        sm256.exec(&Instruction::Write(B256::from(64), chunk));
-        let read_result = sm256.dummy_read(B256::from(64));
+        let base_addr = sm256.base_address();
+        let write_addr = base_addr + B256::from(96);
+        sm256.exec(&Instruction::Write(write_addr, chunk));
+        let read_result = sm256.dummy_read(write_addr);
         assert_eq!(chunk, read_result);
     }
 
@@ -43,7 +45,8 @@ mod tests {
     fn sm256_read_empty_cell() {
         let mut sm256 = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default());
         let chunk = B256::zero();
-        let read_result = sm256.dummy_read(B256::from(128));
+        let base_addr = sm256.base_address();
+        let read_result = sm256.dummy_read(base_addr);
         assert_eq!(chunk, read_result);
     }
 
@@ -52,7 +55,8 @@ mod tests {
         let mut sm256 = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default());
         let chunk_hi = [132u8; 18];
         let chunk_lo = [7u8; 14];
-        let write_addr = 78;
+        let base_addr = sm256.base_address();
+        let write_addr = base_addr + B256::from(78);
         let write_chunk: [u8; 32] = [chunk_hi.as_slice(), chunk_lo.as_slice()]
                                     .concat()
                                     .try_into()
@@ -66,8 +70,8 @@ mod tests {
                                     .try_into()
                                     .unwrap();
         sm256.exec(&Instruction::Write(B256::from(write_addr), B256::from(write_chunk)));
-        let read_chunk_hi = sm256.dummy_read(B256::from(64));
-        let read_chunk_lo = sm256.dummy_read(B256::from(96));
+        let read_chunk_hi = sm256.dummy_read(base_addr + B256::from(64));
+        let read_chunk_lo = sm256.dummy_read(base_addr + B256::from(96));
         assert_eq!(B256::from(expected_hi), read_chunk_hi);
         assert_eq!(B256::from(expected_lo), read_chunk_lo);
     }
@@ -76,7 +80,8 @@ mod tests {
     #[test]
     #[should_panic]
     fn sm256_read_prohibited_cell() {
-        unimplemented!("Working on panic when reading to the buffer section")
+        let mut sm256 = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default());
+        sm256.exec(&Instruction::Read(B256::from(32784)));
     }
 
     #[test]

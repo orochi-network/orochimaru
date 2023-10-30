@@ -66,6 +66,15 @@ where
 
     /// Get the time log
     fn time_log(&self) -> u64;
+
+    /// Get the address of the stack section
+    fn stack_addr(&self) -> (K, K);
+
+    /// Get the address of the memory section
+    fn memory_addr(&self) -> (K, K);
+
+    /// Get the address of the register section
+    fn register_addr(&self) -> (K, K);
 }
 
 /// Public trait for all instructions.
@@ -149,6 +158,9 @@ where
 
     /// Get the execution trace
     fn exec(&mut self, instruction: &Self::Instruction);
+
+    /// Get the base address of the memory section
+    fn base_address(&self) -> K;
 }
 
 /// Abstract RAM machine
@@ -320,6 +332,8 @@ where
         let base = address - remain;
         (base, base + self.word_size())
     }
+
+
 }
 
 /// Abstract stack machine
