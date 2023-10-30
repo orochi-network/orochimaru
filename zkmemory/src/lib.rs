@@ -85,6 +85,68 @@ mod tests {
     }
 
     #[test]
+    fn sm256_stack_functional_test() {
+        let mut sm256 = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default());
+        //let base_addr = sm256.base_address();
+        sm256.exec(&Instruction::Push(B256::from([8u8; 32])));
+        assert_eq!(sm256.get_stack_depth(), 1);
+        sm256.exec(&Instruction::Push(B256::from([19u8; 32])));
+        assert_eq!(sm256.get_stack_depth(), 2);
+        sm256.exec(&Instruction::Push(B256::from([109u8; 32])));
+        assert_eq!(sm256.get_stack_depth(), 3);
+        sm256.exec(&Instruction::Pop(B256::from(1)));
+        assert_eq!(sm256.get_stack_depth(), 2);
+    }
+
+    #[test]
+    #[should_panic]
+    fn sm256_stack_underflow() {
+        let mut sm = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default());
+        sm.exec(&Instruction::Pop(sm.base_address()));
+    }
+
+    #[test]
+    #[should_panic]
+    fn sm256_stack_overflow() {
+        let mut sm = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default());
+        for _ in 0..1024 {
+            sm.exec(&Instruction::Push(B256::from(1)));
+        }
+        assert_eq!(sm.get_stack_depth(), 1024);
+        sm.exec(&Instruction::Push(B256::from(1)));
+        
+    }
+
+    #[test]
+    fn sm256_register_memory_functional_test() {
+
+        // Resigter - Memory test
+        let mut sm256 = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default());
+        let base_addr = sm256.base_address();
+        sm256.exec(&Instruction::Write(base_addr, B256::from(12880)));
+        sm256.exec(&Instruction::Load(sm256.r0, base_addr));
+        sm256.exec(&Instruction::Save(base_addr + B256::from(32), sm256.r0));
+        let read_chunk = sm256.dummy_read(base_addr + B256::from(32));
+        assert_eq!(read_chunk, B256::from(12880));
+    }
+
+    #[test]
+    fn sm256_register_register_functional_test() {
+
+        // Resigter - Register test
+        let mut sm256 = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default());
+        let base_addr = sm256.base_address();
+        sm256.exec(&Instruction::Write(base_addr, B256::from(12880)));
+        sm256.exec(&Instruction::Write(base_addr + B256::from(32), B256::from(87120)));
+        sm256.exec(&Instruction::Load(sm256.r0, base_addr));
+        sm256.exec(&Instruction::Load(sm256.r1, base_addr + B256::from(32)));
+        sm256.exec(&Instruction::Add(sm256.r0, sm256.r1));
+        sm256.exec(&Instruction::Save(base_addr + B256::from(64), sm256.r0));
+        let read_chunk = sm256.dummy_read(base_addr + B256::from(64));
+        assert_eq!(read_chunk, B256::from(100000));
+    }
+
+    #[test]
     fn u256_struct_test() {
         let chunk_zero = B256::zero();
         let bytes1 = [9u8; 32];
@@ -181,57 +243,4 @@ mod tests {
         assert_eq!(chunk_4 / chunk_3, B32::from(156 / 5));
         assert_eq!(chunk_4 % chunk_3, B32::from(156 % 5));
     }
-
-    // #[test]
-    // fn u32_stack_functional() {
-    //     let mut sm = StateMachine32::new(DefaultConfig::default());
-
-    //     assert!(sm.push(0x01020304).is_ok());
-    //     assert!(sm.push(0xaabbccdd).is_ok());
-    //     assert!(sm.stack_depth() == 2);
-
-    //     assert_eq!(sm.pop().unwrap(), 0xaabbccdd);
-    //     assert_eq!(sm.pop().unwrap(), 0x01020304);
-    //     assert!(sm.stack_depth() == 0);
-    // }
-
-    // #[test]
-    // #[should_panic]
-    // fn u32_stack_underflow() {
-    //     let mut sm = StateMachine32::new(DefaultConfig::default());
-    //     sm.pop().unwrap();
-    // }
-
-    // #[test]
-    // #[should_panic]
-    // fn u32_stack_overflow() {
-    //     let mut sm = StateMachine32::new(ConfigArgs {
-    //         head_layout: true,
-    //         stack_depth: 2,
-    //         no_register: 0,
-    //         buffer_size: 64,
-    //     });
-    //     assert!(sm.push(0x01020304).is_ok());
-    //     assert!(sm.push(0x01020304).is_ok());
-    //     assert!(sm.push(0x01020304).is_ok());
-    //     assert!(sm.push(0x01020304).is_ok());
-    // }
-
-    // #[test]
-    // fn u32_register_functional() {
-    //     let mut sm = StateMachine32::new(DefaultConfig::default());
-
-    //     let r0 = sm.register(0).unwrap();
-    //     let r1 = sm.register(1).unwrap();
-
-    //     assert!(sm.set(r0, 0x01020304).is_ok());
-    //     assert!(sm.set(r1, 0xaabbccdd).is_ok());
-
-    //     assert_eq!(sm.get(r0).unwrap(), 0x01020304);
-    //     assert_eq!(sm.get(r1).unwrap(), 0xaabbccdd);
-
-    //     assert!(sm.mov(r0, r1).is_ok());
-
-    //     assert!(sm.get(r0).unwrap() == 0xaabbccdd);
-    // }
 }

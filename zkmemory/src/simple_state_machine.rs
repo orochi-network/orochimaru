@@ -60,6 +60,7 @@ where
 
     // Stack
     stack_allocated: AllocatedSection<K>,
+    max_stack_depth: u64,
     stack_depth: u64,
     stack_ptr: K,
 
@@ -115,19 +116,6 @@ where
     fn memory(&mut self) -> &'_ mut RBTree<K, V> {
         &mut self.memory
     }
-
-    fn stack_addr(&self) -> (K, K) {
-        (self.stack_allocated.low(), self.stack_allocated.high())
-    }
-
-    fn memory_addr(&self) -> (K, K) {
-        (self.memory_allocated.low(), self.stack_allocated.high())
-    }
-
-    fn register_addr(&self) -> (K, K) {
-        (self.register_allocated.low(), self.stack_allocated.high())
-    }
-
 }
 
 impl<M, K, V, const S: usize, const T: usize> AbstractInstruction<M, K, V>
@@ -196,11 +184,11 @@ where
                     }
                 };
             }
-            MyInstruction::Save(_, reg) => {
+            MyInstruction::Save(address, reg) => {
                 match machine.get(*reg).expect("Unable to access register") {
-                    CellInteraction::SingleCell(_, addr, value) => {
+                    CellInteraction::SingleCell(_, _, value) => {
                         machine
-                            .write(addr, value)
+                            .write(*address, value)
                             .expect("Unable to write to memory");
                     }
                     _ => panic!("Register unable to be two cells"),
@@ -242,7 +230,8 @@ where
 
             // Stack
             stack_allocated: config.stack,
-            stack_depth: config.stack_depth.into(),
+            max_stack_depth: config.stack_depth.into(),
+            stack_depth: 0,
             stack_ptr: K::zero(),
 
             // Register
@@ -308,6 +297,14 @@ where
 
     fn base_address(&self) -> K {
         self.memory_allocated.low()
+    }
+
+    fn get_stack_depth(&self) -> u64 {
+        self.ro_context().stack_depth
+    }
+
+    fn max_stack_depth(&self) -> u64 {
+        self.ro_context().max_stack_depth
     }
 
 }

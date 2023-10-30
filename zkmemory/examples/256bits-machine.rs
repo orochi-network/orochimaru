@@ -1,6 +1,6 @@
 use zkmemory::base::B256;
 use zkmemory::config::DefaultConfig;
-use zkmemory::machine::{AbstractMachine,AbstractMemoryMachine};
+use zkmemory::machine::AbstractMachine;
 use zkmemory::simple_state_machine::{StateMachine, Instruction};
 
 fn main() {
@@ -8,8 +8,12 @@ fn main() {
     // Define the desired machine configuration
     let mut machine = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default());
 
+    // Show the section map
+    machine.show_sections_maps();
+
     // Get the base address of the memory section
     let base = machine.base_address();
+    println!("{}", base);
 
     // Define your desired program
     let program = vec![
@@ -30,6 +34,4 @@ fn main() {
     for x in machine.trace().into_iter() {
         println!("{:?}", x);
     }
-
-
 }

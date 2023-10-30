@@ -61,20 +61,12 @@ where
     /// Get the stack pointer
     fn stack_ptr(&self) -> K;
 
-    /// Get the stack depth
+    /// Get the current stack depth
     fn stack_depth(&self) -> u64;
 
     /// Get the time log
     fn time_log(&self) -> u64;
 
-    /// Get the address of the stack section
-    fn stack_addr(&self) -> (K, K);
-
-    /// Get the address of the memory section
-    fn memory_addr(&self) -> (K, K);
-
-    /// Get the address of the register section
-    fn register_addr(&self) -> (K, K);
 }
 
 /// Public trait for all instructions.
@@ -161,6 +153,12 @@ where
 
     /// Get the base address of the memory section
     fn base_address(&self) -> K;
+
+    /// Get the current stack depth of the machine
+    fn get_stack_depth(&self) -> u64;
+
+    /// Get max stack depth of the machine
+    fn max_stack_depth(&self) -> u64;
 }
 
 /// Abstract RAM machine
@@ -345,6 +343,10 @@ where
 {
     /// Push the value to the stack and return stack_depth
     fn push(&mut self, value: V) -> Result<(u64, CellInteraction<K, V>), Error> {
+        // Check for stack overflow
+        if self.ro_context().stack_depth() == self.max_stack_depth() {
+            return Err(Error::StackOverflow);
+        }
         // Update stack depth and stack pointer
         let stack_depth = self.ro_context().stack_depth() + 1;
         self.context().set_stack_depth(stack_depth);
@@ -359,6 +361,10 @@ where
 
     /// Get value from the stack and return stack_depth and value
     fn pop(&mut self) -> Result<(u64, CellInteraction<K, V>), Error> {
+        // Check for stack underflow
+        if self.ro_context().stack_depth() == 0 {
+            return Err(Error::StackUnderflow);
+        }
         // Update stack depth and stack pointer
         let stack_depth = self.ro_context().stack_depth() - 1;
         self.context().set_stack_depth(stack_depth);
