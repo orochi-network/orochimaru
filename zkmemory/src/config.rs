@@ -32,6 +32,8 @@ pub struct Config<T, const S: usize> {
     pub word_size: T,
     /// Stack depth
     pub stack_depth: T,
+    /// Buffer size
+    pub buffer_size: T,
     /// Base address of memory
     pub memory: AllocatedSection<T>,
     /// Stack base address
@@ -50,6 +52,8 @@ pub struct ConfigArgs<T> {
     pub no_register: T,
     /// Buffer size
     pub buffer_size: T,
+    /// Number of memory cell
+    pub no_memory_cell: T,
 }
 
 /// Default config
@@ -63,6 +67,7 @@ impl DefaultConfig {
             stack_depth: T::from(1024),
             no_register: T::from(32),
             buffer_size: T::from(32),
+            no_memory_cell: T::from(1024)
         }
     }
 }
@@ -79,29 +84,27 @@ where
             let register_lo = stack_hi + args.buffer_size;
             let register_hi = register_lo + (args.no_register * word_size);
             let memory_lo = register_hi + args.buffer_size;
-            let memory_hi = T::MAX;
+            let memory_hi = memory_lo + (args.no_memory_cell * word_size);
             Self {
                 word_size,
                 stack_depth: args.stack_depth,
+                buffer_size: args.buffer_size,
                 stack: AllocatedSection(stack_lo, stack_hi),
                 register: AllocatedSection(register_lo, register_hi),
                 memory: AllocatedSection(memory_lo, memory_hi),
             }
         } else {
-            let length =
-                (args.stack_depth + args.no_register + args.buffer_size + args.buffer_size)
-                    * word_size;
-            let stack_lo = T::MAX - length;
-            let remain = stack_lo % word_size;
-            let stack_lo = stack_lo - remain + word_size;
+            let memory_lo = T::MIN;
+            let memory_hi = memory_lo + (args.no_memory_cell * word_size);
+            let stack_lo = memory_hi + args.buffer_size;
             let stack_hi = stack_lo + (args.stack_depth * word_size);
             let register_lo = stack_hi + args.buffer_size;
             let register_hi = register_lo + (args.no_register * word_size);
-            let memory_lo = T::MIN;
-            let memory_hi = T::MAX - length;
+
             Self {
                 word_size: word_size,
                 stack_depth: args.stack_depth,
+                buffer_size: args.buffer_size,
                 stack: AllocatedSection(stack_lo, stack_hi),
                 register: AllocatedSection(register_lo, register_hi),
                 memory: AllocatedSection(memory_lo, memory_hi),
@@ -115,5 +118,13 @@ where
             index,
             self.register.low() + (T::from(index) * self.word_size),
         )
+    }
+
+    /// Computes the total volume of RAM in bytes
+    pub fn calc_ram_size(&self) -> T {
+        let stack_size = self.word_size * self.stack_depth;
+        let register_size = self.register.high() - self.register.low();
+        let memory_size = self.memory.high() - self.memory.low();
+        stack_size + register_size + memory_size + self.buffer_size + self.buffer_size
     }
 }

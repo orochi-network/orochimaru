@@ -35,16 +35,4 @@ fn main() {
         println!("{:?}", x);
     }
 
-    println!("------------");
-
-    let mut sm256 = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default());
-    let chunk = B256::from([85u8; 32]);
-    let base_addr = sm256.base_address();
-    sm256.exec(&Instruction::Push(chunk));
-    sm256.exec(&Instruction::Swap(sm256.r0));
-    sm256.exec(&Instruction::Save(base_addr, sm256.r0));
-
-    for x in sm256.trace().into_iter() {
-        println!("{:?}", x);
-    }
 }

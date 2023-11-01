@@ -26,7 +26,7 @@ pub mod simple_state_machine;
 #[cfg(test)]
 mod tests {
     use crate::base::{B256, B64, B32, B128, Base};
-    use crate::config::DefaultConfig;
+    use crate::config::{DefaultConfig, Config};
     use crate::machine::{AbstractMachine, AbstractMemoryMachine};
     use crate::simple_state_machine::{StateMachine, Instruction};
 
@@ -259,5 +259,11 @@ mod tests {
         assert_eq!(chunk_4 * chunk_3, B32::from(156 * 5));
         assert_eq!(chunk_4 / chunk_3, B32::from(156 / 5));
         assert_eq!(chunk_4 % chunk_3, B32::from(156 % 5));
+    }
+
+    #[test]
+    fn ram_size_test() {
+        let default_config = Config::new(B256::from(32), DefaultConfig::default());
+        assert_eq!(default_config.calc_ram_size(), B256::from(66624));
     }
 }
