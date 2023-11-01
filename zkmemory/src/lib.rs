@@ -21,14 +21,16 @@ pub mod error;
 /// Definition of abstract machine (instruction, trace and context)
 pub mod machine;
 /// A simple state machine used for testing and for building examples
-pub mod simple_state_machine;
+pub mod state_machine;
+/// A KZG Polynomial Commitment scheme used for the memory of the RAM
+pub mod kzg;
 
 #[cfg(test)]
 mod tests {
     use crate::base::{B256, B64, B32, B128, Base};
-    use crate::config::{DefaultConfig, Config};
+    use crate::config::{DefaultConfig, Config, ConfigArgs};
     use crate::machine::{AbstractMachine, AbstractMemoryMachine};
-    use crate::simple_state_machine::{StateMachine, Instruction};
+    use crate::state_machine::{StateMachine, Instruction};
 
     #[test]
     fn u256_struct_test() {
@@ -263,7 +265,21 @@ mod tests {
 
     #[test]
     fn ram_size_test() {
+
+        // Test default config
         let default_config = Config::new(B256::from(32), DefaultConfig::default());
-        assert_eq!(default_config.calc_ram_size(), B256::from(66624));
+        assert_eq!(default_config.calc_ram_size(), B256::MAX);
+
+        // Test custom config
+        let config = Config::<B256, 32>::new_custom(
+            B256::from(32), 
+            ConfigArgs {
+            head_layout: false,
+            stack_depth: B256::from(1024),
+            no_register: B256::from(32),
+            buffer_size: B256::from(32)
+        }, B256::from(32));
+
+        assert_eq!(config.calc_ram_size(), B256::from(34880));
     }
 }

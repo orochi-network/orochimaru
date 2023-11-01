@@ -1,7 +1,7 @@
 use zkmemory::base::B256;
 use zkmemory::config::DefaultConfig;
 use zkmemory::machine::AbstractMachine;
-use zkmemory::simple_state_machine::{StateMachine, Instruction};
+use zkmemory::state_machine::{StateMachine, Instruction};
 
 fn main() {
 
@@ -34,5 +34,4 @@ fn main() {
     for x in machine.trace().into_iter() {
         println!("{:?}", x);
     }
-
 }

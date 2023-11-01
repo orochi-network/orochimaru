@@ -246,6 +246,34 @@ where
         }
     }
 
+    /// Create a new RAM machine with limited size
+    pub fn new_custom(config: ConfigArgs<K>, no_memory_cell: K) -> Self {
+        let config = Config::new_custom(K::WORD_SIZE, config, no_memory_cell);
+        Self {
+            // Memory section
+            memory: RBTree::new(),
+            memory_allocated: config.memory,
+            word_size: config.word_size,
+            time_log: 0,
+
+            // Stack
+            stack_allocated: config.stack,
+            max_stack_depth: config.stack_depth.into(),
+            stack_depth: 0,
+            stack_ptr: K::zero(),
+
+            // Register
+            register_allocated: config.register,
+            r0: config.create_register(0),
+            r1: config.create_register(1),
+            r2: config.create_register(2),
+            r3: config.create_register(3),
+
+            // Execution trace
+            execution_trace: RBTree::new(),
+        }
+    }
+
     /// Show address maps of memory, stack and registers sections
     pub fn show_sections_maps(&self) -> () {
         println!("Memory section map: from {} to {}", 
@@ -297,6 +325,10 @@ where
 
     fn base_address(&self) -> K {
         self.memory_allocated.low()
+    }
+
+    fn get_memory_address(&self) -> (K, K) {
+        (self.memory_allocated.low(), self.memory_allocated.high())
     }
 
     fn get_stack_depth(&self) -> u64 {

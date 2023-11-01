@@ -52,8 +52,6 @@ pub struct ConfigArgs<T> {
     pub no_register: T,
     /// Buffer size
     pub buffer_size: T,
-    /// Number of memory cell
-    pub no_memory_cell: T,
 }
 
 /// Default config
@@ -67,7 +65,6 @@ impl DefaultConfig {
             stack_depth: T::from(1024),
             no_register: T::from(32),
             buffer_size: T::from(32),
-            no_memory_cell: T::from(1024)
         }
     }
 }
@@ -84,7 +81,48 @@ where
             let register_lo = stack_hi + args.buffer_size;
             let register_hi = register_lo + (args.no_register * word_size);
             let memory_lo = register_hi + args.buffer_size;
-            let memory_hi = memory_lo + (args.no_memory_cell * word_size);
+            let memory_hi = T::MAX;
+            Self {
+                word_size,
+                stack_depth: args.stack_depth,
+                buffer_size: args.buffer_size,
+                stack: AllocatedSection(stack_lo, stack_hi),
+                register: AllocatedSection(register_lo, register_hi),
+                memory: AllocatedSection(memory_lo, memory_hi),
+            }
+        } else {
+            let length =
+                (args.stack_depth + args.no_register + args.buffer_size + args.buffer_size)
+                    * word_size;
+            let stack_lo = T::MAX - length;
+            let remain = stack_lo % word_size;
+            let stack_lo = stack_lo - remain + word_size;
+            let stack_hi = stack_lo + (args.stack_depth * word_size);
+            let register_lo = stack_hi + args.buffer_size;
+            let register_hi = register_lo + (args.no_register * word_size);
+            let memory_lo = T::MIN;
+            let memory_hi = T::MAX - length;
+
+            Self {
+                word_size: word_size,
+                stack_depth: args.stack_depth,
+                buffer_size: args.buffer_size,
+                stack: AllocatedSection(stack_lo, stack_hi),
+                register: AllocatedSection(register_lo, register_hi),
+                memory: AllocatedSection(memory_lo, memory_hi),
+            }
+        }
+    }
+
+    /// Create a new config where the total size of RAM is limited
+    pub fn new_custom(word_size: T, args: ConfigArgs<T>, no_memory_cell: T) -> Self {
+        if args.head_layout {
+            let stack_lo = T::MIN;
+            let stack_hi = stack_lo + (args.stack_depth * word_size);
+            let register_lo = stack_hi + args.buffer_size;
+            let register_hi = register_lo + (args.no_register * word_size);
+            let memory_lo = register_hi + args.buffer_size;
+            let memory_hi = memory_lo + (no_memory_cell * word_size);
             Self {
                 word_size,
                 stack_depth: args.stack_depth,
@@ -95,12 +133,11 @@ where
             }
         } else {
             let memory_lo = T::MIN;
-            let memory_hi = memory_lo + (args.no_memory_cell * word_size);
+            let memory_hi = memory_lo + (no_memory_cell * word_size);
             let stack_lo = memory_hi + args.buffer_size;
             let stack_hi = stack_lo + (args.stack_depth * word_size);
             let register_lo = stack_hi + args.buffer_size;
             let register_hi = register_lo + (args.no_register * word_size);
-
             Self {
                 word_size: word_size,
                 stack_depth: args.stack_depth,

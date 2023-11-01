@@ -39,6 +39,9 @@ pub trait Base<const S: usize = 0, T = Self>:
     fn is_zero(&self) -> bool;
     /// Get the zero value
     fn zero() -> Self;
+    /// Fill to 32 bytes from any bases 
+    /// that are less than 32 bytes in raw bytes representation
+    fn zfill32(&self) -> [u8; 32];
 }
 
 /// Convert from/to [usize](core::usize)
@@ -115,6 +118,10 @@ macro_rules! new_base {
             fn zero() -> Self {
                 Self(U256::ZERO)
             }
+
+            fn zfill32(&self) -> [u8; 32] {
+                self.0.to_be_bytes()
+            }
         }
 
         impl From<i32> for Uint<U256> {
@@ -179,6 +186,13 @@ macro_rules! new_base {
 
             fn zero() -> Self {
                 Self(0)
+            }
+
+            fn zfill32(&self) -> [u8; 32] {
+                let bytes = self.0.to_be_bytes();
+                let mut buffer = [0u8; 32];
+                buffer[(32 - $byte_size)..].copy_from_slice(&bytes);
+                buffer
             }
         }
 

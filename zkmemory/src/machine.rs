@@ -154,6 +154,9 @@ where
     /// Get the base address of the memory section
     fn base_address(&self) -> K;
 
+    /// Get the range allocated of the memory section
+    fn get_memory_address(&self) -> (K, K);
+
     /// Get the current stack depth of the machine
     fn get_stack_depth(&self) -> u64;
 
@@ -329,6 +332,18 @@ where
     fn compute_address(&self, address: K, remain: K) -> (K, K) {
         let base = address - remain;
         (base, base + self.word_size())
+    }
+
+    /// Get all RAM cells (excluding buffers) as a vector of 2-tuple (K, V)
+    fn get_memory_cells(&mut self) -> Vec<(K, V)> {
+        let mut kv_vec = Vec::new();
+        let (base, terminal) = self.get_memory_address();
+        let mut index = base;
+        while index < terminal {
+            kv_vec.push((index, self.dummy_read(index)));
+            index = index + self.word_size();
+        }
+        kv_vec
     }
 
 
