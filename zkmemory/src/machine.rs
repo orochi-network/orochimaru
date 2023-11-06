@@ -1,8 +1,14 @@
 extern crate alloc;
-
-use crate::{base::Base, error::Error};
 use alloc::vec::Vec;
+use crate::{base::Base, error::Error};
+use halo2curves::bn256::{Bn256, G1, Fr};
 use rbtree::RBTree;
+use halo2_proofs::{
+    arithmetic::{lagrange_interpolate, best_multiexp},
+    poly::{Polynomial, Coeff, EvaluationDomain},
+    poly::commitment::ParamsProver,
+    poly::kzg::commitment::ParamsKZG,
+};
 
 /// Basic Memory Instruction
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -67,6 +73,8 @@ where
     /// Get the time log
     fn time_log(&self) -> u64;
 
+    /// Get the KZG params
+    fn get_params_domain(&self) -> (ParamsKZG<Bn256>, EvaluationDomain<Fr>);
 }
 
 /// Public trait for all instructions.
@@ -162,6 +170,9 @@ where
 
     /// Get max stack depth of the machine
     fn max_stack_depth(&self) -> u64;
+
+    /// Get the KZG params
+    fn get_params_domain(&self) -> (ParamsKZG<Bn256>, EvaluationDomain<Fr>);
 }
 
 /// Abstract RAM machine
@@ -186,6 +197,7 @@ where
                 result,
             ));
             self.context().set_time_log(time_log + 1);
+            _ = self.commit_memory_state();
 
             // Return single cell read
             Ok(CellInteraction::SingleCell(
@@ -227,7 +239,9 @@ where
                 addr_hi,
                 val_hi,
             ));
+
             self.context().set_time_log(time_log + 2);
+            _ = self.commit_memory_state();
 
             // Return double cells read
             Ok(CellInteraction::DoubleCell(
@@ -256,7 +270,9 @@ where
                 address,
                 value,
             ));
+
             self.context().set_time_log(time_log + 1);
+            _ = self.commit_memory_state();
 
             // Return single cell write
             Ok(CellInteraction::SingleCell(
@@ -306,6 +322,7 @@ where
             ));
 
             self.context().set_time_log(time_log + 2);
+            _ = self.commit_memory_state();
 
             // Return double cells write
             Ok(CellInteraction::DoubleCell(
@@ -346,6 +363,72 @@ where
         kv_vec
     }
 
+    /// Commit to a polynomial, the result is in G1
+    fn commit_polynomial_in_g1(&self, poly: Polynomial<Fr, Coeff>) -> G1 {
+        let (params, _) = self.get_params_domain();
+        let mut scalars = Vec::with_capacity(poly.len());
+        scalars.extend(poly.iter());
+        let bases = params.get_g();
+        let size = scalars.len();
+        assert!(bases.len() >= size);
+        best_multiexp(&scalars, &bases[0..size])
+    }
+
+    /// Convert points of type Base<S> to Fr element
+    fn base_to_field_elements(&self, points: Vec<(K, V)>) -> Vec<(Fr, Fr)> {
+        let mut field_point_vec: Vec<(Fr, Fr)> = Vec::new();
+        for (point, value) in points.into_iter() {
+            field_point_vec.push((
+                self.be_bytes_to_field(point.zfill32().as_mut_slice()), 
+                self.be_bytes_to_field(value.zfill32().as_mut_slice())));
+        }
+        field_point_vec
+    }
+
+    /// Convert raw bytes from big endian to Fr element
+    fn be_bytes_to_field(&self, bytes: &mut [u8]) -> Fr {
+        bytes.reverse();
+        let b = bytes.as_ref();
+        let inner =
+        [0, 8, 16, 24].map(|i| u64::from_le_bytes(b[i..i + 8].try_into().unwrap()));
+        Fr::from_raw(inner)
+    }
+
+    /// Use lagrange interpolation to form a polynomial from points
+    fn lagrange_from_points(&self, points: Vec<(Fr, Fr)>) -> Polynomial<Fr, Coeff> {
+        let (_, domain) = self.get_params_domain();
+        let point: Vec<Fr> = points.iter().map(|&(a, _)| a).collect();
+        let value: Vec<Fr> = points.iter().map(|&(_, b)| b).collect();
+        let poly_coefficients = lagrange_interpolate(&point, &value);
+        domain.coeff_from_vec(poly_coefficients)
+    }
+
+    /// Commit the memory state
+    fn commit_memory_state(&mut self) -> G1 {
+        let cells = self.get_memory_cells();
+        let points_vec = self.base_to_field_elements(cells);
+        let state_poly = self.lagrange_from_points(points_vec);
+        let commitment = self.commit_polynomial_in_g1(state_poly);
+        commitment
+    }
+
+    /// Get the memory state represented as a polynomial
+    fn get_poly_state(&mut self) -> Polynomial<Fr, Coeff> {
+        let cells = self.get_memory_cells();
+        let points_vec = self.base_to_field_elements(cells);
+        self.lagrange_from_points(points_vec)
+    }
+
+    /// Verify the polynomial state is valid
+    fn verify_poly(&mut self, commitment: G1) -> bool {
+        let state_commitment = self.commit_memory_state();
+        state_commitment == commitment
+    }
+
+    // /// Get KZG params
+    // fn get_kzg_params(&self) -> {
+
+    // }
 
 }
 
@@ -519,11 +602,14 @@ where
     }
 }
 
+// pub trait KZGMemoryCommitment
+
+
 #[macro_export]
 /// Export macro for implementing [AbstractMemoryMachine](crate::state_machine::AbstractMemoryMachine) trait
 macro_rules! impl_state_machine {
     ($machine_struct: ident) => {
-        use crate::machine::AbstractMemoryMachine;
+        use zkmemory::machine::AbstractMemoryMachine;
 
         impl<K, V, const S: usize, const T: usize> AbstractMemoryMachine<K, V, S, T>
             for $machine_struct<K, V, S, T>
@@ -540,7 +626,7 @@ macro_rules! impl_state_machine {
 /// Export macro for implementing [AbstractRegisterMachine](crate::register_machine::AbstractRegisterMachine) trait
 macro_rules! impl_register_machine {
     ($machine_struct: ident) => {
-        use crate::machine::AbstractRegisterMachine;
+        use zkmemory::machine::AbstractRegisterMachine;
 
         impl<K, V, const S: usize, const T: usize> AbstractRegisterMachine<K, V, S, T>
             for $machine_struct<K, V, S, T>
@@ -552,7 +638,7 @@ macro_rules! impl_register_machine {
             fn new_register(
                 &self,
                 register_index: usize,
-            ) -> Option<crate::machine::Register<K>> {
+            ) -> Option<zkmemory::machine::Register<K>> {
                 Some(Register::new(
                     register_index,
                     self.register_start() + K::from(register_index) * K::WORD_SIZE,
@@ -566,7 +652,7 @@ macro_rules! impl_register_machine {
 /// Export macro for implementing [AbstractStackMachine](crate::stack_machine::AbstractStackMachine) trait
 macro_rules! impl_stack_machine {
     ($machine_struct: ident) => {
-        use crate::machine::AbstractStackMachine;
+        use zkmemory::machine::AbstractStackMachine;
 
         impl<K, V, const S: usize, const T: usize> AbstractStackMachine<K, V, S, T>
             for $machine_struct<K, V, S, T>

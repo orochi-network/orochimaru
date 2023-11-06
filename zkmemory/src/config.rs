@@ -164,4 +164,19 @@ where
         let memory_size = self.memory.high() - self.memory.low();
         stack_size + register_size + memory_size + self.buffer_size + self.buffer_size
     }
+
+    fn log_2(&self, x: T) -> u32 {
+        let x_i32: i32 = x.into();
+        let x_f32 = x_i32 as f32;
+        let x_f32_log2 = x_f32.log2();
+        let result: u32 = x_f32_log2 as u32;
+        result
+    }
+
+    /// Computes the total number of cells in the memory section a, then computes x = log_2(a) 
+    pub fn calc_mem_cells_log_2(&self) -> u32 {
+        let mem_cell = (self.memory.high() - self.memory.low()) / self.word_size;
+        let result = self.log_2(mem_cell);
+        result
+    }
 }
