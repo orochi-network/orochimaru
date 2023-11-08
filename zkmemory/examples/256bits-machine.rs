@@ -1,9 +1,3 @@
-use halo2_proofs::{
-    poly::EvaluationDomain,
-    poly::commitment::ParamsProver,
-    poly::kzg::commitment::ParamsKZG,
-};
-use halo2curves::bn256::{Bn256, Fr};
 use rbtree::RBTree;
 use std::{
     marker::PhantomData,
@@ -12,7 +6,7 @@ use std::{
 use zkmemory::{
     impl_register_machine, impl_stack_machine, impl_state_machine,
     machine::{AbstractContext, AbstractInstruction, AbstractMachine, Register, CellInteraction, TraceRecord},
-    config::{AllocatedSection, Config, ConfigArgs},
+    config::{AllocatedSection, Config, ConfigArgs, DefaultConfig},
     base::{Base, B256},
     error::Error,
 };
@@ -82,10 +76,6 @@ where
 
     // Trace
     execution_trace: RBTree<TraceRecord<K, V, S, T>, PhantomData<()>>,
-
-    // KZG params
-    params_kzg: ParamsKZG<Bn256>,
-    domain: EvaluationDomain<Fr>,
 }
 
 impl<M, K, V, const S: usize, const T: usize> AbstractContext<M, K, V> for StateMachine<K, V, S, T>
@@ -123,10 +113,6 @@ where
 
     fn memory(&mut self) -> &'_ mut RBTree<K, V> {
         &mut self.memory
-    }
-
-    fn get_params_domain(&self) -> (ParamsKZG<Bn256>, EvaluationDomain<Fr>) {
-        (self.params_kzg.clone(), self.domain.clone())
     }
 }
 
@@ -255,42 +241,6 @@ where
 
             // Execution trace
             execution_trace: RBTree::new(),
-
-            // KZG params
-            params_kzg: ParamsKZG::<Bn256>::new(config.calc_mem_cells_log_2()),
-            domain: EvaluationDomain::new(1, config.calc_mem_cells_log_2()),
-        }
-    }
-
-    /// Create a new RAM machine with limited size
-    pub fn new_custom(config: ConfigArgs<K>, no_memory_cell: K) -> Self {
-        let config = Config::new_custom(K::WORD_SIZE, config, no_memory_cell);
-        Self {
-            // Memory section
-            memory: RBTree::new(),
-            memory_allocated: config.memory,
-            word_size: config.word_size,
-            time_log: 0,
-
-            // Stack
-            stack_allocated: config.stack,
-            max_stack_depth: config.stack_depth.into(),
-            stack_depth: 0,
-            stack_ptr: K::zero(),
-
-            // Register
-            register_allocated: config.register,
-            r0: config.create_register(0),
-            r1: config.create_register(1),
-            r2: config.create_register(2),
-            r3: config.create_register(3),
-
-            // Execution trace
-            execution_trace: RBTree::new(),
-
-            // KZG params
-            params_kzg: ParamsKZG::<Bn256>::new(config.calc_mem_cells_log_2()),
-            domain: EvaluationDomain::new(1, config.calc_mem_cells_log_2()),
         }
     }
 
@@ -358,10 +308,6 @@ where
     fn max_stack_depth(&self) -> u64 {
         self.ro_context().max_stack_depth
     }
-
-    fn get_params_domain(&self) -> (ParamsKZG<Bn256>, EvaluationDomain<Fr>) {
-        (self.ro_context().params_kzg.clone(), self.ro_context().domain.clone())
-    }
 }
 
 impl_register_machine!(StateMachine);
@@ -370,16 +316,8 @@ impl_state_machine!(StateMachine);
 
 fn main() {
 
-    // Config the RAM
-    let config = ConfigArgs {
-        head_layout: false,
-        stack_depth: B256::from(1024),
-        no_register: B256::from(32),
-        buffer_size: B256::from(32)
-    };
-
     // Define the desired machine configuration
-    let mut machine = StateMachine::<B256, B256, 32, 32>::new_custom(config, B256::from(128));
+    let mut machine = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default());
 
     // Show the section map
     machine.show_sections_maps();

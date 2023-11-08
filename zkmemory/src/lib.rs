@@ -24,7 +24,6 @@ pub mod machine;
 #[cfg(test)]
 mod tests {
     use crate::base::{B256, B64, B32, B128, Base};
-    use crate::config::{DefaultConfig, Config, ConfigArgs};
 
     #[test]
     fn u256_struct_test() {
@@ -122,24 +121,5 @@ mod tests {
         assert_eq!(chunk_4 * chunk_3, B32::from(156 * 5));
         assert_eq!(chunk_4 / chunk_3, B32::from(156 / 5));
         assert_eq!(chunk_4 % chunk_3, B32::from(156 % 5));
-    }
-
-    #[test]
-    fn ram_size_test() {
-        // Test default config
-        let default_config = Config::new(B256::from(32), DefaultConfig::default());
-        assert_eq!(default_config.calc_ram_size(), B256::MAX);
-
-        // Test custom config
-        let config = Config::<B256, 32>::new_custom(
-            B256::from(32), 
-            ConfigArgs {
-            head_layout: false,
-            stack_depth: B256::from(1024),
-            no_register: B256::from(32),
-            buffer_size: B256::from(32)
-        }, B256::from(32));
-
-        assert_eq!(config.calc_ram_size(), B256::from(34880));
     }
 }

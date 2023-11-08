@@ -114,69 +114,11 @@ where
         }
     }
 
-    /// Create a new config where the total size of RAM is limited
-    pub fn new_custom(word_size: T, args: ConfigArgs<T>, no_memory_cell: T) -> Self {
-        if args.head_layout {
-            let stack_lo = T::MIN;
-            let stack_hi = stack_lo + (args.stack_depth * word_size);
-            let register_lo = stack_hi + args.buffer_size;
-            let register_hi = register_lo + (args.no_register * word_size);
-            let memory_lo = register_hi + args.buffer_size;
-            let memory_hi = memory_lo + (no_memory_cell * word_size);
-            Self {
-                word_size,
-                stack_depth: args.stack_depth,
-                buffer_size: args.buffer_size,
-                stack: AllocatedSection(stack_lo, stack_hi),
-                register: AllocatedSection(register_lo, register_hi),
-                memory: AllocatedSection(memory_lo, memory_hi),
-            }
-        } else {
-            let memory_lo = T::MIN;
-            let memory_hi = memory_lo + (no_memory_cell * word_size);
-            let stack_lo = memory_hi + args.buffer_size;
-            let stack_hi = stack_lo + (args.stack_depth * word_size);
-            let register_lo = stack_hi + args.buffer_size;
-            let register_hi = register_lo + (args.no_register * word_size);
-            Self {
-                word_size: word_size,
-                stack_depth: args.stack_depth,
-                buffer_size: args.buffer_size,
-                stack: AllocatedSection(stack_lo, stack_hi),
-                register: AllocatedSection(register_lo, register_hi),
-                memory: AllocatedSection(memory_lo, memory_hi),
-            }
-        }
-    }
-
     /// Create a new register by index
     pub fn create_register(&self, index: usize) -> Register<T> {
         Register::new(
             index,
             self.register.low() + (T::from(index) * self.word_size),
         )
-    }
-
-    /// Computes the total volume of RAM in bytes
-    pub fn calc_ram_size(&self) -> T {
-        let stack_size = self.word_size * self.stack_depth;
-        let register_size = self.register.high() - self.register.low();
-        let memory_size = self.memory.high() - self.memory.low();
-        stack_size + register_size + memory_size + self.buffer_size + self.buffer_size
-    }
-
-    fn log_2(&self, x: T) -> u32 {
-        let x_i32: i32 = x.into();
-        let x_f32 = x_i32 as f32;
-        let x_f32_log2 = x_f32.log2();
-        let result: u32 = x_f32_log2 as u32;
-        result
-    }
-
-    /// Computes the total number of cells in the memory section a, then computes x = log_2(a) 
-    pub fn calc_mem_cells_log_2(&self) -> u32 {
-        let mem_cell = (self.memory.high() - self.memory.low()) / self.word_size;
-        let result = self.log_2(mem_cell);
-        result
     }
 }
