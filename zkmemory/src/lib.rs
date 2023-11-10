@@ -20,6 +20,8 @@ pub mod config;
 pub mod error;
 /// Definition of abstract machine (instruction, trace and context)
 pub mod machine;
+/// A KZG module that commit to the memory trace through the execution trace
+pub mod kzg;
 
 #[cfg(test)]
 mod tests {

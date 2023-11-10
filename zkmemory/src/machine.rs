@@ -14,7 +14,7 @@ pub enum MemoryInstruction {
 }
 
 /// Trace record struct of [AbstractTraceRecord](crate::machine::AbstractTraceRecord)
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TraceRecord<K, V, const S: usize, const T: usize>
 where
     K: Base<S>,
@@ -25,6 +25,17 @@ where
     instruction: MemoryInstruction,
     address: K,
     value: V,
+}
+
+impl<K, V, const S: usize, const T: usize> TraceRecord<K, V, S, T>
+where
+    K: Base<S>,
+    V: Base<T>,
+{
+    /// Return the tuple representation of the trace record
+    pub fn get_tuple(&self) -> (u64, u64, MemoryInstruction, K, V) {
+        (self.time_log, self.stack_depth, self.instruction, self.address, self.value)
+    }
 }
 
 #[derive(Debug)]

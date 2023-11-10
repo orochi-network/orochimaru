@@ -347,5 +347,5 @@ fn main() {
     // Print the trace record (prettified), sorted by ascending address by default
     for x in machine.trace().into_iter() {
         println!("{:?}", x);
-    }
+    }   
 }
