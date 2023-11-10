@@ -8,7 +8,7 @@ use zkmemory::{
     machine::{AbstractContext, AbstractInstruction, AbstractMachine, Register, CellInteraction, TraceRecord},
     config::{AllocatedSection, Config, ConfigArgs, DefaultConfig},
     base::{Base, B256},
-    error::Error,
+    error::Error, kzg::KZGMemoryCommitment,
 };
 
 /// My instruction set for the machine
@@ -347,5 +347,12 @@ fn main() {
     // Print the trace record (prettified), sorted by ascending address by default
     for x in machine.trace().into_iter() {
         println!("{:?}", x);
-    }   
+    }  
+
+    let mut kzg_scheme = KZGMemoryCommitment::init(); 
+
+    // Test commitment
+    let record = machine.trace()[4];
+    println!("{:?}", record);
+    println!("{:?}", kzg_scheme.commit_trace_element(record));
 }

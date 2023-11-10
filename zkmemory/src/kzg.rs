@@ -86,11 +86,10 @@ where
     fn get_trace_poly(&self, evals: [Fr; 8]) -> Polynomial<Fr, Coeff> {
         let mut points_arr = [Fr::ONE; 8];
         let mut current_point = Fr::ONE;
-        for i in 0..8 as usize {
+        for i in 1..8 as usize {
             current_point *= Fr::MULTIPLICATIVE_GENERATOR;
             points_arr[i] = current_point;
         }
-        println!("{:?}", points_arr);
         self.domain.coeff_from_vec(lagrange_interpolate(points_arr.as_slice(), evals.as_slice()))
     }
 
