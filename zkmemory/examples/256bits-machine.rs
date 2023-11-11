@@ -8,7 +8,7 @@ use zkmemory::{
     machine::{AbstractContext, AbstractInstruction, AbstractMachine, Register, CellInteraction, TraceRecord},
     config::{AllocatedSection, Config, ConfigArgs, DefaultConfig},
     base::{Base, B256},
-    error::Error, kzg::KZGMemoryCommitment,
+    error::Error, kzg::{KZGMemoryCommitment, KZGParams},
 };
 
 /// My instruction set for the machine
@@ -349,7 +349,7 @@ fn main() {
         println!("{:?}", x);
     }  
 
-    let mut kzg_scheme = KZGMemoryCommitment::init(); 
+    let mut kzg_scheme = KZGParams::init(); 
 
     // Test commitment
     let record = machine.trace()[4];
