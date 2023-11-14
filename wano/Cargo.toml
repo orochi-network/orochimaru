@@ -1,5 +1,5 @@
 [package]
-name = "rome"
+name = "wano"
 version = "0.1.0"
 description = "Cairo-vm on Plonk"
 authors.workspace = true

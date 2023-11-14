@@ -1,6 +1,6 @@
 extern crate alloc;
-use alloc::vec::Vec;
 use crate::{base::Base, error::Error};
+use alloc::vec::Vec;
 use rbtree::RBTree;
 
 /// Basic Memory Instruction
@@ -34,7 +34,13 @@ where
 {
     /// Return the tuple representation of the trace record
     pub fn get_tuple(&self) -> (u64, u64, MemoryInstruction, K, V) {
-        (self.time_log, self.stack_depth, self.instruction, self.address, self.value)
+        (
+            self.time_log,
+            self.stack_depth,
+            self.instruction,
+            self.address,
+            self.value,
+        )
     }
 }
 
@@ -91,7 +97,7 @@ where
 
 /// Trace record
 /// TIME_LOG, STACK_DEPTH, INSTRUCTION, ADDRESS, VALUE,  
-pub trait AbstractTraceRecord<M: AbstractMachine<K, V>, K, V>
+pub trait AbstractTraceRecord<K, V>
 where
     K: Ord,
     Self: Ord,
@@ -137,7 +143,7 @@ where
     type Instruction: AbstractInstruction<Self, K, V>;
 
     /// Trace record
-    type TraceRecord: AbstractTraceRecord<Self, K, V>;
+    type TraceRecord: AbstractTraceRecord<K, V>;
 
     /// Get the context of abstract machine
     fn context(&mut self) -> &'_ mut Self::Context;
@@ -438,12 +444,10 @@ where
     fn new_register(&self, register_index: usize) -> Option<Register<K>>;
 }
 
-impl<M, K, V, const S: usize, const T: usize> AbstractTraceRecord<M, K, V>
-    for TraceRecord<K, V, S, T>
+impl<K, V, const S: usize, const T: usize> AbstractTraceRecord<K, V> for TraceRecord<K, V, S, T>
 where
     K: Base<S>,
     V: Base<T>,
-    M: AbstractMachine<K, V>,
 {
     fn new(
         time_log: u64,
@@ -518,9 +522,8 @@ where
 
 // pub trait KZGMemoryCommitment
 
-
 #[macro_export]
-/// Export macro for implementing [AbstractMemoryMachine](crate::state_machine::AbstractMemoryMachine) trait
+/// Export macro for implementing [AbstractMemoryMachine](crate::machine::AbstractMemoryMachine) trait
 macro_rules! impl_state_machine {
     ($machine_struct: ident) => {
         use zkmemory::machine::AbstractMemoryMachine;
@@ -537,7 +540,7 @@ macro_rules! impl_state_machine {
 }
 
 #[macro_export]
-/// Export macro for implementing [AbstractRegisterMachine](crate::register_machine::AbstractRegisterMachine) trait
+/// Export macro for implementing [AbstractRegisterMachine](crate::machine::AbstractRegisterMachine) trait
 macro_rules! impl_register_machine {
     ($machine_struct: ident) => {
         use zkmemory::machine::AbstractRegisterMachine;
@@ -563,7 +566,7 @@ macro_rules! impl_register_machine {
 }
 
 #[macro_export]
-/// Export macro for implementing [AbstractStackMachine](crate::stack_machine::AbstractStackMachine) trait
+/// Export macro for implementing [AbstractStackMachine](crate::machine::AbstractStackMachine) trait
 macro_rules! impl_stack_machine {
     ($machine_struct: ident) => {
         use zkmemory::machine::AbstractStackMachine;

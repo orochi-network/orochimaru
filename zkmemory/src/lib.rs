@@ -14,18 +14,20 @@
 
 /// Base trait for generic type
 pub mod base;
+/// Define abstract traits for commitment schemes
+pub mod commitment;
 /// Define all configuration of [StateMachine](crate::machine::StateMachine) and [RawMemory](crate::memory::RawMemory)
 pub mod config;
 /// Define all errors of [StateMachine](crate::machine::StateMachine) and [RawMemory](crate::memory::RawMemory)
 pub mod error;
-/// Definition of abstract machine (instruction, trace and context)
-pub mod machine;
 /// A KZG module that commit to the memory trace through the execution trace
 pub mod kzg;
+/// Definition of abstract machine (instruction, trace and context)
+pub mod machine;
 
 #[cfg(test)]
 mod tests {
-    use crate::base::{B256, B64, B32, B128, Base};
+    use crate::base::{Base, B128, B256, B32, B64};
 
     #[test]
     fn u256_struct_test() {
@@ -74,7 +76,6 @@ mod tests {
         assert_eq!(chunk_4 / chunk_3, B128::from(34 / 7));
         assert_eq!(chunk_4 % chunk_3, B128::from(34 % 7));
     }
-
 
     #[test]
     fn u64_struct_test() {

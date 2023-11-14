@@ -1,26 +1,27 @@
-extern crate std;
 extern crate alloc;
+extern crate std;
 use alloc::vec::Vec;
 use core::marker::PhantomData;
+use ff::{Field, PrimeField, WithSmallOrderMulGroup};
 use group::Curve;
 use rand_core::OsRng;
-use ff::{Field, PrimeField, WithSmallOrderMulGroup};
 use rbtree::RBTree;
 
-use halo2_proofs::{
-    arithmetic::{lagrange_interpolate, eval_polynomial},
-    poly::{
-        {Polynomial, Coeff, EvaluationDomain, ProverQuery},
-        commitment::{Blind, ParamsProver, Prover, CommitmentScheme},
-        kzg::commitment::ParamsKZG,
-    }, transcript::{EncodedChallenge, TranscriptWriterBuffer}
-};
-use halo2curves::bn256::{Bn256, G1Affine, Fr};
 use crate::{
-    machine::TraceRecord,
     base::Base,
-    machine::MemoryInstruction,
+    machine::TraceRecord,
+    machine::{AbstractTraceRecord, MemoryInstruction},
 };
+use halo2_proofs::{
+    arithmetic::{eval_polynomial, lagrange_interpolate},
+    poly::{
+        commitment::{Blind, CommitmentScheme, ParamsProver, Prover},
+        kzg::commitment::ParamsKZG,
+        {Coeff, EvaluationDomain, Polynomial, ProverQuery},
+    },
+    transcript::{EncodedChallenge, TranscriptWriterBuffer},
+};
+use halo2curves::bn256::{Bn256, Fr, G1Affine};
 
 /// A KZG module that commit to the memory trace through the execution trace
 #[derive(Debug, Clone)]
@@ -33,7 +34,6 @@ where
     domain: EvaluationDomain<Fr>,
     trace_record: RBTree<TraceRecord<K, V, S, T>, PhantomData<()>>,
 }
-
 
 /// KZG trait for committing the memory trace elements
 pub trait KZGMemoryCommitment<K, V, const S: usize, const T: usize>
@@ -71,16 +71,17 @@ where
         // a list of point x_1,x_2,...x_n
         points_list: Vec<Scheme::Scalar>,
         // a list of polynomials p_1(x), p_2(x),...,p_n(x)
-        polynomial_list: Vec<Polynomial<Scheme::Scalar,Coeff>>,
+        polynomial_list: Vec<Polynomial<Scheme::Scalar, Coeff>>,
     ) -> Vec<u8>
-    where Scheme::Scalar: WithSmallOrderMulGroup<3>;
+    where
+        Scheme::Scalar: WithSmallOrderMulGroup<3>;
 }
 
 impl<K, V, const S: usize, const T: usize> KZGMemoryCommitment<K, V, S, T> for KZGParams<K, V, S, T>
 where
     K: Base<S>,
     V: Base<T>,
-{   
+{
     fn init() -> Self {
         const K: u32 = 3;
         Self {
@@ -105,14 +106,26 @@ where
 
         // Encode instruction to number : 1 for Write, 0 for Read
         match i {
-            MemoryInstruction::Read => 
-            [Fr::from(t), Fr::from(s), Fr::ZERO, 
-            self.be_bytes_to_field(l.zfill32().as_mut_slice()), self.be_bytes_to_field(d.zfill32().as_mut_slice()),
-            Fr::ZERO, Fr::ZERO, Fr::ZERO],
-            MemoryInstruction::Write => 
-            [Fr::from(t), Fr::from(s), Fr::ONE, 
-            self.be_bytes_to_field(l.zfill32().as_mut_slice()), self.be_bytes_to_field(d.zfill32().as_mut_slice()),
-            Fr::ZERO, Fr::ZERO, Fr::ZERO],
+            MemoryInstruction::Read => [
+                Fr::from(t),
+                Fr::from(s),
+                Fr::ZERO,
+                self.be_bytes_to_field(l.zfill32().as_mut_slice()),
+                self.be_bytes_to_field(d.zfill32().as_mut_slice()),
+                Fr::ZERO,
+                Fr::ZERO,
+                Fr::ZERO,
+            ],
+            MemoryInstruction::Write => [
+                Fr::from(t),
+                Fr::from(s),
+                Fr::ONE,
+                self.be_bytes_to_field(l.zfill32().as_mut_slice()),
+                self.be_bytes_to_field(d.zfill32().as_mut_slice()),
+                Fr::ZERO,
+                Fr::ZERO,
+                Fr::ZERO,
+            ],
         }
     }
 
@@ -123,57 +136,58 @@ where
             current_point *= Fr::MULTIPLICATIVE_GENERATOR;
             points_arr[i] = current_point;
         }
-        self.domain.coeff_from_vec(lagrange_interpolate(points_arr.as_slice(), evals.as_slice()))
+        self.domain.coeff_from_vec(lagrange_interpolate(
+            points_arr.as_slice(),
+            evals.as_slice(),
+        ))
     }
 
     fn be_bytes_to_field(&self, bytes: &mut [u8]) -> Fr {
         bytes.reverse();
         let b = bytes.as_ref();
-        let inner =
-        [0, 8, 16, 24].map(|i| u64::from_le_bytes(b[i..i + 8].try_into().unwrap()));
+        let inner = [0, 8, 16, 24].map(|i| u64::from_le_bytes(b[i..i + 8].try_into().unwrap()));
         Fr::from_raw(inner)
     }
 
     fn create_proof_sh_plonk<
-            'params,
-            Scheme: CommitmentScheme,
-            P: Prover<'params, Scheme>,
-            E: EncodedChallenge<Scheme::Curve>,
-            TW: TranscriptWriterBuffer<Vec<u8>, Scheme::Curve, E>,
-        >(
-            params: &'params Scheme::ParamsProver,
-            // a list of point x_1,x_2,...x_n
-            points_list: Vec<Scheme::Scalar>,
-            // a list of polynomials p_1(x), p_2(x),...,p_n(x)
-            polynomial_list: Vec<Polynomial<Scheme::Scalar,Coeff>>,
-        ) -> Vec<u8>
-        where Scheme::Scalar: WithSmallOrderMulGroup<3> {
-                // this function, given a list of points x_1,x_2,...,x_n
+        'params,
+        Scheme: CommitmentScheme,
+        P: Prover<'params, Scheme>,
+        E: EncodedChallenge<Scheme::Curve>,
+        TW: TranscriptWriterBuffer<Vec<u8>, Scheme::Curve, E>,
+    >(
+        params: &'params Scheme::ParamsProver,
+        // a list of point x_1,x_2,...x_n
+        points_list: Vec<Scheme::Scalar>,
+        // a list of polynomials p_1(x), p_2(x),...,p_n(x)
+        polynomial_list: Vec<Polynomial<Scheme::Scalar, Coeff>>,
+    ) -> Vec<u8>
+    where
+        Scheme::Scalar: WithSmallOrderMulGroup<3>,
+    {
+        // this function, given a list of points x_1,x_2,...,x_n
         // and polynomials p_1(x),p_2(x),...,p_n(x)
         // create a witness for the value p_1(x_1), p_2(x_2),...,p_n(x_n)
         let mut transcript = TW::init(Vec::new());
 
         let blind = Blind::new(&mut OsRng);
         // Commit the polynomial p_i(x)
-        for i in 0..polynomial_list.len()
-          {  
+        for i in 0..polynomial_list.len() {
             let a = params.commit(&polynomial_list[i], blind).to_affine();
             transcript.write_point(a).unwrap();
         }
         // evaluate the values p_i(x_i) for i=1,2,...,n
-        for i in 0..polynomial_list.len()
-        {  
-          let av = eval_polynomial(&polynomial_list[i],points_list[i]);
-          transcript.write_scalar(av).unwrap();
-      }
+        for i in 0..polynomial_list.len() {
+            let av = eval_polynomial(&polynomial_list[i], points_list[i]);
+            transcript.write_scalar(av).unwrap();
+        }
 
         // this query is used to list all the values p_1(x_1), p_2(x_2),...,p_n(x_n)
         // in the query list of shplonk prover
 
-        let mut queries: Vec<ProverQuery<'_, <Scheme as CommitmentScheme>::Curve>>=Vec::new();
-        for i in 0..polynomial_list.len()
-        {
-            let mut temp= ProverQuery {
+        let mut queries: Vec<ProverQuery<'_, <Scheme as CommitmentScheme>::Curve>> = Vec::new();
+        for i in 0..polynomial_list.len() {
+            let mut temp = ProverQuery {
                 point: points_list[i],
                 poly: &polynomial_list[i],
                 blind,

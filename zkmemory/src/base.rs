@@ -4,7 +4,7 @@ use core::usize;
 use ethnum::U256;
 
 /// Base trait for memory address and value
-pub trait Base<const S: usize = 0, T = Self>:
+pub trait Base<const S: usize, T = Self>:
     Ord
     + Copy
     + PartialEq
@@ -39,7 +39,7 @@ pub trait Base<const S: usize = 0, T = Self>:
     fn is_zero(&self) -> bool;
     /// Get the zero value
     fn zero() -> Self;
-    /// Fill to 32 bytes from any bases 
+    /// Fill to 32 bytes from any bases
     /// that are less than 32 bytes in raw bytes representation
     fn zfill32(&self) -> [u8; 32];
 }
