@@ -21,3 +21,8 @@ cargo-llvm-cov = "0.5.27"
 ethnum = "1.3.2"
 hex = "0.4.3"
 rbtree = "0.1.5"
+halo2_proofs = {git="https://github.com/privacy-scaling-explorations/halo2", tag="v2023_04_20"}
+halo2curves = {git="https://github.com/privacy-scaling-explorations/halo2curves", tag="0.3.2"}
+ff = "0.13.0"
+group = "0.13.0"
+rand_core = "0.6.4"

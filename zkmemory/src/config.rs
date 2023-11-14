@@ -1,4 +1,5 @@
 use crate::base::Base;
+use crate::machine::Register;
 
 /// Memory section
 #[derive(Debug, Clone, Copy)]
@@ -28,9 +29,11 @@ where
 #[derive(Debug, Clone, Copy)]
 pub struct Config<T, const S: usize> {
     /// Size of a memory cell
-    pub cell_size: T,
+    pub word_size: T,
     /// Stack depth
     pub stack_depth: T,
+    /// Buffer size
+    pub buffer_size: T,
     /// Base address of memory
     pub memory: AllocatedSection<T>,
     /// Stack base address
@@ -59,9 +62,9 @@ impl DefaultConfig {
     pub fn default<const S: usize, T: Base<S>>() -> ConfigArgs<T> {
         ConfigArgs {
             head_layout: true,
-            stack_depth: T::from_usize(1024),
-            no_register: T::from_usize(16),
-            buffer_size: T::from_usize(32),
+            stack_depth: T::from(1024),
+            no_register: T::from(32),
+            buffer_size: T::from(32),
         }
     }
 }
@@ -71,17 +74,18 @@ where
     T: Base<S>,
 {
     /// Create a new config for given arguments
-    pub fn new(cell_size: T, args: ConfigArgs<T>) -> Self {
+    pub fn new(word_size: T, args: ConfigArgs<T>) -> Self {
         if args.head_layout {
             let stack_lo = T::MIN;
-            let stack_hi = stack_lo + (args.stack_depth * cell_size);
+            let stack_hi = stack_lo + (args.stack_depth * word_size);
             let register_lo = stack_hi + args.buffer_size;
-            let register_hi = register_lo + (args.no_register * cell_size);
+            let register_hi = register_lo + (args.no_register * word_size);
             let memory_lo = register_hi + args.buffer_size;
             let memory_hi = T::MAX;
             Self {
-                cell_size: cell_size,
+                word_size,
                 stack_depth: args.stack_depth,
+                buffer_size: args.buffer_size,
                 stack: AllocatedSection(stack_lo, stack_hi),
                 register: AllocatedSection(register_lo, register_hi),
                 memory: AllocatedSection(memory_lo, memory_hi),
@@ -89,22 +93,32 @@ where
         } else {
             let length =
                 (args.stack_depth + args.no_register + args.buffer_size + args.buffer_size)
-                    * cell_size;
+                    * word_size;
             let stack_lo = T::MAX - length;
-            let remain = stack_lo % cell_size;
-            let stack_lo = stack_lo - remain + cell_size;
-            let stack_hi = stack_lo + (args.stack_depth * cell_size);
+            let remain = stack_lo % word_size;
+            let stack_lo = stack_lo - remain + word_size;
+            let stack_hi = stack_lo + (args.stack_depth * word_size);
             let register_lo = stack_hi + args.buffer_size;
-            let register_hi = register_lo + (args.no_register * cell_size);
+            let register_hi = register_lo + (args.no_register * word_size);
             let memory_lo = T::MIN;
             let memory_hi = T::MAX - length;
+
             Self {
-                cell_size: cell_size,
+                word_size: word_size,
                 stack_depth: args.stack_depth,
+                buffer_size: args.buffer_size,
                 stack: AllocatedSection(stack_lo, stack_hi),
                 register: AllocatedSection(register_lo, register_hi),
                 memory: AllocatedSection(memory_lo, memory_hi),
             }
         }
+    }
+
+    /// Create a new register by index
+    pub fn create_register(&self, index: usize) -> Register<T> {
+        Register::new(
+            index,
+            self.register.low() + (T::from(index) * self.word_size),
+        )
     }
 }

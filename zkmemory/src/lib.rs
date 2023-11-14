@@ -1,4 +1,5 @@
 //! This crate provides a simple RAM machine for use in the zkVM
+#![recursion_limit = "256"]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![deny(
     unused,
@@ -13,221 +14,115 @@
 
 /// Base trait for generic type
 pub mod base;
+/// Define abstract traits for commitment schemes
+pub mod commitment;
 /// Define all configuration of [StateMachine](crate::machine::StateMachine) and [RawMemory](crate::memory::RawMemory)
 pub mod config;
 /// Define all errors of [StateMachine](crate::machine::StateMachine) and [RawMemory](crate::memory::RawMemory)
 pub mod error;
-/// A state machine with two instructions [Write](crate::machine::Instruction::Write) and [Read](crate::machine::Instruction::Read).
-/// This machine have configurable word size and address size. This crate provide following aliases:
-/// - [StateMachine256](crate::machine::StateMachine256) with 256 bits address and word size
-/// - [StateMachine64](crate::machine::StateMachine64) with 64 bits address and word size
-/// - [StateMachine32](crate::machine::StateMachine32) with 32 bits address and word size
+/// A KZG module that commit to the memory trace through the execution trace
+pub mod kzg;
+/// Definition of abstract machine (instruction, trace and context)
 pub mod machine;
-/// Raw memory as a key-value store base on [RBTree](rbtree::RBTree) that mapping address to value
-pub mod memory;
 
 #[cfg(test)]
 mod tests {
-    use crate::base::{Base, UsizeConvertible, U256};
-    use crate::config::{ConfigArgs, DefaultConfig};
-    use crate::machine::{
-        RAMMachine, RegisterMachine, StackMachine, StateMachine256, StateMachine32,
-    };
+    use crate::base::{Base, B128, B256, B32, B64};
 
     #[test]
-    fn sm256_write_read_one_cell() {
-        let mut sm = StateMachine256::new(DefaultConfig::default());
-        let chunk = U256::from_bytes([5u8; 32]);
-        assert!(sm.write(sm.base_address(), chunk).is_ok());
-        let read_result = sm.read(sm.base_address());
-        assert!(read_result.is_ok());
-        assert_eq!(read_result.unwrap(), chunk);
+    fn u256_struct_test() {
+        let chunk_zero = B256::zero();
+        let bytes1 = [9u8; 32];
+        let chunk1 = B256::from(bytes1);
+        let bytes_convert: [u8; 32] = chunk1.try_into().unwrap();
+        assert_eq!(bytes_convert, bytes1);
+        assert!(chunk_zero.is_zero());
+        assert!(!chunk1.is_zero());
     }
 
     #[test]
-    fn sm256_read_empty_cell() {
-        let mut sm = StateMachine256::new(DefaultConfig::default());
-        let chunk = U256::from_bytes([0u8; 32]);
-        let read_result = sm.read(sm.base_address());
-        assert!(read_result.is_ok());
-        assert_eq!(read_result.unwrap(), chunk);
+    fn u256_arithmetic_test() {
+        let chunk_1 = B256::from([34u8; 32]);
+        let chunk_2 = B256::from([17u8; 32]);
+        let chunk_3 = B256::from(5);
+        let chunk_4 = B256::from(156);
+        assert_eq!(chunk_1 + chunk_2, B256::from([51u8; 32]));
+        assert_eq!(chunk_1 - chunk_2, B256::from([17u8; 32]));
+        assert_eq!(chunk_4 * chunk_3, B256::from(156 * 5));
+        assert_eq!(chunk_4 / chunk_3, B256::from(156 / 5));
+        assert_eq!(chunk_4 % chunk_3, B256::from(156 % 5));
     }
 
     #[test]
-    fn sm256_write_one_cell_read_two_cell() {
-        let mut sm = StateMachine256::new(DefaultConfig::default());
-        let chunk_1 = U256::from_bytes([5u8; 32]);
-        let chunk_2 = U256::from_bytes([10u8; 32]);
-        let base_addr = sm.base_address().to_usize();
-
-        let expected: [u8; 32] = [[5u8; 17].as_slice(), [10u8; 15].as_slice()]
-            .concat()
-            .try_into()
-            .unwrap();
-
-        assert!(sm.write(U256::from_usize(base_addr), chunk_1).is_ok());
-        assert!(sm.write(U256::from_usize(base_addr + 32), chunk_2).is_ok());
-        let read_result = sm.read(U256::from_usize(base_addr + 15));
-        assert!(read_result.is_ok());
-        assert_eq!(read_result.unwrap(), U256::from_bytes(expected));
+    fn u128_struct_test() {
+        let chunk_zero = B128::zero();
+        let bytes1 = [9u8; 16];
+        let chunk1 = B128::from(bytes1);
+        let bytes_convert: [u8; 16] = chunk1.try_into().unwrap();
+        assert_eq!(bytes_convert, bytes1);
+        assert!(chunk_zero.is_zero());
+        assert!(!chunk1.is_zero());
     }
 
     #[test]
-    fn sm256_write_two_cell_read_one_cell() {
-        let mut sm = StateMachine256::new(DefaultConfig::default());
-        let base_addr = sm.base_address().to_usize();
-
-        let chunk = U256::from_bytes([1u8; 32]);
-        assert!(sm.write(U256::from_usize(base_addr + 23), chunk).is_ok());
-        let expected_lo: [u8; 32] = [[0u8; 23].as_slice(), [1u8; 9].as_slice()]
-            .concat()
-            .try_into()
-            .unwrap();
-        let expected_hi: [u8; 32] = [[1u8; 23].as_slice(), [0u8; 9].as_slice()]
-            .concat()
-            .try_into()
-            .unwrap();
-
-        let read_result_lo = sm.read(U256::from_usize(base_addr));
-        let read_result_hi = sm.read(U256::from_usize(base_addr + 32));
-
-        assert!(read_result_lo.is_ok());
-        assert!(read_result_hi.is_ok());
-        assert_eq!(read_result_lo.unwrap(), U256::from_bytes(expected_lo));
-        assert_eq!(read_result_hi.unwrap(), U256::from_bytes(expected_hi));
+    fn u128_arithmetic_test() {
+        let chunk_1 = B128::from([19u8; 16]);
+        let chunk_2 = B128::from([5u8; 16]);
+        let chunk_3 = B128::from(7i32);
+        let chunk_4 = B128::from(34u64);
+        assert_eq!(chunk_1 + chunk_2, B128::from([24u8; 16]));
+        assert_eq!(chunk_1 - chunk_2, B128::from([14u8; 16]));
+        assert_eq!(chunk_4 * chunk_3, B128::from(34 * 7));
+        assert_eq!(chunk_4 / chunk_3, B128::from(34 / 7));
+        assert_eq!(chunk_4 % chunk_3, B128::from(34 % 7));
     }
 
     #[test]
-    #[should_panic]
-    fn sm32_read_prohibited_cell() {
-        let mut sm = StateMachine32::new(DefaultConfig::default());
-        assert_eq!(sm.read(64).unwrap(), 0u32);
+    fn u64_struct_test() {
+        let chunk_zero = B64::zero();
+        let bytes1 = [1u8; 8];
+        let chunk1 = B64::from(bytes1);
+        let bytes_convert: [u8; 8] = chunk1.try_into().unwrap();
+        assert_eq!(bytes_convert, bytes1);
+        assert!(chunk_zero.is_zero());
+        assert!(!chunk1.is_zero());
     }
 
     #[test]
-    fn sm32_read_empty_cell() {
-        let mut sm = StateMachine32::new(DefaultConfig::default());
-        assert_eq!(sm.read(sm.base_address() + 64).unwrap(), 0u32);
+    fn u64_arithmetic_test() {
+        let chunk_1 = B64::from([61u8; 8]);
+        let chunk_2 = B64::from([16u8; 8]);
+        let chunk_3 = B64::from(12);
+        let chunk_4 = B64::from(99);
+        assert_eq!(chunk_1 + chunk_2, B64::from([77u8; 8]));
+        assert_eq!(chunk_1 - chunk_2, B64::from([45u8; 8]));
+        assert_eq!(chunk_4 * chunk_3, B64::from(99 * 12));
+        assert_eq!(chunk_4 / chunk_3, B64::from(99 / 12));
+        assert_eq!(chunk_4 % chunk_3, B64::from(99 % 12));
     }
 
     #[test]
-    fn sm32_write_read_one_cell() {
-        let mut sm = StateMachine32::new(DefaultConfig::default());
-        let chunk = 12u32;
-        assert!(sm.write(sm.base_address(), chunk).is_ok());
-        assert_eq!(sm.read(sm.base_address()).unwrap(), 12u32);
-    }
-
-    #[test]
-    fn sm32_write_one_cell_read_two_cells() {
-        let mut sm = StateMachine32::new(DefaultConfig::default());
-        let chunk_1 = u32::from_bytes([7u8; 4]);
-        let chunk_2 = u32::from_bytes([10u8; 4]);
-        assert!(sm.write(sm.base_address(), chunk_1).is_ok());
-        assert!(sm.write(sm.base_address() + 4u32, chunk_2).is_ok());
-        assert_eq!(
-            sm.read(sm.base_address() + 3u32).unwrap(),
-            u32::from_be_bytes([7u8, 10, 10, 10])
-        );
-    }
-
-    #[test]
-    fn sm32_write_two_cells_read_one_cells() {
-        let mut sm = StateMachine32::new(DefaultConfig::default());
-        let chunk = u32::from_bytes([3u8; 4]);
-        assert!(sm.write(sm.base_address() + 2u32, chunk).is_ok());
-        assert_eq!(sm.read(sm.base_address()).unwrap(), 0x00000303u32);
-        assert_eq!(sm.read(sm.base_address() + 4u32).unwrap(), 0x03030000u32);
-    }
-
-    #[test]
-    fn u256_test() {
-        let chunk_1 = U256::from_bytes([9u8; 32]);
-        let chunk_2 = U256::from_usize(10);
-        assert_eq!(chunk_1.to_bytes(), [9u8; 32]);
-        assert_eq!(U256::zero(), U256::from_bytes([0u8; 32]));
-        assert_eq!(chunk_2.to_usize(), 10 as usize);
-        assert!(!chunk_1.is_zero());
+    fn u32_struct_test() {
+        let chunk_zero = B64::zero();
+        let bytes1 = [59u8; 8];
+        let chunk1 = B64::from(bytes1);
+        let bytes_convert: [u8; 8] = chunk1.try_into().unwrap();
+        assert_eq!(bytes_convert, bytes1);
+        assert!(chunk_zero.is_zero());
+        assert!(!chunk1.is_zero());
     }
 
     #[test]
     /// The testcases above already covered Add, Sub and Rem. This test case covers Div
-    fn u256_arithmetic_test() {
-        let chunk_1 = U256::from_bytes([34u8; 32]);
-        let chunk_2 = U256::from_bytes([17u8; 32]);
-        assert_eq!(chunk_1 / chunk_2, U256::from_usize(2));
-    }
-
-    #[test]
-    fn u32_test() {
-        let chunk_1 = u32::from_bytes([73u8; 4]);
-        let chunk_2 = u32::from_usize(103);
-        assert_eq!(chunk_1.to_bytes(), [73u8; 4]);
-        assert_eq!(u32::zero(), u32::from_bytes([0u8; 4]));
-        assert_eq!(chunk_2.to_usize(), 103 as usize);
-        assert!(!chunk_1.is_zero());
-    }
-
-    #[test]
-    fn u64_test() {
-        let chunk_1 = u64::from_bytes([15u8; 8]);
-        let chunk_2 = u64::from_usize(235);
-        assert_eq!(chunk_1.to_bytes(), [15u8; 8]);
-        assert_eq!(u64::zero(), u64::from_bytes([0u8; 8]));
-        assert_eq!(chunk_2.to_usize(), 235 as usize);
-        assert!(!chunk_1.is_zero());
-    }
-
-    #[test]
-    fn u32_stack_functional() {
-        let mut sm = StateMachine32::new(DefaultConfig::default());
-
-        assert!(sm.push(0x01020304).is_ok());
-        assert!(sm.push(0xaabbccdd).is_ok());
-        assert!(sm.stack_depth() == 2);
-
-        assert_eq!(sm.pop().unwrap(), 0xaabbccdd);
-        assert_eq!(sm.pop().unwrap(), 0x01020304);
-        assert!(sm.stack_depth() == 0);
-    }
-
-    #[test]
-    #[should_panic]
-    fn u32_stack_underflow() {
-        let mut sm = StateMachine32::new(DefaultConfig::default());
-        sm.pop().unwrap();
-    }
-
-    #[test]
-    #[should_panic]
-    fn u32_stack_overflow() {
-        let mut sm = StateMachine32::new(ConfigArgs {
-            head_layout: true,
-            stack_depth: 2,
-            no_register: 0,
-            buffer_size: 64,
-        });
-        assert!(sm.push(0x01020304).is_ok());
-        assert!(sm.push(0x01020304).is_ok());
-        assert!(sm.push(0x01020304).is_ok());
-        assert!(sm.push(0x01020304).is_ok());
-    }
-
-    #[test]
-    fn u32_register_functional() {
-        let mut sm = StateMachine32::new(DefaultConfig::default());
-
-        let r0 = sm.register(0).unwrap();
-        let r1 = sm.register(1).unwrap();
-
-        assert!(sm.set(r0, 0x01020304).is_ok());
-        assert!(sm.set(r1, 0xaabbccdd).is_ok());
-
-        assert_eq!(sm.get(r0).unwrap(), 0x01020304);
-        assert_eq!(sm.get(r1).unwrap(), 0xaabbccdd);
-
-        assert!(sm.mov(r0, r1).is_ok());
-
-        assert!(sm.get(r0).unwrap() == 0xaabbccdd);
+    fn u32_arithmetic_test() {
+        let chunk_1 = B32::from([34u8; 4]);
+        let chunk_2 = B32::from([17u8; 4]);
+        let chunk_3 = B32::from(5);
+        let chunk_4 = B32::from(156);
+        assert_eq!(chunk_1 + chunk_2, B32::from([51u8; 4]));
+        assert_eq!(chunk_1 - chunk_2, B32::from([17u8; 4]));
+        assert_eq!(chunk_4 * chunk_3, B32::from(156 * 5));
+        assert_eq!(chunk_4 / chunk_3, B32::from(156 / 5));
+        assert_eq!(chunk_4 % chunk_3, B32::from(156 % 5));
     }
 }

@@ -2811,6 +2811,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "wano"
+version = "0.1.0"
+
+[[package]]
 name = "want"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3038,12 +3042,16 @@ version = "0.1.0"
 
 [[package]]
 name = "zkmemory"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "cargo-llvm-cov",
  "ethnum",
+ "ff",
+ "group",
  "halo2_proofs",
+ "halo2curves",
  "hex",
+ "rand_core",
  "rbtree",
 ]
 
