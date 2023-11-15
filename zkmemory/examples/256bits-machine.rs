@@ -8,7 +8,7 @@ use zkmemory::{
     machine::{AbstractContext, AbstractInstruction, AbstractMachine, Register, CellInteraction, TraceRecord},
     config::{AllocatedSection, Config, ConfigArgs, DefaultConfig},
     base::{Base, B256},
-    error::Error, kzg::{KZGMemoryCommitment, KZGParams},
+    error::Error,
 };
 
 /// My instruction set for the machine
