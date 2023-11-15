@@ -10,7 +10,7 @@ use rbtree::RBTree;
 use crate::{
     base::Base,
     machine::TraceRecord,
-    machine::{AbstractTraceRecord, MemoryInstruction},
+    machine::MemoryInstruction,
 };
 use halo2_proofs::{
     arithmetic::{eval_polynomial, lagrange_interpolate},
@@ -30,8 +30,11 @@ where
     K: Base<S>,
     V: Base<T>,
 {
+    // Params: generators, crs, etc
     kzg_params: ParamsKZG<Bn256>,
+    // Domain used for creating polynomials
     domain: EvaluationDomain<Fr>,
+    // A copy of an execution trace, RBTree for later implementation of sorting
     trace_record: RBTree<TraceRecord<K, V, S, T>, PhantomData<()>>,
 }
 
