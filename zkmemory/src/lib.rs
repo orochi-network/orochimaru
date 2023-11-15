@@ -14,16 +14,16 @@
 
 /// Base trait for generic type
 pub mod base;
-/// Define abstract traits for commitment schemes
-pub mod commitment;
 /// Define all configuration of [StateMachine](crate::machine::StateMachine) and [RawMemory](crate::memory::RawMemory)
 pub mod config;
 /// Define all errors of [StateMachine](crate::machine::StateMachine) and [RawMemory](crate::memory::RawMemory)
 pub mod error;
-/// A KZG module that commit to the memory trace through the execution trace
-pub mod kzg;
+/// A commitment module that commit to the memory trace through the execution trace
+/// Currently supports: KZG, Merkle Tree, Verkle Tree.
+pub mod commitment;
 /// Definition of abstract machine (instruction, trace and context)
 pub mod machine;
+///
 
 #[cfg(test)]
 mod tests {

@@ -348,11 +348,4 @@ fn main() {
     for x in machine.trace().into_iter() {
         println!("{:?}", x);
     }  
-
-    let mut kzg_scheme = KZGParams::init(); 
-
-    // Test commitment
-    let record = machine.trace()[4];
-    println!("{:?}", record);
-    println!("{:?}", kzg_scheme.commit_trace_element(record));
 }
