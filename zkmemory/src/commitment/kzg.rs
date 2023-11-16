@@ -49,7 +49,8 @@ where
     K: Base<S>,
     V: Base<T>,
 {
-    fn init() -> Self {
+    ///Documentation
+    pub fn init() -> Self {
         const K: u32 = 3;
         Self {
             kzg_params: ParamsKZG::<Bn256>::new(K),
@@ -129,8 +130,8 @@ where
     //due to the field private error
 
     // Create the list of proof for KZG openings
-    // Used to create a friendly KZG API opening function
-    fn create_proof_sh_plonk<
+    /// Used to create a friendly KZG API opening function
+    pub fn create_proof_sh_plonk<
         'params,
         Scheme: CommitmentScheme,
         P: Prover<'params, Scheme>,
@@ -189,8 +190,8 @@ where
     }
 
     //Verify KZG openings
-    // Used to create a friendly KZG API verification function
-    fn verify_shplonk<
+    /// Used to create a friendly KZG API verification function
+    pub fn verify_shplonk<
         'a,
         'params,
         Scheme: CommitmentScheme,
@@ -239,18 +240,16 @@ where
                     .map_err(|_| Error::Opening)
             })
             .unwrap();
-
         strategy.finalize()
     }
 
 
- // Open all fields from the trace record
-    fn prove_trace_element
+ /// Open all fields from the trace record
+    pub fn prove_trace_element
     (&self, trace: TraceRecord<K, V, S, T>,
     commitment: <KZGCommitmentScheme<Bn256> as CommitmentScheme>::Curve) -> Vec<u8> {
         //convert the trace to the polynomial
         //borrowed from Thang's commit function
-        const K: u32 = 3;
         let field_tuple = self.trace_to_field(trace);
         let poly = self.get_trace_poly(field_tuple);
         // create the point list of opening
@@ -281,9 +280,8 @@ where
         commitment_list)
     }
     
-// verify the correctness of the tract record
-    fn verify_trace_element(&self, proof: Vec<u8>) -> bool {
-        const K: u32 = 3;
+/// verify the correctness of the tract record
+    pub fn verify_trace_element(&self, proof: Vec<u8>) -> bool {
         // create the point list of opening
         let mut points_list = Vec::new();
         points_list.extend([Fr::ONE; 5]);
