@@ -5,7 +5,6 @@ use core::marker::PhantomData;
 use ff::{Field, PrimeField, WithSmallOrderMulGroup};
 use group::Curve;
 use rand_core::OsRng;
-use rbtree::RBTree;
 
 use crate::{base::Base, machine::MemoryInstruction, machine::TraceRecord};
 use halo2_proofs::{
@@ -127,8 +126,11 @@ where
         let inner = [0, 8, 16, 24].map(|i| u64::from_le_bytes(b[i..i + 8].try_into().unwrap()));
         Fr::from_raw(inner)
     }
+    //WARNING: the functions below have not been tested yet
+    //due to the field private error
 
     // Create the list of proof for KZG openings
+    // Used to create a friendly KZG API opening function
     fn create_proof_sh_plonk<
         'params,
         Scheme: CommitmentScheme,
@@ -142,21 +144,23 @@ where
         points_list: Vec<Scheme::Scalar>,
         // a list of polynomials p_1(x), p_2(x),...,p_n(x)
         polynomial_list: Vec<Polynomial<Scheme::Scalar, Coeff>>,
+        // the list of commitment of p_1(x),p_2(x),...,p_n(x)
+        commitment_list:Vec<Scheme::Curve>,
     ) -> Vec<u8>
     where
         Scheme::Scalar: WithSmallOrderMulGroup<3>,
     {
         assert!(points_list.len()==polynomial_list.len());
+        assert!(points_list.len()==commitment_list.len());
         // this function, given a list of points x_1,x_2,...,x_n
         // and polynomials p_1(x),p_2(x),...,p_n(x)
         // create a witness for the value p_1(x_1), p_2(x_2),...,p_n(x_n)
         let mut transcript = TW::init(Vec::new());
 
         let blind = Blind::new(&mut OsRng);
-        // Commit the polynomial p_i(x)
+        // Add the commitment the polynomial p_i(x) to transcript
         for i in 0..polynomial_list.len() {
-            let a = params.commit(&polynomial_list[i], blind).to_affine();
-            transcript.write_point(a).unwrap();
+            transcript.write_point(commitment_list[i]).unwrap();
         }
         // evaluate the values p_i(x_i) for i=1,2,...,n
         for i in 0..polynomial_list.len() {
@@ -186,6 +190,7 @@ where
     }
 
     //Verify KZG openings
+    // Used to create a friendly KZG API verification function
     fn verify_shplonk<
         'a,
         'params,
@@ -197,25 +202,27 @@ where
     >(
         &self,
         params: &'params Scheme::ParamsVerifier,
+        // // a list of point x_1,x_2,...x_n
         points_list: Vec<Scheme::Scalar>,
+        // the proof of opening
         proof: &'a [u8],
     ) -> bool {
         let verifier = Vr::new(params);
 
         let mut transcript = Tr::init(proof);
-
+        // read commitment list from transcript
         let mut commitment_list = Vec::new();
         for i in 0..points_list.len() {
             let temp = transcript.read_point().unwrap();
             commitment_list.push(temp);
         }
-
+        // read the point list from transcript
         let mut polynomial_list = Vec::new();
         for i in 0..points_list.len() {
             let temp: Scheme::Scalar = transcript.read_scalar().unwrap();
             polynomial_list.push(temp);
         }
-
+        // add the queries
         let mut queries = Vec::new();
         for i in 0..points_list.len() {
             let temp = VerifierQuery {
@@ -226,7 +233,7 @@ where
 
             queries.push(temp);
         }
-
+        // now, we apply the verify function from SHPLONK to return the result
         let strategy = Strategy::new(params);
         let strategy = strategy
             .process(|msm_accumulator| {
@@ -240,39 +247,60 @@ where
     }
 
 
-
-    fn prove_trace_element(&self, trace: TraceRecord<K, V, S, T>) -> Vec<u8> {
+ // Open all fields from the trace record
+    fn prove_trace_element
+    (&self, trace: TraceRecord<K, V, S, T>,
+    commitment: <KZGCommitmentScheme<Bn256> as CommitmentScheme>::Curve) -> Vec<u8> {
+        //convert the trace to the polynomial
+        //borrowed from Thang's commit function
         const K: u32 = 3;
         let mut points_arr = [Fr::ONE; 8];
         let field_tuple = self.trace_to_field(trace);
         let poly = self.get_trace_poly(field_tuple);
         let alpha = Blind(Fr::random(OsRng));
-        let params = ParamsKZG::<Bn256>::new(K);
+        // create the point list of opening
         let mut points_list = Vec::new();
         points_list.extend([Fr::ONE; 5]);
         let mut current_point = Fr::ONE;
         for i in 1..5 as usize {
             current_point *= Fr::MULTIPLICATIVE_GENERATOR;
-            points_arr[i] = current_point;
+            points_list[i] = current_point;
         }
+        // initialize the kzg params
+        let params = self.kzg_params;
+        // initialize the vector of commitments for the create_proof_for_shplonk function
+        let mut commitment_list=Vec::new();
+        commitment_list.extend([commitment; 5]);
+        // initialize the vector of polynomials for the create_proof_for_shplonk function
         let mut poly_list = Vec::new();
         for i in 0..5 {
             poly_list.push(poly);
         }
-        let proof = self.create_proof_sh_plonk::< 
+        //create the proof
+        self.create_proof_sh_plonk::< 
         KZGCommitmentScheme<Bn256>, 
         ProverSHPLONK<'_,_>, 
         _, Blake2bWrite<_, _, Challenge255<_>>>(
-        &params, points_list.clone(), poly_list);
-        proof
+        &params, 
+        points_list.clone(), 
+        poly_list,
+        commitment_list)
     }
     
-
+// verify the correctness of the tract record
     fn verify_trace_element(&self, proof: Vec<u8>) -> bool {
         const K: u32 = 3;
+        // create the point list of opening
         let mut points_list = Vec::new();
         points_list.extend([Fr::ONE; 5]);
-        let params = ParamsKZG::<Bn256>::new(K);
+        let mut current_point = Fr::ONE;
+        for i in 1..5 as usize {
+            current_point *= Fr::MULTIPLICATIVE_GENERATOR;
+            points_list[i] = current_point;
+        }
+        // initialize the kzg params
+        let params =self.kzg_params;
+        // finally, verify the opening
         self.verify_shplonk::< 
         KZGCommitmentScheme<Bn256>,
         VerifierSHPLONK<'_,_>,
