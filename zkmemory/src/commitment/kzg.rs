@@ -38,72 +38,15 @@ where
     kzg_params: ParamsKZG<Bn256>,
     // Domain used for creating polynomials
     domain: EvaluationDomain<Fr>,
-    // A copy of an execution trace, RBTree for later implementation of sorting
-    trace_record: RBTree<TraceRecord<K, V, S, T>, PhantomData<()>>,
+    _marker1: PhantomData<K>,
+    _marker2: PhantomData<V>,
 }
+
 
 /// KZG trait for committing the memory trace elements
-pub trait KZGMemoryCommitment<K, V, const S: usize, const T: usize>
-where
-    K: Base<S>,
-    V: Base<T>,
-{
-    /// Init a new KZG module
-    fn init() -> KZGParams<K, V, S, T>;
 
-    /// Commit the trace element tuple to G1
-    fn commit_trace_element(&mut self, trace: TraceRecord<K, V, S, T>) -> G1Affine;
 
-    /// Convert trace tuple elements to field elements
-    /// Also, fill with ZERO elements to 8 (the nearest power of 2)
-    fn trace_to_field(&self, trace: TraceRecord<K, V, S, T>) -> [Fr; 8];
-
-    /// Use Lagrange interpolation to form the polynomial
-    /// representing a trace tuple element
-    /// We will use the points as successive powers of the field's primitive root
-    fn get_trace_poly(&self, evals: [Fr; 8]) -> Polynomial<Fr, Coeff>;
-
-    /// Convert raw 32 bytes from big endian to Fr element
-    fn be_bytes_to_field(&self, bytes: &mut [u8]) -> Fr;
-
-    /// Create witness
-    fn create_proof_sh_plonk<
-        'params,
-        Scheme: CommitmentScheme,
-        P: Prover<'params, Scheme>,
-        E: EncodedChallenge<Scheme::Curve>,
-        TW: TranscriptWriterBuffer<Vec<u8>, Scheme::Curve, E>,
-    >(
-        &self,
-        params: &'params Scheme::ParamsProver,
-        // a list of point x_1,x_2,...x_n
-        points_list: Vec<Scheme::Scalar>,
-        // a list of polynomials p_1(x), p_2(x),...,p_n(x)
-        polynomial_list: Vec<Polynomial<Scheme::Scalar, Coeff>>,
-    ) -> Vec<u8>
-    where
-        Scheme::Scalar: WithSmallOrderMulGroup<3>;
-
-    fn verify_shplonk<
-        'a,
-        'params,
-        Scheme: CommitmentScheme,
-        Vr: Verifier<'params, Scheme>,
-        E: EncodedChallenge<Scheme::Curve>,
-        Tr: TranscriptReadBuffer<&'a [u8], Scheme::Curve, E>,
-        Strategy: VerificationStrategy<'params, Scheme, Vr, Output = Strategy>,
-    >(
-        &self,
-        params: &'params Scheme::ParamsVerifier,
-        points_list: Vec<Scheme::Scalar>,
-        proof: &'a [u8],
-    ) -> bool;
-
-    fn open_trace_element(&self, trace: TraceRecord<K, V, S, T>) -> Vec<u8>;
-    fn verify_trace_element(&self, proof: Vec<u8>) -> bool;
-}
-
-impl<K, V, const S: usize, const T: usize> KZGMemoryCommitment<K, V, S, T> for KZGParams<K, V, S, T>
+impl<K, V, const S: usize, const T: usize> KZGParams<K, V, S, T>
 where
     K: Base<S>,
     V: Base<T>,
@@ -113,19 +56,22 @@ where
         Self {
             kzg_params: ParamsKZG::<Bn256>::new(K),
             domain: EvaluationDomain::new(1, K),
-            trace_record: RBTree::new(),
+            _marker1: PhantomData::<K>,
+            _marker2: PhantomData::<V>,
         }
     }
 
-    fn commit_trace_element(&mut self, trace: TraceRecord<K, V, S, T>) -> G1Affine {
-        // Update the trace record set
-        self.trace_record.insert(trace, PhantomData);
+
+      /// Commit a trace record in an execution trace
+    /// The RBtree in the struct also updates the records
+    pub fn commit(&mut self, trace: TraceRecord<K, V, S, T>) -> G1Affine {
         let field_tuple = self.trace_to_field(trace);
         let poly = self.get_trace_poly(field_tuple);
         let alpha = Blind(Fr::random(OsRng));
         let commitment = self.kzg_params.commit(&poly, alpha);
         commitment.to_affine()
     }
+
 
     fn trace_to_field(&self, trace: TraceRecord<K, V, S, T>) -> [Fr; 8] {
         let (t, s, i, l, d) = trace.get_tuple();
@@ -155,9 +101,15 @@ where
         }
     }
 
+   // Convert 8 field elements of a trace record
+    // into a polynomial
     fn get_trace_poly(&self, evals: [Fr; 8]) -> Polynomial<Fr, Coeff> {
         let mut points_arr = [Fr::ONE; 8];
         let mut current_point = Fr::ONE;
+
+        // We use successive powers of primitive roots as points
+        // We use elements in trace record to be the evals
+        // 3 last evals should be ZERO
         for i in 1..8 as usize {
             current_point *= Fr::MULTIPLICATIVE_GENERATOR;
             points_arr[i] = current_point;
@@ -168,6 +120,7 @@ where
         ))
     }
 
+
     fn be_bytes_to_field(&self, bytes: &mut [u8]) -> Fr {
         bytes.reverse();
         let b = bytes.as_ref();
@@ -175,6 +128,7 @@ where
         Fr::from_raw(inner)
     }
 
+    // Create the list of proof for KZG openings
     fn create_proof_sh_plonk<
         'params,
         Scheme: CommitmentScheme,
@@ -230,6 +184,7 @@ where
         transcript.finalize()
     }
 
+    //Verify KZG openings
     fn verify_shplonk<
         'a,
         'params,
@@ -283,7 +238,9 @@ where
         strategy.finalize()
     }
 
-    fn open_trace_element(&self, trace: TraceRecord<K, V, S, T>) -> Vec<u8> {
+
+
+    fn prove_trace_element(&self, trace: TraceRecord<K, V, S, T>) -> Vec<u8> {
         const K: u32 = 3;
         let mut points_arr = [Fr::ONE; 8];
         let field_tuple = self.trace_to_field(trace);
@@ -303,23 +260,24 @@ where
         }
         let proof = self.create_proof_sh_plonk::< 
         KZGCommitmentScheme<Bn256>, 
-        ProverSHPLONK<_>, 
+        ProverSHPLONK<'_,_>, 
         _, Blake2bWrite<_, _, Challenge255<_>>>(
         &params, points_list.clone(), poly_list);
         proof
     }
     
+
     fn verify_trace_element(&self, proof: Vec<u8>) -> bool {
         const K: u32 = 3;
         let mut points_list = Vec::new();
         points_list.extend([Fr::ONE; 5]);
         let params = ParamsKZG::<Bn256>::new(K);
         self.verify_shplonk::< 
-        KZGCommitmentScheme<Bn256>, 
-        VerifierSHPLONK<_>,
+        KZGCommitmentScheme<Bn256>,
+        VerifierSHPLONK<'_,_>,
         _,
-        Blake2bRead<_, _, Challenge255<_>>, 
-        AccumulatorStrategy<_>> 
-        (&params, points_list.clone(), proof.as_slice())
+        Blake2bRead<_, _, Challenge255<_>>,
+        AccumulatorStrategy<'_,_>,
+        >(&params, points_list.clone(), proof.as_slice())
     }
 }
