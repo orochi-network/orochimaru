@@ -146,6 +146,7 @@ where
     where
         Scheme::Scalar: WithSmallOrderMulGroup<3>,
     {
+        assert!(points_list.len()==polynomial_list.len());
         // this function, given a list of points x_1,x_2,...,x_n
         // and polynomials p_1(x),p_2(x),...,p_n(x)
         // create a witness for the value p_1(x_1), p_2(x_2),...,p_n(x_n)
