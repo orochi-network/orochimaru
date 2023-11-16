@@ -17,7 +17,6 @@ use halo2_proofs::{
             multiopen::{ProverSHPLONK,VerifierSHPLONK},
             strategy::AccumulatorStrategy,
         },
-        query::CommitmentReference,
         {Coeff, EvaluationDomain, Polynomial, ProverQuery, VerificationStrategy, VerifierQuery},
     },
     transcript::{
@@ -212,25 +211,23 @@ where
         let mut transcript = Tr::init(proof);
         // read commitment list from transcript
         let mut commitment_list = Vec::new();
-        for i in 0..points_list.len() {
+        for _i in 0..points_list.len() {
             let temp = transcript.read_point().unwrap();
             commitment_list.push(temp);
         }
         // read the point list from transcript
         let mut polynomial_list = Vec::new();
-        for i in 0..points_list.len() {
+        for _i in 0..points_list.len() {
             let temp: Scheme::Scalar = transcript.read_scalar().unwrap();
             polynomial_list.push(temp);
         }
         // add the queries
         let mut queries = Vec::new();
         for i in 0..points_list.len() {
-            let temp = VerifierQuery {
-                commitment: CommitmentReference::Commitment(&commitment_list[i]),
-                point: points_list[i],
-                eval: polynomial_list[i],
-            };
-
+            let temp = VerifierQuery::new_commitment(
+                &commitment_list[i],
+                points_list[i],
+                polynomial_list[i]);
             queries.push(temp);
         }
         // now, we apply the verify function from SHPLONK to return the result
@@ -254,10 +251,8 @@ where
         //convert the trace to the polynomial
         //borrowed from Thang's commit function
         const K: u32 = 3;
-        let mut points_arr = [Fr::ONE; 8];
         let field_tuple = self.trace_to_field(trace);
         let poly = self.get_trace_poly(field_tuple);
-        let alpha = Blind(Fr::random(OsRng));
         // create the point list of opening
         let mut points_list = Vec::new();
         points_list.extend([Fr::ONE; 5]);
@@ -266,22 +261,21 @@ where
             current_point *= Fr::MULTIPLICATIVE_GENERATOR;
             points_list[i] = current_point;
         }
-        // initialize the kzg params
-        let params = self.kzg_params;
         // initialize the vector of commitments for the create_proof_for_shplonk function
         let mut commitment_list=Vec::new();
         commitment_list.extend([commitment; 5]);
         // initialize the vector of polynomials for the create_proof_for_shplonk function
         let mut poly_list = Vec::new();
-        for i in 0..5 {
-            poly_list.push(poly);
+        for _i in 0..5
+        {
+            poly_list.push(poly.clone());
         }
         //create the proof
         self.create_proof_sh_plonk::< 
         KZGCommitmentScheme<Bn256>, 
         ProverSHPLONK<'_,_>, 
         _, Blake2bWrite<_, _, Challenge255<_>>>(
-        &params, 
+        &self.kzg_params, 
         points_list.clone(), 
         poly_list,
         commitment_list)
@@ -298,8 +292,6 @@ where
             current_point *= Fr::MULTIPLICATIVE_GENERATOR;
             points_list[i] = current_point;
         }
-        // initialize the kzg params
-        let params =self.kzg_params;
         // finally, verify the opening
         self.verify_shplonk::< 
         KZGCommitmentScheme<Bn256>,
@@ -307,6 +299,6 @@ where
         _,
         Blake2bRead<_, _, Challenge255<_>>,
         AccumulatorStrategy<'_,_>,
-        >(&params, points_list.clone(), proof.as_slice())
+        >(&self.kzg_params, points_list.clone(), proof.as_slice())
     }
 }
