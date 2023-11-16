@@ -54,10 +54,8 @@ where
     }
 
     /// Commit a trace record in an execution trace
-    /// The RBtree in the struct also updates the records
     pub fn commit(&mut self, trace: TraceRecord<K, V, S, T>) -> G1Affine {
-        let field_tuple = self.trace_to_field(trace);
-        let poly = self.get_trace_poly(field_tuple);
+        let poly = self.poly_from_trace(trace);
         let alpha = Blind(Fr::random(OsRng));
         let commitment = self.kzg_params.commit(&poly, alpha);
         commitment.to_affine()
@@ -93,9 +91,15 @@ where
         }
     }
 
+    // Convert the trace record into a polynomial
+    fn poly_from_trace(&self, trace: TraceRecord<K, V, S, T>) -> Polynomial<Fr, Coeff> {
+        let evals = self.trace_to_field(trace);
+        self.poly_from_evals(evals)
+    }
+
     // Convert 8 field elements of a trace record
     // into a polynomial
-    fn get_trace_poly(&self, evals: [Fr; 8]) -> Polynomial<Fr, Coeff> {
+    fn poly_from_evals(&self, evals: [Fr; 8]) -> Polynomial<Fr, Coeff> {
         let mut points_arr = [Fr::ONE; 8];
         let mut current_point = Fr::ONE;
 
