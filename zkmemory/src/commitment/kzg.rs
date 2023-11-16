@@ -7,19 +7,23 @@ use group::Curve;
 use rand_core::OsRng;
 use rbtree::RBTree;
 
-use crate::{
-    base::Base,
-    machine::TraceRecord,
-    machine::MemoryInstruction,
-};
+use crate::{base::Base, machine::MemoryInstruction, machine::TraceRecord};
 use halo2_proofs::{
     arithmetic::{eval_polynomial, lagrange_interpolate},
+    plonk::Error,
     poly::{
-        commitment::{Blind, CommitmentScheme, ParamsProver, Prover},
-        kzg::commitment::ParamsKZG,
-        {Coeff, EvaluationDomain, Polynomial, ProverQuery},
+        commitment::{Blind, CommitmentScheme, ParamsProver, Prover, Verifier},
+        kzg::{
+            commitment::{KZGCommitmentScheme, ParamsKZG},
+            multiopen::{ProverSHPLONK,VerifierSHPLONK},
+            strategy::AccumulatorStrategy,
+        },
+        query::CommitmentReference,
+        {Coeff, EvaluationDomain, Polynomial, ProverQuery, VerificationStrategy, VerifierQuery},
     },
-    transcript::{EncodedChallenge, TranscriptWriterBuffer},
+    transcript::{
+       Blake2bRead, Blake2bWrite, Challenge255, EncodedChallenge, TranscriptReadBuffer, TranscriptWriterBuffer,
+    },
 };
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
 
@@ -70,6 +74,7 @@ where
         E: EncodedChallenge<Scheme::Curve>,
         TW: TranscriptWriterBuffer<Vec<u8>, Scheme::Curve, E>,
     >(
+        &self,
         params: &'params Scheme::ParamsProver,
         // a list of point x_1,x_2,...x_n
         points_list: Vec<Scheme::Scalar>,
@@ -78,6 +83,24 @@ where
     ) -> Vec<u8>
     where
         Scheme::Scalar: WithSmallOrderMulGroup<3>;
+
+    fn verify_shplonk<
+        'a,
+        'params,
+        Scheme: CommitmentScheme,
+        Vr: Verifier<'params, Scheme>,
+        E: EncodedChallenge<Scheme::Curve>,
+        Tr: TranscriptReadBuffer<&'a [u8], Scheme::Curve, E>,
+        Strategy: VerificationStrategy<'params, Scheme, Vr, Output = Strategy>,
+    >(
+        &self,
+        params: &'params Scheme::ParamsVerifier,
+        points_list: Vec<Scheme::Scalar>,
+        proof: &'a [u8],
+    ) -> bool;
+
+    fn open_trace_element(&self, trace: TraceRecord<K, V, S, T>) -> Vec<u8>;
+    fn verify_trace_element(&self, proof: Vec<u8>) -> bool;
 }
 
 impl<K, V, const S: usize, const T: usize> KZGMemoryCommitment<K, V, S, T> for KZGParams<K, V, S, T>
@@ -159,6 +182,7 @@ where
         E: EncodedChallenge<Scheme::Curve>,
         TW: TranscriptWriterBuffer<Vec<u8>, Scheme::Curve, E>,
     >(
+        &self,
         params: &'params Scheme::ParamsProver,
         // a list of point x_1,x_2,...x_n
         points_list: Vec<Scheme::Scalar>,
@@ -190,7 +214,7 @@ where
 
         let mut queries: Vec<ProverQuery<'_, <Scheme as CommitmentScheme>::Curve>> = Vec::new();
         for i in 0..polynomial_list.len() {
-            let mut temp = ProverQuery {
+            let temp = ProverQuery {
                 point: points_list[i],
                 poly: &polynomial_list[i],
                 blind,
@@ -204,5 +228,98 @@ where
             .unwrap();
 
         transcript.finalize()
+    }
+
+    fn verify_shplonk<
+        'a,
+        'params,
+        Scheme: CommitmentScheme,
+        Vr: Verifier<'params, Scheme>,
+        E: EncodedChallenge<Scheme::Curve>,
+        Tr: TranscriptReadBuffer<&'a [u8], Scheme::Curve, E>,
+        Strategy: VerificationStrategy<'params, Scheme, Vr, Output = Strategy>,
+    >(
+        &self,
+        params: &'params Scheme::ParamsVerifier,
+        points_list: Vec<Scheme::Scalar>,
+        proof: &'a [u8],
+    ) -> bool {
+        let verifier = Vr::new(params);
+
+        let mut transcript = Tr::init(proof);
+
+        let mut commitment_list = Vec::new();
+        for i in 0..points_list.len() {
+            let temp = transcript.read_point().unwrap();
+            commitment_list.push(temp);
+        }
+
+        let mut polynomial_list = Vec::new();
+        for i in 0..points_list.len() {
+            let temp: Scheme::Scalar = transcript.read_scalar().unwrap();
+            polynomial_list.push(temp);
+        }
+
+        let mut queries = Vec::new();
+        for i in 0..points_list.len() {
+            let temp = VerifierQuery {
+                commitment: CommitmentReference::Commitment(&commitment_list[i]),
+                point: points_list[i],
+                eval: polynomial_list[i],
+            };
+
+            queries.push(temp);
+        }
+
+        let strategy = Strategy::new(params);
+        let strategy = strategy
+            .process(|msm_accumulator| {
+                verifier
+                    .verify_proof(&mut transcript, queries.clone(), msm_accumulator)
+                    .map_err(|_| Error::Opening)
+            })
+            .unwrap();
+
+        strategy.finalize()
+    }
+
+    fn open_trace_element(&self, trace: TraceRecord<K, V, S, T>) -> Vec<u8> {
+        const K: u32 = 3;
+        let mut points_arr = [Fr::ONE; 8];
+        let field_tuple = self.trace_to_field(trace);
+        let poly = self.get_trace_poly(field_tuple);
+        let alpha = Blind(Fr::random(OsRng));
+        let params = ParamsKZG::<Bn256>::new(K);
+        let mut points_list = Vec::new();
+        points_list.extend([Fr::ONE; 5]);
+        let mut current_point = Fr::ONE;
+        for i in 1..5 as usize {
+            current_point *= Fr::MULTIPLICATIVE_GENERATOR;
+            points_arr[i] = current_point;
+        }
+        let mut poly_list = Vec::new();
+        for i in 0..5 {
+            poly_list.push(poly);
+        }
+        let proof = self.create_proof_sh_plonk::< 
+        KZGCommitmentScheme<Bn256>, 
+        ProverSHPLONK<_>, 
+        _, Blake2bWrite<_, _, Challenge255<_>>>(
+        &params, points_list.clone(), poly_list);
+        proof
+    }
+    
+    fn verify_trace_element(&self, proof: Vec<u8>) -> bool {
+        const K: u32 = 3;
+        let mut points_list = Vec::new();
+        points_list.extend([Fr::ONE; 5]);
+        let params = ParamsKZG::<Bn256>::new(K);
+        self.verify_shplonk::< 
+        KZGCommitmentScheme<Bn256>, 
+        VerifierSHPLONK<_>,
+        _,
+        Blake2bRead<_, _, Challenge255<_>>, 
+        AccumulatorStrategy<_>> 
+        (&params, points_list.clone(), proof.as_slice())
     }
 }
