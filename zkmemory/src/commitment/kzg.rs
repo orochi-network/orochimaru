@@ -21,7 +21,7 @@ use halo2curves::bn256::{Bn256, Fr, G1Affine};
 
 /// A KZG module that commit to the memory trace through the execution trace
 #[derive(Debug, Clone)]
-pub struct KZGCommitmentScheme<K, V, const S: usize, const T: usize>
+pub struct KZGMemoryCommitment<K, V, const S: usize, const T: usize>
 where
     K: Base<S>,
     V: Base<T>,
@@ -32,11 +32,11 @@ where
     domain: EvaluationDomain<Fr>,
 
     // Phantom data for K and V
-    _marker1: PhantomData<K>,
-    _marker2: PhantomData<V>,
+    _marker_k: PhantomData<K>,
+    _marker_v: PhantomData<V>,
 }
 
-impl<K, V, const S: usize, const T: usize> KZGCommitmentScheme<K, V, S, T>
+impl<K, V, const S: usize, const T: usize> KZGMemoryCommitment<K, V, S, T>
 where
     K: Base<S>,
     V: Base<T>,
@@ -48,8 +48,8 @@ where
         Self {
             kzg_params: ParamsKZG::<Bn256>::new(K),
             domain: EvaluationDomain::new(1, K),
-            _marker1: PhantomData::<K>,
-            _marker2: PhantomData::<V>,
+            _marker_k: PhantomData::<K>,
+            _marker_v: PhantomData::<V>,
         }
     }
 
