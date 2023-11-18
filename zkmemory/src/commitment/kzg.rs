@@ -28,7 +28,7 @@ use halo2_proofs::{
 
 /// A KZG module that commit to the memory trace through the execution trace
 #[derive(Debug, Clone)]
-pub struct KZGParams<K, V, const S: usize, const T: usize>
+pub struct KZGMemoryCommitment<K, V, const S: usize, const T: usize>
 where
     K: Base<S>,
     V: Base<T>,
@@ -43,13 +43,13 @@ where
 
 /// KZG trait for committing the memory trace elements
 
-impl<K, V, const S: usize, const T: usize> KZGParams<K, V, S, T>
+impl<K, V, const S: usize, const T: usize> KZGMemoryCommitment<K, V, S, T>
 where
     K: Base<S>,
     V: Base<T>,
 {
     ///Documentation
-    pub fn init() -> Self {
+    pub fn new() -> Self {
         const K: u32 = 3;
         Self {
             kzg_params: ParamsKZG::<Bn256>::new(K),
@@ -60,18 +60,18 @@ where
     }
 
     /// Commit a trace record in an execution trace
-    /// The RBtree in the struct also updates the records
     pub fn commit(&mut self, trace: TraceRecord<K, V, S, T>) -> G1Affine {
-        let field_tuple = self.trace_to_field(trace);
-        let poly = self.get_trace_poly(field_tuple);
+        // Convert trace record into polynomial
+        let poly = self.poly_from_trace(trace);
+        // Commit the polynomial using Halo2's code
         let alpha = Blind(Fr::random(OsRng));
         let commitment = self.kzg_params.commit(&poly, alpha);
         commitment.to_affine()
     }
-
+    // Convert a trace record to 8 field elements
+    // The last 3 elements will be ZERO
     fn trace_to_field(&self, trace: TraceRecord<K, V, S, T>) -> [Fr; 8] {
         let (t, s, i, l, d) = trace.get_tuple();
-
         // Encode instruction to number : 1 for Write, 0 for Read
         match i {
             MemoryInstruction::Read => [
@@ -96,13 +96,16 @@ where
             ],
         }
     }
-
+    // Convert the trace record into a polynomial
+    fn poly_from_trace(&self, trace: TraceRecord<K, V, S, T>) -> Polynomial<Fr, Coeff> {
+        let evals = self.trace_to_field(trace);
+        self.poly_from_evals(evals)
+    }
     // Convert 8 field elements of a trace record
     // into a polynomial
-    fn get_trace_poly(&self, evals: [Fr; 8]) -> Polynomial<Fr, Coeff> {
+    fn poly_from_evals(&self, evals: [Fr; 8]) -> Polynomial<Fr, Coeff> {
         let mut points_arr = [Fr::ONE; 8];
         let mut current_point = Fr::ONE;
-
         // We use successive powers of primitive roots as points
         // We use elements in trace record to be the evals
         // 3 last evals should be ZERO
@@ -110,17 +113,20 @@ where
             current_point *= Fr::MULTIPLICATIVE_GENERATOR;
             points_arr[i] = current_point;
         }
+        // Use Lagrange interpolation
         self.domain.coeff_from_vec(lagrange_interpolate(
             points_arr.as_slice(),
             evals.as_slice(),
         ))
     }
-
+    // Convert 32 bytes number to field elements
+    // This is made compatible with the Fr endianess
     fn be_bytes_to_field(&self, bytes: &mut [u8]) -> Fr {
         bytes.reverse();
         let b = bytes.as_ref();
         let inner = [0, 8, 16, 24].map(|i| u64::from_le_bytes(b[i..i + 8].try_into().unwrap()));
-        Fr::from_raw(inner)
+        let result = Fr::from_raw(inner);
+        result
     }
     //WARNING: the functions below have not been tested yet
     //due to the field private error
@@ -248,8 +254,7 @@ where
     ) -> Vec<u8> {
         //convert the trace to the polynomial
         //borrowed from Thang's commit function
-        let field_tuple = self.trace_to_field(trace);
-        let poly = self.get_trace_poly(field_tuple);
+        let poly = self.poly_from_trace(trace);
         // create the point list of opening
         let mut points_list = Vec::new();
         points_list.extend([Fr::ONE; 5]);
@@ -295,5 +300,72 @@ where
         Blake2bRead<_, _, Challenge255<_>>,
         AccumulatorStrategy<'_,_>,
         >(&self.kzg_params, points_list.clone(),proof.as_slice())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::{base::B256, machine::AbstractTraceRecord};
+    use halo2_proofs::arithmetic::eval_polynomial;
+    #[test]
+    fn test_conversion_fr() {
+        let kzg_scheme = KZGMemoryCommitment::<B256, B256, 32, 32>::new();
+
+        // Create a 32-bytes repr of Base 256
+        let mut chunk = [0u8; 32];
+        for i in 0..32 {
+            chunk[i] = i as u8;
+        }
+
+        // Use my method to convert to Fr
+        let fr = kzg_scheme.be_bytes_to_field(chunk.as_mut_slice());
+
+        // Use Fr's method to convert back to bytes
+        let chunk_fr: [u8; 32] = fr.try_into().unwrap();
+
+        assert_eq!(chunk_fr, chunk);
+    }
+    #[test]
+    fn test_record_polynomial_conversion() {
+        let kzg_scheme = KZGMemoryCommitment::<B256, B256, 32, 32>::new();
+        // Initialize a trace record
+        let trace = TraceRecord::<B256, B256, 32, 32>::new(
+            1u64,
+            2u64,
+            MemoryInstruction::Read,
+            B256::zero(),
+            B256::from(100),
+        );
+        // Get the polynomial
+        let poly_trace = kzg_scheme.poly_from_trace(trace);
+        // Get only the evals, which is the trace record's elements converted to field elements
+        let poly_evals = kzg_scheme.trace_to_field(trace);
+        // Test each eval values
+        let mut base_index = Fr::ONE;
+        for i in 0..8 {
+            assert_eq!(eval_polynomial(&poly_trace, base_index), poly_evals[i]);
+            base_index *= Fr::MULTIPLICATIVE_GENERATOR;
+        }
+    }
+
+    #[test]
+    fn test_correct_memory_opening() {
+        let mut kzg_scheme = KZGMemoryCommitment::<B256, B256, 32, 32>::new();
+        // Initialize a trace record
+        let trace = TraceRecord::<B256, B256, 32, 32>::new(
+            1u64,
+            2u64,
+            MemoryInstruction::Read,
+            B256::zero(),
+            B256::from(100),
+        );
+        //Commit the trace
+        let commit = kzg_scheme.commit(trace);
+        //Open the trace
+        let proof = kzg_scheme.prove_trace_element(trace, commit);
+        //Verify the trace
+        let verify = kzg_scheme.verify_trace_element(proof);
+        assert_eq!(verify, true);
     }
 }
