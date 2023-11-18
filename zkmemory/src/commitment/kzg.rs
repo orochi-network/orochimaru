@@ -137,12 +137,17 @@ mod test {
     #[test]
     fn test_conversion_fr() {
         let kzg_scheme = KZGMemoryCommitment::<B256, B256, 32, 32>::new();
+
+        // Create a 32-bytes repr of Base 256
         let mut chunk = [0u8; 32];
         for i in 0..32 {
             chunk[i] = i as u8;
         }
 
+        // Use my method to convert to Fr
         let fr = kzg_scheme.be_bytes_to_field(chunk.as_mut_slice());
+
+        // Use Fr's method to convert back to bytes
         let chunk_fr: [u8; 32] = fr.try_into().unwrap();
 
         assert_eq!(chunk_fr, chunk);
