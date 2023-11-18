@@ -132,8 +132,8 @@ where
     //due to the field private error
 
     // Create the list of proof for KZG openings
-    /// Used to create a friendly KZG API opening function
-    pub fn create_proof_sh_plonk<
+    // Used to create a friendly KZG API opening function
+    fn create_proof_sh_plonk<
         'params,
         Scheme: CommitmentScheme,
         P: Prover<'params, Scheme>,
@@ -192,8 +192,8 @@ where
     }
 
     //Verify KZG openings
-    /// Used to create a friendly KZG API verification function
-    pub fn verify_shplonk<
+    // Used to create a friendly KZG API verification function
+    fn verify_shplonk<
         'a,
         'params,
         Scheme: CommitmentScheme,
