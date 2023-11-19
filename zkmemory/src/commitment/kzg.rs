@@ -206,32 +206,39 @@ where
         params: &'params Scheme::ParamsVerifier,
         // // a list of point x_1,x_2,...x_n
         points_list: Vec<Scheme::Scalar>,
+        // the evaluation of p_1(x_1),p_2(x_2),...,p_n(x_n)
+        opening: Vec<Scheme::Scalar>,
+        // the commitment of the polynomials p_1(x),p_2(x),...,p_n(x)
+        commitment: Vec<Scheme::Curve>,
         // the proof of opening
         proof: &'a [u8],
     ) -> bool {
         let verifier = Vr::new(params);
-
+        let mut check = true;
         let mut transcript = Tr::init(proof);
         // read commitment list from transcript
         let mut commitment_list = Vec::new();
-        for _i in 0..points_list.len() {
+        for i in 0..points_list.len() {
             let temp = transcript.read_point().unwrap();
             commitment_list.push(temp);
+            // the  "proof" consists of the commitment of the polynomials p_1(x),p_2(x),...,p_n(x)
+            // which should be equal to the "commitment" input, hence we need to check this
+            check = check && (commitment[i] == commitment_list[i]);
         }
-        // read the point list from transcript
-        let mut polynomial_list = Vec::new();
-        for _i in 0..points_list.len() {
+        // read the opening list from transcript
+        let mut eval_list: Vec<<Scheme as CommitmentScheme>::Scalar> = Vec::new();
+        for i in 0..points_list.len() {
             let temp: Scheme::Scalar = transcript.read_scalar().unwrap();
-            polynomial_list.push(temp);
+            eval_list.push(temp);
+            // the proof "proof" consists of the evaluations of p_1(x_1), p_2(x_2),...,p_n(x_n)
+            // which should be equal to the "opening" input, hence we need to check this
+            check = check && (opening[i] == eval_list[i]);
         }
         // add the queries
         let mut queries = Vec::new();
         for i in 0..points_list.len() {
-            let temp = VerifierQuery::new_commitment(
-                &commitment_list[i],
-                points_list[i],
-                polynomial_list[i],
-            );
+            let temp =
+                VerifierQuery::new_commitment(&commitment_list[i], points_list[i], eval_list[i]);
             queries.push(temp);
         }
         // now, we apply the verify function from SHPLONK to return the result
@@ -243,7 +250,7 @@ where
                     .map_err(|_| Error::Opening)
             })
             .unwrap();
-        strategy.finalize()
+        check && strategy.finalize()
     }
 
     /// Open all fields from the trace record
@@ -283,8 +290,18 @@ where
     }
 
     /// verify the correctness of the tract record
-    pub fn verify_trace_element(&self, proof: Vec<u8>) -> bool {
-        // create the point list of opening
+    pub fn verify_trace_element(
+        &self,
+        trace: TraceRecord<K, V, S, T>,
+        commitment: <KZGCommitmentScheme<Bn256> as CommitmentScheme>::Curve,
+        proof: Vec<u8>,
+    ) -> bool {
+        // create the opening for the polynomial from the trace
+        let opening = Vec::from(self.trace_to_field(trace));
+        // create the commitment list of the trace
+        let mut commitment_list = Vec::new();
+        commitment_list.extend([commitment; 5]);
+        // create the point list of opening of the polynomial
         let mut points_list = Vec::new();
         points_list.extend([Fr::ONE; 5]);
         let mut current_point = Fr::ONE;
@@ -299,7 +316,7 @@ where
         _,
         Blake2bRead<_, _, Challenge255<_>>,
         AccumulatorStrategy<'_,_>,
-        >(&self.kzg_params, points_list.clone(),proof.as_slice())
+        >(&self.kzg_params, points_list.clone(), opening, commitment_list,proof.as_slice())
     }
 }
 
@@ -365,7 +382,37 @@ mod test {
         //Open the trace
         let proof = kzg_scheme.prove_trace_element(trace, commit);
         //Verify the trace
-        let verify = kzg_scheme.verify_trace_element(proof);
+        let verify = kzg_scheme.verify_trace_element(trace, commit, proof);
         assert_eq!(verify, true);
+    }
+
+    #[test]
+    fn test_wrong_memory_opening() {
+        let mut kzg_scheme = KZGMemoryCommitment::<B256, B256, 32, 32>::new();
+        // Initialize a trace record
+        let trace = TraceRecord::<B256, B256, 32, 32>::new(
+            1u64,
+            2u64,
+            MemoryInstruction::Read,
+            B256::zero(),
+            B256::from(100),
+        );
+        // Initialize another trace record
+        // which is used to create a false proof for the first trace
+        let trace2 = TraceRecord::<B256, B256, 32, 32>::new(
+            2u64,
+            2u64,
+            MemoryInstruction::Read,
+            B256::zero(),
+            B256::from(100),
+        );
+        //Commit the first trace
+        let commit = kzg_scheme.commit(trace);
+        //Attempt to create the false proof of the first trace
+        let commit2 = kzg_scheme.commit(trace2);
+        let false_proof = kzg_scheme.prove_trace_element(trace2, commit2);
+        //Verify the trace
+        let verify = kzg_scheme.verify_trace_element(trace, commit, false_proof);
+        assert_eq!(verify, false);
     }
 }
