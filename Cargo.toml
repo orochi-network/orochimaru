@@ -1,5 +1,5 @@
 [workspace]
-members = ["libecvrf", "zkmemory", "zkrisc", "zkdb", "node", "wano"]
+members = ["libecvrf", "zkmemory", "zkrisc", "zkdb", "node", "wano", "verkletree"]
 exclude = []
 resolver = "2"
 

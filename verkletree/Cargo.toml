@@ -1,0 +1,19 @@
+[package]
+name = "verkletree"
+version = "0.1.1"
+description = "Verkle Tree"
+authors.workspace = true
+repository.workspace = true
+edition.workspace = true
+license = "Apache-2.0"
+readme = "README.md"
+keywords = ["zkp", "zkmemory", "zkvm", "zkrisc", "ram"]
+categories = ["no-std", "cryptography", "algorithms"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "verkletree"
+path = "src/lib.rs"
+
+[dependencies]
