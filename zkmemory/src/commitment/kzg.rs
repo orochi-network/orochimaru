@@ -161,8 +161,8 @@ where
 
         let blind = Blind::new(&mut OsRng);
         // Add the commitment the polynomial p_i(x) to transcript
-        for i in 0..polynomial_list.len() {
-            transcript.write_point(commitment_list[i]).unwrap();
+        for item in &commitment_list {
+            transcript.write_point(*item).unwrap();
         }
         // evaluate the values p_i(x_i) for i=1,2,...,n
         for i in 0..polynomial_list.len() {
