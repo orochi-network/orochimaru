@@ -1,14 +1,14 @@
 use rbtree::RBTree;
-use std::{
-    marker::PhantomData,
-    println,
-};
+use std::{marker::PhantomData, println};
 use zkmemory::{
-    impl_register_machine, impl_stack_machine, impl_state_machine,
-    machine::{AbstractContext, AbstractInstruction, AbstractMachine, Register, CellInteraction, TraceRecord},
-    config::{AllocatedSection, Config, ConfigArgs, DefaultConfig},
     base::{Base, B256},
-    error::Error, kzg::{KZGMemoryCommitment, KZGParams},
+    config::{AllocatedSection, Config, ConfigArgs, DefaultConfig},
+    error::Error,
+    impl_register_machine, impl_stack_machine, impl_state_machine,
+    machine::{
+        AbstractContext, AbstractInstruction, AbstractMachine, CellInteraction, Register,
+        TraceRecord,
+    },
 };
 
 /// My instruction set for the machine
@@ -132,18 +132,17 @@ where
             MyInstruction::Read(addr) => {
                 if !machine.memory_allocated.contain(*addr) {
                     panic!("{}", Error::MemoryAccessDeinied);
-                }
-                else {
+                } else {
                     machine.read(*addr).expect("Unable to read to memory");
                 }
             }
             MyInstruction::Write(addr, val) => {
                 if !machine.memory_allocated.contain(*addr) {
                     panic!("{}", Error::MemoryAccessDeinied);
-                }
-                else {
-                    machine.write(*addr, *val)
-                    .expect("Unable to write to memory");
+                } else {
+                    machine
+                        .write(*addr, *val)
+                        .expect("Unable to write to memory");
                 }
             }
             MyInstruction::Push(value) => {
@@ -203,7 +202,7 @@ where
                             }
                             _ => panic!("Register unable to be two cells"),
                         }
-                    },
+                    }
                     _ => panic!("Register unable to be two cells"),
                 }
             }
@@ -246,12 +245,21 @@ where
 
     /// Show address maps of memory, stack and registers sections
     pub fn show_sections_maps(&self) -> () {
-        println!("Memory section map: from {} to {}", 
-        self.memory_allocated.low(), self.memory_allocated.high());
-        println!("Register section map: from {} to {}", 
-        self.register_allocated.low(), self.register_allocated.high());
-        println!("Stack section map: from {} to {}", 
-        self.stack_allocated.low(), self.stack_allocated.high());
+        println!(
+            "Memory section map: from {} to {}",
+            self.memory_allocated.low(),
+            self.memory_allocated.high()
+        );
+        println!(
+            "Register section map: from {} to {}",
+            self.register_allocated.low(),
+            self.register_allocated.high()
+        );
+        println!(
+            "Stack section map: from {} to {}",
+            self.stack_allocated.low(),
+            self.stack_allocated.high()
+        );
     }
 }
 
@@ -315,7 +323,6 @@ impl_stack_machine!(StateMachine);
 impl_state_machine!(StateMachine);
 
 fn main() {
-
     // Define the desired machine configuration
     let mut machine = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default());
 
@@ -347,5 +354,5 @@ fn main() {
     // Print the trace record (prettified), sorted by ascending address by default
     for x in machine.trace().into_iter() {
         println!("{:?}", x);
-    }  
+    }
 }
