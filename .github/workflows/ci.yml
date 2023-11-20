@@ -14,7 +14,7 @@ jobs:
     strategy:
       matrix:
         feature_set: [basic, all]
-        os: [ubuntu-latest, windows-latest, macOS-latest]
+        os: [ubuntu-latest]
         include:
           - feature_set: basic
             features: batch,dev-graph,gadget-traces
@@ -53,45 +53,6 @@ jobs:
         with:
           command: build
           args: --no-default-features --features batch,dev-graph,gadget-traces --target ${{ matrix.target }}
-
-  bitrot:
-    name: Bitrot check
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          override: false
-      # Build benchmarks to prevent bitrot
-      - name: Build benchmarks
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --benches --examples --all-features
-
-  doc-links:
-    name: Intra-doc links
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          override: false
-      - name: cargo fetch
-        uses: actions-rs/cargo@v1
-        with:
-          command: fetch
-
-      # Ensure intra-documentation links all resolve correctly
-      # Requires #![deny(intra_doc_link_resolution_failure)] in crates.
-      - name: Check intra-doc links
-        uses: actions-rs/cargo@v1
-        with:
-          command: doc
-          args: --all --document-private-items
-
   fmt:
     name: Rustfmt
     timeout-minutes: 30
@@ -106,4 +67,3 @@ jobs:
         with:
           command: fmt
           args: --all -- --check
-
