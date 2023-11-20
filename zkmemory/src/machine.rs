@@ -340,7 +340,7 @@ where
     /// Read from memory (only read one whole cell)
     fn dummy_read(&mut self, address: K) -> V {
         match self.context().memory().get(&address) {
-            Some(r) => r.clone(),
+            Some(r) => *r,
             None => V::zero(),
         }
     }
