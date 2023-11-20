@@ -159,9 +159,9 @@ async fn orand_new_epoch(
             "epoch": next_epoch,
             "alpha":hex::encode(current_alpha.b32()),
             "gamma": contract_proof.gamma.to_hex_string(),
-            "c":hex::encode(&contract_proof.c.b32()),
-            "s":hex::encode(&contract_proof.s.b32()),
-            "y":hex::encode(&contract_proof.y.b32()),
+            "c":hex::encode(contract_proof.c.b32()),
+            "s":hex::encode(contract_proof.s.b32()),
+            "y":hex::encode(contract_proof.y.b32()),
             "witness_address": hex::encode(contract_proof.witness_address.b32())[24..64],
             "witness_gamma": contract_proof.witness_gamma.to_hex_string(),
             "witness_hash": contract_proof.witness_hash.to_hex_string(),
@@ -219,7 +219,7 @@ async fn orand(
                     // Decode JWT payload, this code is dirty let try catch_unwind next time
                     let (jwt_payload, json_web_token) = match header.headers.get("authorization") {
                         Some(e) => match e.to_str() {
-                            Ok(s) => match JWT::decode_payload(&s.to_string()) {
+                            Ok(s) => match JWT::decode_payload(s) {
                                 Ok(p) => (p, s),
                                 Err(e) => {
                                     return QuickResponse::err(e);
@@ -262,7 +262,7 @@ async fn orand(
                     };
 
                     let jwt = JWT::new(&user_record.hmac_secret);
-                    if !jwt.verify(&json_web_token.to_string()) {
+                    if !jwt.verify(json_web_token) {
                         return QuickResponse::err(node::Error(
                             "ACCESS_DENIED",
                             "Access denied, incorrect key",
