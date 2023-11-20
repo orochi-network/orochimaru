@@ -2,6 +2,7 @@ use rbtree::RBTree;
 use std::{marker::PhantomData, println};
 use zkmemory::{
     base::{Base, B256},
+    commitment::kzg::KZGMemoryCommitment,
     config::{AllocatedSection, Config, ConfigArgs, DefaultConfig},
     error::Error,
     impl_register_machine, impl_stack_machine, impl_state_machine,
