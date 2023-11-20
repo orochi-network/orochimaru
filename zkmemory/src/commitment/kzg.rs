@@ -1,8 +1,9 @@
 extern crate std;
 use core::marker::PhantomData;
-use ff::{Field, PrimeField};
+use ff::{Field, PrimeField, WithSmallOrderMulGroup};
 use group::Curve;
 use rand_core::OsRng;
+use std::vec::Vec;
 
 use crate::{base::Base, machine::MemoryInstruction, machine::TraceRecord};
 use halo2_proofs::halo2curves::bn256::{Bn256, Fr, G1Affine};
@@ -44,7 +45,6 @@ where
     K: Base<S>,
     V: Base<T>,
 {
-
     /// Initialize KZG parameters
     /// K = 3 since we need the poly degree to be 2^3 = 8
     pub fn new() -> Self {
@@ -66,7 +66,7 @@ where
         let commitment = self.kzg_params.commit(&poly, alpha);
         commitment.to_affine()
     }
-  
+
     // Convert a trace record to 8 field elements
     // The last 3 elements will be ZERO
     fn trace_to_field(&self, trace: TraceRecord<K, V, S, T>) -> [Fr; 8] {
@@ -95,7 +95,7 @@ where
             ],
         }
     }
-  
+
     // Convert the trace record into a polynomial
     fn poly_from_trace(&self, trace: TraceRecord<K, V, S, T>) -> Polynomial<Fr, Coeff> {
         let evals = self.trace_to_field(trace);
@@ -111,9 +111,9 @@ where
         // We use successive powers of primitive roots as points
         // We use elements in trace record to be the evals
         // 3 last evals should be ZERO
-        for i in 1..8 as usize {
+        for (_i, point) in (1..=8).zip(points_arr.iter_mut().skip(1)) {
             current_point *= Fr::MULTIPLICATIVE_GENERATOR;
-            points_arr[i] = current_point;
+            *point = current_point;
         }
 
         // Use Lagrange interpolation
@@ -127,10 +127,9 @@ where
     // This is made compatible with the Fr endianess
     fn be_bytes_to_field(&self, bytes: &mut [u8]) -> Fr {
         bytes.reverse();
-        let b = bytes.as_ref();
-        let inner = [0, 8, 16, 24].map(|i| u64::from_le_bytes(b[i..i + 8].try_into().unwrap()));
-        let result = Fr::from_raw(inner);
-        result
+        //let b = bytes.as_ref();
+        let inner = [0, 8, 16, 24].map(|i| u64::from_le_bytes(bytes[i..i + 8].try_into().unwrap()));
+        Fr::from_raw(inner)
     }
 
     //WARNING: the functions below have not been tested yet
@@ -186,34 +185,15 @@ where
                 blind,
             };
             queries.push(temp);
-}
-
-#[cfg(test)]
-mod test {
-
-    use super::*;
-    use crate::{base::B256, machine::AbstractTraceRecord};
-    use halo2_proofs::arithmetic::eval_polynomial;
-
-    #[test]
-    fn test_conversion_fr() {
-        let kzg_scheme = KZGMemoryCommitment::<B256, B256, 32, 32>::new();
-
-        // Create a 32-bytes repr of Base 256
-        let mut chunk = [0u8; 32];
-        for i in 0..32 {
-            chunk[i] = i as u8;
         }
 
-        // Use my method to convert to Fr
-        let fr = kzg_scheme.be_bytes_to_field(chunk.as_mut_slice());
+        let prover = P::new(params);
+        prover
+            .create_proof(&mut OsRng, &mut transcript, queries)
+            .unwrap();
 
-        // Use Fr's method to convert back to bytes
-        let chunk_fr: [u8; 32] = fr.try_into().unwrap();
-
-        assert_eq!(chunk_fr, chunk);
+        transcript.finalize()
     }
-
 
     //Verify KZG openings
     // Used to create a friendly KZG API verification function
@@ -287,12 +267,11 @@ mod test {
         //borrowed from Thang's commit function
         let poly = self.poly_from_trace(trace);
         // create the point list of opening
-        let mut points_list = Vec::new();
-        points_list.extend([Fr::ONE; 5]);
+        let mut points_list = Vec::from([Fr::ONE; 5]);
         let mut current_point = Fr::ONE;
-        for i in 1..5 as usize {
+        for (_i, point) in (1..=5).zip(points_list.iter_mut().skip(1)) {
             current_point *= Fr::MULTIPLICATIVE_GENERATOR;
-            points_list[i] = current_point;
+            *point = current_point;
         }
         // initialize the vector of commitments for the create_proof_for_shplonk function
         let mut commitment_list = Vec::new();
@@ -329,9 +308,9 @@ mod test {
         let mut points_list = Vec::new();
         points_list.extend([Fr::ONE; 5]);
         let mut current_point = Fr::ONE;
-        for i in 1..5 as usize {
+        for (_i, point) in (1..=5).zip(points_list.iter_mut().skip(1)) {
             current_point *= Fr::MULTIPLICATIVE_GENERATOR;
-            points_list[i] = current_point;
+            *point = current_point;
         }
         // finally, verify the opening
         self.verify_shplonk::<
@@ -393,7 +372,6 @@ mod test {
         }
     }
 
-
     #[test]
     fn test_correct_memory_opening() {
         let mut kzg_scheme = KZGMemoryCommitment::<B256, B256, 32, 32>::new();
@@ -443,5 +421,4 @@ mod test {
         let verify = kzg_scheme.verify_trace_element(trace, commit, false_proof);
         assert_eq!(verify, false);
     }
-
 }

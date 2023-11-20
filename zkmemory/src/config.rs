@@ -104,7 +104,7 @@ where
             let memory_hi = T::MAX - length;
 
             Self {
-                word_size: word_size,
+                word_size,
                 stack_depth: args.stack_depth,
                 buffer_size: args.buffer_size,
                 stack: AllocatedSection(stack_lo, stack_hi),
