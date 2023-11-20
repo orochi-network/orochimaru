@@ -25,13 +25,13 @@ impl<'a> ReceiverTable<'a> {
         &self,
         record: &Model,
         network: u32,
-        address: &String,
+        address: &str,
     ) -> Result<Option<Model>, DbErr> {
         Entity::update(ActiveModel {
             id: ActiveValue::set(record.id),
             name: ActiveValue::set(record.name.clone()),
             network: ActiveValue::set(network),
-            address: ActiveValue::set(address.clone()),
+            address: ActiveValue::set(address.to_owned()),
             nonce: ActiveValue::set(record.nonce + 1),
             created_date: ActiveValue::default(),
         })
@@ -75,11 +75,11 @@ impl<'a> ReceiverTable<'a> {
     }
 
     /// Find receiver record by its network and address
-    pub async fn find_one(&self, network: u32, address: &String) -> Result<Option<Model>, DbErr> {
+    pub async fn find_one(&self, network: u32, address: &str) -> Result<Option<Model>, DbErr> {
         Entity::find()
             .filter(
                 Condition::all()
-                    .add(Column::Address.eq(address.clone()))
+                    .add(Column::Address.eq(address.to_owned()))
                     .add(Column::Network.eq(network)),
             )
             .one(self.connection)

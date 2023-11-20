@@ -23,7 +23,7 @@ impl<'a> RandomnessTable<'a> {
     pub async fn find_recent_epoch(
         &self,
         network: u32,
-        address: &String,
+        address: &str,
         epoch: u32,
     ) -> Result<Vec<Model>, DbErr> {
         let receiver = ReceiverTable::new(self.connection)
@@ -52,7 +52,7 @@ impl<'a> RandomnessTable<'a> {
     pub async fn find_latest_epoch(
         &self,
         network: u32,
-        address: &String,
+        address: &str,
     ) -> Result<Option<Model>, DbErr> {
         let receiver = ReceiverTable::new(self.connection)
             .find_one(network, address)

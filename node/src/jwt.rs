@@ -28,7 +28,7 @@ pub struct JWT {
 
 impl JWT {
     /// Create new instance of JWT
-    pub fn new(secret_hex_string: &String) -> Self {
+    pub fn new(secret_hex_string: &str) -> Self {
         JWT {
             secret_key: hex::decode(secret_hex_string.replace("0x", "").replace("0X", ""))
                 .expect("Unable to decode secret key"),
@@ -36,8 +36,8 @@ impl JWT {
     }
 
     /// Encode payload to JWT
-    pub fn decode_payload(json_web_token: &String) -> Result<JWTPayload, Error> {
-        let split_jwt: Vec<&str> = json_web_token.trim().split(".").collect();
+    pub fn decode_payload(json_web_token: &str) -> Result<JWTPayload, Error> {
+        let split_jwt: Vec<&str> = json_web_token.trim().split('.').collect();
         if split_jwt.len() == 3 {
             let decoded_payload = match base64_url::decode(&split_jwt[1]) {
                 Ok(payload) => payload,
@@ -58,20 +58,19 @@ impl JWT {
     }
 
     /// Encode payload to JWT
-    pub fn verify(&self, json_web_token: &String) -> bool {
-        let split_jwt: Vec<&str> = json_web_token.trim().split(".").collect();
+    pub fn verify(&self, json_web_token: &str) -> bool {
+        let split_jwt: Vec<&str> = json_web_token.trim().split('.').collect();
         if split_jwt.len() == 3 {
             let payload = split_jwt[1];
             let signature = split_jwt[2];
             let mut mac = HmacSha256::new_from_slice(&self.secret_key)
                 .expect("HMAC can take key of any size");
             mac.update(&base64_url::decode(&payload).expect("Unable to decode base64 payload"));
-            return match mac.verify_slice(
-                &base64_url::decode(&signature).expect("Unable to decode base64 signature"),
-            ) {
-                Ok(_) => true,
-                _ => false,
-            };
+            return mac
+                .verify_slice(
+                    &base64_url::decode(&signature).expect("Unable to decode base64 signature"),
+                )
+                .is_ok();
         }
         false
     }
