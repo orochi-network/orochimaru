@@ -1,6 +1,6 @@
 extern crate alloc;
 use crate::helper::random_bytes;
-use alloc::{string::String, vec::Vec};
+use alloc::string::String;
 use libsecp256k1::curve::{Affine, Field, Jacobian, Scalar};
 use tiny_keccak::{Hasher, Keccak};
 
@@ -28,7 +28,7 @@ pub trait ScalarExtend {
     fn randomize() -> Self;
 
     /// Keccak a vector to scalar
-    fn keccak256(a: &Vec<u8>) -> Self;
+    fn keccak256(a: &[u8]) -> Self;
 
     /// Make sure self > b
     fn gt(&self, b: &Scalar) -> bool;
@@ -105,10 +105,10 @@ impl ScalarExtend for Scalar {
         true
     }
 
-    fn keccak256(a: &Vec<u8>) -> Self {
+    fn keccak256(a: &[u8]) -> Self {
         let mut output = [0u8; 32];
         let mut hasher = Keccak::v256();
-        hasher.update(a.as_slice());
+        hasher.update(a);
         hasher.finalize(&mut output);
         Self::from_bytes(&output)
     }

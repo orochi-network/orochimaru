@@ -39,6 +39,12 @@ pub struct RawKeyPair {
     pub secret_key: [u8; SECRET_KEY_SIZE],
 }
 
+impl Default for KeyPair {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl KeyPair {
     /// Generate a new key pair
     pub fn new() -> Self {
@@ -122,7 +128,7 @@ impl From<&[u8; SECRET_KEY_SIZE]> for RawKeyPair {
         let public_key = PublicKey::from_secret_key(&secret_instance).serialize();
         RawKeyPair {
             public_key,
-            secret_key: value.clone(),
+            secret_key: *value,
         }
     }
 }
@@ -179,7 +185,7 @@ impl ECVRF<'_> {
     /// Create new instance of ECVRF from a secret key
     pub fn new(secret_key: SecretKey) -> Self {
         ECVRF {
-            secret_key: secret_key,
+            secret_key,
             public_key: PublicKey::from_secret_key(&secret_key),
             ctx_gen: &ECMULT_GEN_CONTEXT,
             ctx_mul: &ECMULT_CONTEXT,
@@ -227,7 +233,7 @@ impl ECVRF<'_> {
 
         // s = (k - c * sk)
         // Based on Schnorr signature
-        let mut neg_c = c.clone();
+        let mut neg_c = c;
         neg_c.cond_neg_assign(1.into());
         let s = k + neg_c * secret_key;
         secret_key.clear();
@@ -295,7 +301,7 @@ impl ECVRF<'_> {
         let c = hash_points(&AFFINE_G, &h, &pub_affine, &gamma, &kg, &kh);
 
         // s = (k - c * secret_key) mod p
-        let mut neg_c = c.clone();
+        let mut neg_c = c;
         neg_c.cond_neg_assign(1.into());
         let s = k + neg_c * secret_key;
         secret_key.clear();

@@ -19,22 +19,20 @@ pub const GROUP_ORDER: Scalar = Scalar([
 
 /// Projective sub, cost optimization for EVM
 pub fn projective_sub(a: &Affine, b: &Affine) -> Affine {
-    let mut c = Affine::default();
-    c.x = b.y * a.x + a.y * b.x.neg(1);
-    c.y = a.y * b.y;
-    c.x.normalize();
-    c.y.normalize();
-    c
+    let mut x = b.y * a.x + a.y * b.x.neg(1);
+    let mut y = a.y * b.y;
+    x.normalize();
+    y.normalize();
+    Affine::new(x, y)
 }
 
 /// Projective mul, cost optimization of EVM
 pub fn projective_mul(a: &Affine, b: &Affine) -> Affine {
-    let mut c = Affine::default();
-    c.x = a.x * b.x;
-    c.y = a.y * b.y;
-    c.x.normalize();
-    c.y.normalize();
-    c
+    let mut x = a.x * b.x;
+    let mut y = a.y * b.y;
+    x.normalize();
+    y.normalize();
+    Affine::new(x, y)
 }
 
 /// Projective EC add
@@ -87,7 +85,7 @@ pub fn ecmult(context: &ECMultContext, a: &Affine, na: &Scalar) -> Affine {
 /// Perform multiplication between a value and G: a * G
 pub fn ecmult_gen(context: &ECMultGenContext, ng: &Scalar) -> Affine {
     let mut rj = Jacobian::default();
-    context.ecmult_gen(&mut rj, &ng);
+    context.ecmult_gen(&mut rj, ng);
     jacobian_to_affine(&rj)
 }
 
