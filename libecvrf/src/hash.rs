@@ -1,9 +1,7 @@
-extern crate alloc;
 use crate::{
     extends::{AffineExtend, ScalarExtend},
     helper::FIELD_SIZE,
 };
-use alloc::vec::Vec;
 use libsecp256k1::{
     curve::{Affine, Field, Jacobian, Scalar},
     ECMULT_GEN_CONTEXT,
@@ -11,25 +9,24 @@ use libsecp256k1::{
 use tiny_keccak::{Hasher, Keccak};
 
 /// Try to generate a point on the curve based on hashes
-pub fn new_candidate_point(b: &Vec<u8>) -> Affine {
-    let mut r = Affine::default();
+pub fn new_candidate_point(b: &[u8]) -> Affine {
     // X is a digest of field
-    r.x = field_hash(b);
+    let mut x = field_hash(b);
     // Y is a coordinate point, corresponding to x
-    (r.y, _) = y_squared(&r.x).sqrt();
-    r.x.normalize();
-    r.y.normalize();
+    let (mut y, _) = y_squared(&x).sqrt();
+    x.normalize();
+    y.normalize();
 
-    if r.y.is_odd() {
-        r.y = r.y.neg(1);
-        r.y.normalize();
+    if y.is_odd() {
+        y = y.neg(1);
+        y.normalize();
     }
-    r
+    Affine::new(x, y)
 }
 
 /// Y squared, it was calculate by evaluate X
 pub fn y_squared(x: &Field) -> Field {
-    let mut t = x.clone();
+    let mut t = *x;
     // y^2 = x^3 + 7
     t = t * t * t + Field::from_int(7);
     t.normalize();
@@ -44,7 +41,7 @@ pub fn is_on_curve(point: &Affine) -> bool {
 /// Hash to curve with prefix
 /// HASH_TO_CURVE_HASH_PREFIX = 1
 pub fn hash_to_curve_prefix(alpha: &Scalar, pk: &Affine) -> Affine {
-    let mut tpk = pk.clone();
+    let mut tpk = *pk;
     tpk.x.normalize();
     tpk.y.normalize();
     let packed = [
@@ -59,13 +56,13 @@ pub fn hash_to_curve_prefix(alpha: &Scalar, pk: &Affine) -> Affine {
     .concat();
     let mut rv = new_candidate_point(&packed);
     while !is_on_curve(&rv) {
-        rv = new_candidate_point(&rv.x.b32().to_vec());
+        rv = new_candidate_point(rv.x.b32().as_ref());
     }
     rv
 }
 
 /// Hash bytes array to a field
-pub fn field_hash(b: &Vec<u8>) -> Field {
+pub fn field_hash(b: &[u8]) -> Field {
     let mut output = [0u8; 32];
     let mut hasher = Keccak::v256();
     hasher.update(b);
