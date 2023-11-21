@@ -48,13 +48,7 @@ where
     /// Initialize KZG parameters
     /// K = 3 since we need the poly degree to be 2^3 = 8
     fn default() -> Self {
-        const K: u32 = 3;
-        Self {
-            kzg_params: ParamsKZG::<Bn256>::new(K),
-            domain: EvaluationDomain::new(1, K),
-            _marker1: PhantomData::<K>,
-            _marker2: PhantomData::<V>,
-        }
+        Self::new()
     }
 }
 
@@ -63,6 +57,17 @@ where
     K: Base<S>,
     V: Base<T>,
 {
+    /// Initialize KZG parameters
+    /// K = 3 since we need the poly degree to be 2^3 = 8
+    pub fn new() -> Self {
+        const K: u32 = 3;
+        Self {
+            kzg_params: ParamsKZG::<Bn256>::new(K),
+            domain: EvaluationDomain::new(1, K),
+            _marker1: PhantomData::<K>,
+            _marker2: PhantomData::<V>,
+        }
+    }
     /// Commit a trace record in an execution trace
     pub fn commit(&mut self, trace: TraceRecord<K, V, S, T>) -> G1Affine {
         // Convert trace record into polynomial
@@ -336,7 +341,7 @@ mod test {
     use halo2_proofs::arithmetic::eval_polynomial;
     #[test]
     fn test_conversion_fr() {
-        let kzg_scheme = KZGMemoryCommitment::<B256, B256, 32, 32>::default();
+        let kzg_scheme = KZGMemoryCommitment::<B256, B256, 32, 32>::new();
 
         // Create a 32-bytes repr of Base 256
         let mut chunk = [0u8; 32];
@@ -354,7 +359,7 @@ mod test {
     }
     #[test]
     fn test_record_polynomial_conversion() {
-        let kzg_scheme = KZGMemoryCommitment::<B256, B256, 32, 32>::default();
+        let kzg_scheme = KZGMemoryCommitment::<B256, B256, 32, 32>::new();
 
         // Initialize a trace record
         let trace = TraceRecord::<B256, B256, 32, 32>::new(
@@ -380,7 +385,7 @@ mod test {
 
     #[test]
     fn test_correct_memory_opening() {
-        let mut kzg_scheme = KZGMemoryCommitment::<B256, B256, 32, 32>::default();
+        let mut kzg_scheme = KZGMemoryCommitment::<B256, B256, 32, 32>::new();
         // Initialize a trace record
         let trace = TraceRecord::<B256, B256, 32, 32>::new(
             1u64,
@@ -400,7 +405,7 @@ mod test {
 
     #[test]
     fn test_wrong_memory_opening() {
-        let mut kzg_scheme = KZGMemoryCommitment::<B256, B256, 32, 32>::default();
+        let mut kzg_scheme = KZGMemoryCommitment::<B256, B256, 32, 32>::new();
         // Initialize a trace record
         let trace = TraceRecord::<B256, B256, 32, 32>::new(
             1u64,
