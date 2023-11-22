@@ -2,7 +2,6 @@ use rbtree::RBTree;
 use std::{marker::PhantomData, println};
 use zkmemory::{
     base::{Base, B256},
-    commitment::kzg::KZGMemoryCommitment,
     config::{AllocatedSection, Config, ConfigArgs, DefaultConfig},
     error::Error,
     impl_register_machine, impl_stack_machine, impl_state_machine,
@@ -325,7 +324,7 @@ impl_state_machine!(StateMachine);
 
 fn main() {
     // Define the desired machine configuration
-    let mut machine = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default());
+    let mut machine = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default_config());
 
     // Show the section map
     machine.show_sections_maps();

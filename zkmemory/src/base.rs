@@ -142,27 +142,27 @@ macro_rules! new_base {
             }
         }
 
-        impl Into<i32> for Uint<U256> {
-            fn into(self) -> i32 {
-                self.0.as_i32()
+        impl From<Uint<U256>> for i32 {
+            fn from(value: Uint<U256>) -> Self {
+                value.0.as_i32()
             }
         }
 
-        impl Into<usize> for Uint<U256> {
-            fn into(self) -> usize {
-                self.0.as_usize()
+        impl From<Uint<U256>> for usize {
+            fn from(value: Uint<U256>) -> Self {
+                value.0.as_usize()
             }
         }
 
-        impl Into<u64> for Uint<U256> {
-            fn into(self) -> u64 {
-                self.0.as_u64()
+        impl From<Uint<U256>> for u64 {
+            fn from(value: Uint<U256>) -> Self {
+                value.0.as_u64()
             }
         }
 
-        impl Into<[u8; $byte_size]> for Uint<U256> {
-            fn into(self) -> [u8; $byte_size] {
-                self.0.to_be_bytes()
+        impl From<Uint<U256>> for [u8; $byte_size] {
+            fn from(value: Uint<U256>) -> Self {
+                value.0.to_be_bytes()
             }
         }
 
@@ -214,27 +214,27 @@ macro_rules! new_base {
             }
         }
 
-        impl Into<i32> for Uint<$primitive> {
-            fn into(self) -> i32 {
-                self.0 as i32
+        impl From<Uint<$primitive>> for i32 {
+            fn from(value: Uint<$primitive>) -> Self {
+                value.0 as i32
             }
         }
 
-        impl Into<usize> for Uint<$primitive> {
-            fn into(self) -> usize {
-                self.0 as usize
+        impl From<Uint<$primitive>> for usize {
+            fn from(value: Uint<$primitive>) -> Self {
+                value.0 as usize
             }
         }
 
-        impl Into<u64> for Uint<$primitive> {
-            fn into(self) -> u64 {
-                self.0 as u64
+        impl From<Uint<$primitive>> for u64 {
+            fn from(value: Uint<$primitive>) -> Self {
+                value.0 as u64
             }
         }
 
-        impl Into<[u8; $byte_size]> for Uint<$primitive> {
-            fn into(self) -> [u8; $byte_size] {
-                self.0.to_be_bytes()
+        impl From<Uint<$primitive>> for [u8; $byte_size] {
+            fn from(value: Uint<$primitive>) -> Self {
+                value.0.to_be_bytes()
             }
         }
 

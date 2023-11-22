@@ -59,7 +59,7 @@ pub struct DefaultConfig;
 
 impl DefaultConfig {
     /// Create a default config
-    pub fn default<const S: usize, T: Base<S>>() -> ConfigArgs<T> {
+    pub fn default_config<const S: usize, T: Base<S>>() -> ConfigArgs<T> {
         ConfigArgs {
             head_layout: true,
             stack_depth: T::from(1024),
@@ -104,7 +104,7 @@ where
             let memory_hi = T::MAX - length;
 
             Self {
-                word_size: word_size,
+                word_size,
                 stack_depth: args.stack_depth,
                 buffer_size: args.buffer_size,
                 stack: AllocatedSection(stack_lo, stack_hi),

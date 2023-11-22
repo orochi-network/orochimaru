@@ -340,7 +340,7 @@ where
     /// Read from memory (only read one whole cell)
     fn dummy_read(&mut self, address: K) -> V {
         match self.context().memory().get(&address) {
-            Some(r) => r.clone(),
+            Some(r) => *r,
             None => V::zero(),
         }
     }
@@ -376,7 +376,7 @@ where
 
         match self.write(address, value) {
             Ok(v) => Ok((stack_depth, v)),
-            Err(e) => return Err(e),
+            Err(e) => Err(e),
         }
     }
 
@@ -394,7 +394,7 @@ where
 
         match self.read(address) {
             Ok(v) => Ok((stack_depth, v)),
-            Err(e) => return Err(e),
+            Err(e) => Err(e),
         }
     }
 }
@@ -504,7 +504,7 @@ where
             Some(core::cmp::Ordering::Equal) => {
                 panic!("Time log never been equal")
             }
-            ord => return ord,
+            ord => ord,
         }
     }
 }
