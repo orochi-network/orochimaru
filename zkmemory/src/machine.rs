@@ -492,20 +492,7 @@ where
     V: Base<T>,
 {
     fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
-        match self.address.partial_cmp(&other.address) {
-            Some(core::cmp::Ordering::Equal) => {}
-            ord => return ord,
-        }
-        match self.instruction.partial_cmp(&other.instruction) {
-            Some(core::cmp::Ordering::Equal) => {}
-            ord => return ord,
-        }
-        match self.time_log.partial_cmp(&other.time_log) {
-            Some(core::cmp::Ordering::Equal) => {
-                panic!("Time log never been equal")
-            }
-            ord => ord,
-        }
+        Some(self.cmp(other))
     }
 }
 
@@ -515,8 +502,20 @@ where
     V: Base<T>,
 {
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
-        self.partial_cmp(other)
-            .expect("Two trace records wont be equal")
+        match self.address.cmp(&other.address) {
+            core::cmp::Ordering::Equal => {}
+            ord => return ord,
+        }
+        match self.instruction.cmp(&other.instruction) {
+            core::cmp::Ordering::Equal => {}
+            ord => return ord,
+        }
+        match self.time_log.cmp(&other.time_log) {
+            core::cmp::Ordering::Equal => {
+                panic!("Time log never been equal")
+            }
+            ord => ord,
+        }
     }
 }
 
