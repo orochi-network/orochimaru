@@ -45,8 +45,6 @@ where
     K: Base<S>,
     V: Base<T>,
 {
-    /// Initialize KZG parameters
-    /// K = 3 since we need the poly degree to be 2^3 = 8
     fn default() -> Self {
         Self::new()
     }
