@@ -188,11 +188,7 @@ where
 
         let mut queries: Vec<ProverQuery<'_, <Scheme as CommitmentScheme>::Curve>> = Vec::new();
         for i in 0..polynomial_list.len() {
-            let temp = ProverQuery {
-                point: points_list[i],
-                poly: &polynomial_list[i],
-                blind,
-            };
+            let temp = ProverQuery::new(points_list[i], &polynomial_list[i], blind);
             queries.push(temp);
         }
 
@@ -337,15 +333,20 @@ mod test {
     use super::*;
     use crate::{base::B256, machine::AbstractTraceRecord};
     use halo2_proofs::arithmetic::eval_polynomial;
+    use rand::{thread_rng, Rng};
     #[test]
     fn test_conversion_fr() {
         let kzg_scheme = KZGMemoryCommitment::<B256, B256, 32, 32>::new();
 
+        let mut rng = thread_rng();
+
         // Create a 32-bytes repr of Base 256
         let mut chunk = [0u8; 32];
-        for i in 0..32 {
-            chunk[i] = i as u8;
+        for e in chunk.iter_mut() {
+            *e = rng.gen_range(0..255);
         }
+        // Clean the first byte to make sure it is not too big
+        chunk[0] = 0u8;
 
         // Use my method to convert to Fr
         let fr = kzg_scheme.be_bytes_to_field(chunk.as_mut_slice());
@@ -375,8 +376,8 @@ mod test {
 
         // Test each eval values
         let mut base_index = Fr::ONE;
-        for i in 0..8 {
-            assert_eq!(eval_polynomial(&poly_trace, base_index), poly_evals[i]);
+        for e in poly_evals {
+            assert_eq!(eval_polynomial(&poly_trace, base_index), e);
             base_index *= Fr::MULTIPLICATIVE_GENERATOR;
         }
     }
@@ -397,8 +398,7 @@ mod test {
         //Open the trace
         let proof = kzg_scheme.prove_trace_element(trace, commit);
         //Verify the trace
-        let verify = kzg_scheme.verify_trace_element(trace, commit, proof);
-        assert_eq!(verify, true);
+        assert!(kzg_scheme.verify_trace_element(trace, commit, proof));
     }
 
     #[test]
@@ -427,7 +427,6 @@ mod test {
         let commit2 = kzg_scheme.commit(trace2);
         let false_proof = kzg_scheme.prove_trace_element(trace2, commit2);
         //Verify the trace
-        let verify = kzg_scheme.verify_trace_element(trace, commit, false_proof);
-        assert_eq!(verify, false);
+        assert!(!kzg_scheme.verify_trace_element(trace, commit, false_proof));
     }
 }
