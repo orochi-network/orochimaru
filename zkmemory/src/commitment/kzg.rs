@@ -3,6 +3,7 @@ use core::marker::PhantomData;
 use ff::{Field, PrimeField, WithSmallOrderMulGroup};
 use group::Curve;
 use rand_core::OsRng;
+use std::vec;
 use std::vec::Vec;
 
 use crate::{base::Base, machine::MemoryInstruction, machine::TraceRecord};
@@ -67,13 +68,15 @@ where
         }
     }
     /// Commit a trace record in an execution trace
+    /// This function, given input a trace record,
+    /// outputs the commitment of the trace
     pub fn commit(&mut self, trace: TraceRecord<K, V, S, T>) -> G1Affine {
         // Convert trace record into polynomial
         let poly = self.poly_from_trace(trace);
+
         // Commit the polynomial using Halo2's code
         let alpha = Blind(Fr::random(OsRng));
-        let commitment = self.kzg_params.commit(&poly, alpha);
-        commitment.to_affine()
+        self.kzg_params.commit(&poly, alpha).to_affine()
     }
 
     // Convert a trace record to 8 field elements
@@ -107,23 +110,23 @@ where
 
     // Convert the trace record into a polynomial
     fn poly_from_trace(&self, trace: TraceRecord<K, V, S, T>) -> Polynomial<Fr, Coeff> {
-        let evals = self.trace_to_field(trace);
-        self.poly_from_evals(evals)
+        self.poly_from_evals(self.trace_to_field(trace))
     }
 
-    // Convert 8 field elements of a trace record
-    // into a polynomial
+    // Convert 8 field elements of a trace record into a polynomial
     fn poly_from_evals(&self, evals: [Fr; 8]) -> Polynomial<Fr, Coeff> {
-        let mut points_arr = [Fr::ONE; 8];
         let mut current_point = Fr::ONE;
 
         // We use successive powers of primitive roots as points
         // We use elements in trace record to be the evals
         // 3 last evals should be ZERO
-        for (_i, point) in (1..=8).zip(points_arr.iter_mut().skip(1)) {
-            current_point *= Fr::MULTIPLICATIVE_GENERATOR;
-            *point = current_point;
-        }
+        let points_arr: Vec<_> = (1..=8)
+            .map(|_| {
+                let point = current_point;
+                current_point *= Fr::MULTIPLICATIVE_GENERATOR;
+                point
+            })
+            .collect();
 
         // Use Lagrange interpolation
         self.domain.coeff_from_vec(lagrange_interpolate(
@@ -141,12 +144,12 @@ where
         Fr::from_raw(inner)
     }
 
-    //WARNING: the functions below have not been tested yet
-    //due to the field private error
-
     // Create the list of proof for KZG openings
-    // Used to create a friendly KZG API opening function
-    fn create_proof_sh_plonk<
+    // More specifially, this function, given a list of points x_1,x_2,...,x_n
+    // and polynomials p_1(x),p_2(x),...,p_n(x),
+    // create a witness for the value p_1(x_1), p_2(x_2),...,p_n(x_n).
+    // Used as a misc function to create the proof of the trace record
+    fn create_kzg_proof<
         'params,
         Scheme: CommitmentScheme,
         P: Prover<'params, Scheme>,
@@ -165,44 +168,48 @@ where
     where
         Scheme::Scalar: WithSmallOrderMulGroup<3>,
     {
-        assert!(points_list.len() == polynomial_list.len());
-        assert!(points_list.len() == commitment_list.len());
-        // this function, given a list of points x_1,x_2,...,x_n
-        // and polynomials p_1(x),p_2(x),...,p_n(x)
-        // create a witness for the value p_1(x_1), p_2(x_2),...,p_n(x_n)
-        let mut transcript = TW::init(Vec::new());
+        assert_eq!(
+            (points_list.len(), polynomial_list.len()),
+            (points_list.len(), commitment_list.len())
+        );
 
+        let mut transcript = TW::init(Vec::new());
         let blind = Blind::new(&mut OsRng);
+
         // Add the commitment the polynomial p_i(x) to transcript
-        for item in &commitment_list {
+        for item in commitment_list.iter() {
             transcript.write_point(*item).unwrap();
         }
-        // evaluate the values p_i(x_i) for i=1,2,...,n
-        for i in 0..polynomial_list.len() {
-            let av = eval_polynomial(&polynomial_list[i], points_list[i]);
-            transcript.write_scalar(av).unwrap();
+
+        // Evaluate the values p_i(x_i) for i=1,2,...,n and add to the transcript
+        for (poly, point) in polynomial_list.iter().zip(&points_list) {
+            transcript
+                .write_scalar(eval_polynomial(poly, *point))
+                .unwrap();
         }
 
-        // this query is used to list all the values p_1(x_1), p_2(x_2),...,p_n(x_n)
-        // in the query list of shplonk prover
-
-        let mut queries: Vec<ProverQuery<'_, <Scheme as CommitmentScheme>::Curve>> = Vec::new();
-        for i in 0..polynomial_list.len() {
-            let temp = ProverQuery::new(points_list[i], &polynomial_list[i], blind);
-            queries.push(temp);
+        // This query is used to list all the values p_1(x_1), p_2(x_2),...,p_n(x_n)
+        // in the query list of SHPLONK prover
+        let mut queries = Vec::new();
+        for (point, poly) in points_list.iter().zip(polynomial_list.iter()) {
+            queries.push(ProverQuery::new(*point, poly, blind));
         }
 
+        // Create the proof
         let prover = P::new(params);
         prover
             .create_proof(&mut OsRng, &mut transcript, queries)
             .unwrap();
-
         transcript.finalize()
     }
 
-    //Verify KZG openings
-    // Used to create a friendly KZG API verification function
-    fn verify_shplonk<
+    // Verify KZG openings
+    // This function, given the list of points x_1,x_2,...,x_n,
+    // a list of openings p_1(x_1),p_2(x_2),...,p_n(x_n)
+    // and a list of commitment c_1,c_2,..c_n
+    // return True or False to determine the correctness of the opening.
+    // Used as a misc function to help verifying the trace record
+    fn verify_kzg_proof<
         'a,
         'params,
         Scheme: CommitmentScheme,
@@ -213,44 +220,50 @@ where
     >(
         &self,
         params: &'params Scheme::ParamsVerifier,
-        // // a list of point x_1,x_2,...x_n
+        // A list of points x_1,x_2,...x_n
         points_list: Vec<Scheme::Scalar>,
-        // the evaluation of p_1(x_1),p_2(x_2),...,p_n(x_n)
-        opening: Vec<Scheme::Scalar>,
-        // the commitment of the polynomials p_1(x),p_2(x),...,p_n(x)
+        // The evaluation of p_1(x_1),p_2(x_2),...,p_n(x_n)
+        eval: Vec<Scheme::Scalar>,
+        // The commitments of the polynomials p_1(x),p_2(x),...,p_n(x)
         commitment: Vec<Scheme::Curve>,
-        // the proof of opening
+        // The proof of opening
         proof: &'a [u8],
     ) -> bool {
         let verifier = Vr::new(params);
-        let mut check = true;
         let mut transcript = Tr::init(proof);
-        // read commitment list from transcript
-        let mut commitment_list = Vec::new();
-        for i in 0..points_list.len() {
-            let temp = transcript.read_point().unwrap();
-            commitment_list.push(temp);
-            // the  "proof" consists of the commitment of the polynomials p_1(x),p_2(x),...,p_n(x)
-            // which should be equal to the "commitment" input, hence we need to check this
-            check = check && (commitment[i] == commitment_list[i]);
+        let mut check = true;
+
+        // Read commitment list from transcript
+        let commitment_list: Vec<_> = (0..points_list.len())
+            .map(|_| transcript.read_point().unwrap())
+            .collect();
+
+        // Check if commitment list input matches the commitment list from the Prover's proof
+        for (c, c_l) in commitment.iter().zip(&commitment_list) {
+            check = check && (*c == *c_l);
         }
-        // read the opening list from transcript
-        let mut eval_list: Vec<<Scheme as CommitmentScheme>::Scalar> = Vec::new();
-        for i in 0..points_list.len() {
-            let temp: Scheme::Scalar = transcript.read_scalar().unwrap();
-            eval_list.push(temp);
-            // the proof "proof" consists of the evaluations of p_1(x_1), p_2(x_2),...,p_n(x_n)
-            // which should be equal to the "opening" input, hence we need to check this
-            check = check && (opening[i] == eval_list[i]);
+
+        // Read the eval list list from transcript
+        let eval_list: Vec<_> = (0..points_list.len())
+            .map(|_| transcript.read_scalar().unwrap())
+            .collect();
+
+        // Check if eval list input matches the eval list from the Prover's proof
+        let mut check = true;
+        for (e, e_l) in eval.iter().zip(&eval_list) {
+            check = check && (*e == *e_l);
         }
-        // add the queries
+
+        // Add the queries
         let mut queries = Vec::new();
-        for i in 0..points_list.len() {
-            let temp =
-                VerifierQuery::new_commitment(&commitment_list[i], points_list[i], eval_list[i]);
-            queries.push(temp);
+        for (c, (p, e)) in commitment_list
+            .iter()
+            .zip(points_list.iter().zip(eval_list.iter()))
+        {
+            queries.push(VerifierQuery::new_commitment(c, *p, *e));
         }
-        // now, we apply the verify function from SHPLONK to return the result
+
+        // Apply the verify function from SHPLONK to return the result
         let strategy = Strategy::new(params);
         let strategy = strategy
             .process(|msm_accumulator| {
@@ -259,72 +272,88 @@ where
                     .map_err(|_| Error::Opening)
             })
             .unwrap();
+
         check && strategy.finalize()
     }
 
     /// Open all fields from the trace record
-    pub fn prove_trace_element(
+    /// The function, given input a trace record and its commitment,
+    /// outputs a proof of correct opening
+    pub fn prove_trace_record(
         &self,
         trace: TraceRecord<K, V, S, T>,
         commitment: <KZGCommitmentScheme<Bn256> as CommitmentScheme>::Curve,
     ) -> Vec<u8> {
-        //convert the trace to the polynomial
-        //borrowed from Thang's commit function
+        // Convert the trace to a polynomial p(x)
         let poly = self.poly_from_trace(trace);
-        // create the point list of opening
-        let mut points_list = Vec::from([Fr::ONE; 5]);
+
+        // Create the point list [x_1,x_2,x_3,x_4,x_5] of opening
         let mut current_point = Fr::ONE;
-        for (_i, point) in (1..=5).zip(points_list.iter_mut().skip(1)) {
-            current_point *= Fr::MULTIPLICATIVE_GENERATOR;
-            *point = current_point;
-        }
-        // initialize the vector of commitments for the create_proof_for_shplonk function
-        let mut commitment_list = Vec::new();
-        commitment_list.extend([commitment; 5]);
-        // initialize the vector of polynomials for the create_proof_for_shplonk function
-        let mut poly_list = Vec::new();
-        for _i in 0..5 {
-            poly_list.push(poly.clone());
-        }
-        //create the proof
-        self.create_proof_sh_plonk::<
+        let points_list: Vec<_> = (1..=5)
+            .map(|_| {
+                let point = current_point;
+                current_point *= Fr::MULTIPLICATIVE_GENERATOR;
+                point
+            })
+            .collect();
+
+        // Initialize the vector of commitments
+        let commitment_list = vec![commitment; 5];
+
+        // Initialize the vector of polynomials.
+        // In our case, since we want to open the values p(x_1),...,p(x_5),
+        // the polynomial list is equal to [p(x);5]
+        let polynomial_list = vec![poly; 5];
+
+        // Create the proof
+        self.create_kzg_proof::<
         KZGCommitmentScheme<Bn256>,
         ProverSHPLONK<'_,_>,
         _, Blake2bWrite<_, _, Challenge255<_>>>(
         &self.kzg_params,
         points_list.clone(),
-        poly_list,
+        polynomial_list,
         commitment_list)
     }
 
-    /// verify the correctness of the tract record
-    pub fn verify_trace_element(
+    /// Verify the correctness of the trace record
+    /// This function, given input a trace record,
+    /// it commitment and the proof of correctness opening,
+    /// returns True or False to determine the correctness of the opening
+    pub fn verify_trace_record(
         &self,
         trace: TraceRecord<K, V, S, T>,
         commitment: <KZGCommitmentScheme<Bn256> as CommitmentScheme>::Curve,
         proof: Vec<u8>,
     ) -> bool {
-        // create the opening for the polynomial from the trace
-        let opening = Vec::from(self.trace_to_field(trace));
-        // create the commitment list of the trace
-        let mut commitment_list = Vec::new();
-        commitment_list.extend([commitment; 5]);
-        // create the point list of opening of the polynomial
-        let mut points_list = Vec::new();
-        points_list.extend([Fr::ONE; 5]);
+        // Create the commitment list of the trace
+        let commitment_list = vec![commitment; 5];
+
+        // Create the point list [x_1,x_2,x_3,x_4,x_5] of opening
         let mut current_point = Fr::ONE;
-        for (_i, point) in (1..=5).zip(points_list.iter_mut().skip(1)) {
-            current_point *= Fr::MULTIPLICATIVE_GENERATOR;
-            *point = current_point;
-        }
-        // finally, verify the opening
-        self.verify_shplonk::<
+        let points_list: Vec<_> = (1..=5)
+            .map(|_| {
+                let point = current_point;
+                current_point *= Fr::MULTIPLICATIVE_GENERATOR;
+                point
+            })
+            .collect();
+
+        // Create the evaluations p(x_1),p(x_2),...,p(x_5)
+        // for the polynomial p(x) converted from the trace
+        let eval = Vec::from(self.trace_to_field(trace));
+
+        // Finally, verify the correctness of the trace record
+        self.verify_kzg_proof::<
         KZGCommitmentScheme<Bn256>,
         VerifierSHPLONK<'_,_>,
         _,
         Blake2bRead<_, _, Challenge255<_>>,
         AccumulatorStrategy<'_,_>,
-        >(&self.kzg_params, points_list.clone(), opening, commitment_list,proof.as_slice())
+        >(&self.kzg_params, points_list.clone(),
+        eval,
+        commitment_list,
+        proof.as_slice())
     }
 }
 
@@ -371,6 +400,7 @@ mod test {
 
         // Get the polynomial
         let poly_trace = kzg_scheme.poly_from_trace(trace);
+
         // Get only the evals, which is the trace record's elements converted to field elements
         let poly_evals = kzg_scheme.trace_to_field(trace);
 
@@ -394,11 +424,13 @@ mod test {
             B256::from(100),
         );
         //Commit the trace
-        let commit = kzg_scheme.commit(trace);
+        let commitment = kzg_scheme.commit(trace);
+
         //Open the trace
-        let proof = kzg_scheme.prove_trace_element(trace, commit);
-        //Verify the trace
-        assert!(kzg_scheme.verify_trace_element(trace, commit, proof));
+        let proof = kzg_scheme.prove_trace_record(trace, commitment);
+
+        //Verify the trace, should return True
+        assert!(kzg_scheme.verify_trace_record(trace, commitment, proof));
     }
 
     #[test]
@@ -422,11 +454,13 @@ mod test {
             B256::from(100),
         );
         //Commit the first trace
-        let commit = kzg_scheme.commit(trace);
+        let commitment = kzg_scheme.commit(trace);
+
         //Attempt to create the false proof of the first trace
         let commit2 = kzg_scheme.commit(trace2);
-        let false_proof = kzg_scheme.prove_trace_element(trace2, commit2);
-        //Verify the trace
-        assert!(!kzg_scheme.verify_trace_element(trace, commit, false_proof));
+        let false_proof = kzg_scheme.prove_trace_record(trace2, commit2);
+
+        //Verify the trace, should return False
+        assert!(!kzg_scheme.verify_trace_record(trace, commitment, false_proof));
     }
 }
