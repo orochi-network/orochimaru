@@ -244,7 +244,7 @@ where
     }
 
     /// Show address maps of memory, stack and registers sections
-    pub fn show_sections_maps(&self) -> () {
+    pub fn show_sections_maps(&self) {
         println!(
             "Memory section map: from {} to {}",
             self.memory_allocated.low(),
@@ -294,7 +294,7 @@ where
     }
 
     fn trace(&self) -> Vec<Self::TraceRecord> {
-        self.execution_trace.keys().map(|x| x.clone()).collect()
+        self.execution_trace.keys().copied().collect()
     }
 
     fn exec(&mut self, instruction: &Self::Instruction) {

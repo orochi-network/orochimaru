@@ -899,7 +899,7 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.2.0"
-source = "git+https://github.com/orochi-network/halo2?tag=v0_0_1#bb57084fdb6c01173b261abbe237e9d1e03b6bc1"
+source = "git+https://github.com/orochi-network/halo2?tag=v0_0_2#8270a67b0a847221a21bcd31b099462346674189"
 dependencies = [
  "blake2b_simd",
  "ff",
@@ -3085,6 +3085,7 @@ dependencies = [
  "halo2_proofs",
  "halo2curves 0.3.2",
  "hex",
+ "rand",
  "rand_core",
  "rbtree",
 ]

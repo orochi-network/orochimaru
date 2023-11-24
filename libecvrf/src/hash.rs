@@ -151,9 +151,9 @@ mod tests {
     fn point_must_be_on_curve() {
         let mut buf = [0u8; 32];
         random_bytes(&mut buf);
-        let mut rv = new_candidate_point(buf.to_vec().as_ref());
+        let mut rv = new_candidate_point(buf.as_ref());
         while !is_on_curve(&rv) {
-            rv = new_candidate_point(&rv.x.b32().to_vec());
+            rv = new_candidate_point(&rv.x.b32());
         }
         assert!(is_on_curve(&rv));
     }
