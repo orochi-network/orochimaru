@@ -249,7 +249,6 @@ where
             .collect();
 
         // Check if eval list input matches the eval list from the Prover's proof
-        let mut check = true;
         for (e, e_l) in eval.iter().zip(&eval_list) {
             check = check && (*e == *e_l);
         }
@@ -359,6 +358,8 @@ where
 
 #[cfg(test)]
 mod test {
+    //use std::println;
+
     use super::*;
     use crate::{base::B256, machine::AbstractTraceRecord};
     use halo2_proofs::arithmetic::eval_polynomial;
@@ -372,7 +373,7 @@ mod test {
             rng.gen_range(0..u64::MAX),
             rng.gen_range(0..u64::MAX),
             MemoryInstruction::Read,
-            B256::zero(),
+            B256::from(rng.gen_range(std::i32::MIN..std::i32::MAX)),
             B256::from(rng.gen_range(std::i32::MIN..std::i32::MAX)),
         )
     }
@@ -403,7 +404,7 @@ mod test {
     fn test_record_polynomial_conversion() {
         let kzg_scheme = KZGMemoryCommitment::<B256, B256, 32, 32>::new();
 
-        // Initialize a trace record
+        // Initialize a random trace record
         let trace = generate_trace_record();
 
         // Get the polynomial
@@ -421,39 +422,39 @@ mod test {
     }
 
     #[test]
-    fn test_correct_memory_opening() {
+    fn test_correct_trace_opening() {
         let mut kzg_scheme = KZGMemoryCommitment::<B256, B256, 32, 32>::new();
 
-        // Initialize a trace record
+        // Initialize a random trace record
         let trace = generate_trace_record();
+
         //Commit the trace
         let commitment = kzg_scheme.commit(trace);
 
         //Open the trace
         let proof = kzg_scheme.prove_trace_record(trace, commitment);
 
-        //Verify the trace, should return True
+        //Verify the correctness of the trace, should return True
         assert!(kzg_scheme.verify_trace_record(trace, commitment, proof));
     }
 
+    // Check that two different trace records cannot have the same commitment
     #[test]
-    fn test_wrong_memory_opening() {
+    fn test_false_trace_opening() {
         let mut kzg_scheme = KZGMemoryCommitment::<B256, B256, 32, 32>::new();
-        // Initialize a trace record
+
+        // Initialize a random trace record
         let trace = generate_trace_record();
 
-        // Initialize another trace record
-        // which is used to create a false proof for the first trace
-        let trace2 = generate_trace_record();
-
-        //Commit the first trace
+        // Commit the initial trace
         let commitment = kzg_scheme.commit(trace);
 
-        //Attempt to create the false proof of the first trace
-        let commit2 = kzg_scheme.commit(trace2);
-        let false_proof = kzg_scheme.prove_trace_record(trace2, commit2);
+        // Given the "commitment", the Prover attempts to find a false trace hoping that it would also
+        // has the same commitment output like the initial trace
+        let false_trace = generate_trace_record();
+        let false_proof = kzg_scheme.prove_trace_record(false_trace, commitment);
 
-        //Verify the trace, should return False
-        assert!(!kzg_scheme.verify_trace_record(trace, commitment, false_proof));
+        // Verify the correctness of the false trace given the commitment "commitment", should return False
+        assert!(!kzg_scheme.verify_trace_record(false_trace, commitment, false_proof));
     }
 }
