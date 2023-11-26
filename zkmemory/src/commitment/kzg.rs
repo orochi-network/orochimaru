@@ -67,6 +67,7 @@ where
             _marker2: PhantomData::<V>,
         }
     }
+
     /// Commit a trace record in an execution trace
     /// This function, given input a trace record,
     /// outputs the commitment of the trace
@@ -139,7 +140,6 @@ where
     // This is made compatible with the Fr endianess
     fn be_bytes_to_field(&self, bytes: &mut [u8]) -> Fr {
         bytes.reverse();
-        //let b = bytes.as_ref();
         let inner = [0, 8, 16, 24].map(|i| u64::from_le_bytes(bytes[i..i + 8].try_into().unwrap()));
         Fr::from_raw(inner)
     }
@@ -207,7 +207,7 @@ where
     // This function, given the list of points x_1,x_2,...,x_n,
     // a list of openings p_1(x_1),p_2(x_2),...,p_n(x_n)
     // and a list of commitment c_1,c_2,..c_n
-    // return True or False to determine the correctness of the opening.
+    // then returns True or False to determine the correctness of the opening.
     // Used as a misc function to help verifying the trace record
     fn verify_kzg_proof<
         'a,
@@ -363,13 +363,27 @@ mod test {
     use crate::{base::B256, machine::AbstractTraceRecord};
     use halo2_proofs::arithmetic::eval_polynomial;
     use rand::{thread_rng, Rng};
+
+    // Generate a trace record
+    fn generate_trace_record() -> TraceRecord<B256, B256, 32, 32> {
+        let mut rng = rand::thread_rng();
+
+        TraceRecord::<B256, B256, 32, 32>::new(
+            rng.gen_range(0..u64::MAX),
+            rng.gen_range(0..u64::MAX),
+            MemoryInstruction::Read,
+            B256::zero(),
+            B256::from(rng.gen_range(std::i32::MIN..std::i32::MAX)),
+        )
+    }
+
     #[test]
     fn test_conversion_fr() {
         let kzg_scheme = KZGMemoryCommitment::<B256, B256, 32, 32>::new();
 
         let mut rng = thread_rng();
 
-        // Create a 32-bytes repr of Base 256
+        // Create a 32-bytes array repr of Base 256
         let mut chunk = [0u8; 32];
         for e in chunk.iter_mut() {
             *e = rng.gen_range(0..255);
@@ -377,10 +391,10 @@ mod test {
         // Clean the first byte to make sure it is not too big
         chunk[0] = 0u8;
 
-        // Use my method to convert to Fr
+        // Convert the array to  Fr
         let fr = kzg_scheme.be_bytes_to_field(chunk.as_mut_slice());
 
-        // Use Fr's method to convert back to bytes
+        // Convert back to bytes
         let chunk_fr: [u8; 32] = fr.try_into().unwrap();
 
         assert_eq!(chunk_fr, chunk);
@@ -390,13 +404,7 @@ mod test {
         let kzg_scheme = KZGMemoryCommitment::<B256, B256, 32, 32>::new();
 
         // Initialize a trace record
-        let trace = TraceRecord::<B256, B256, 32, 32>::new(
-            1u64,
-            2u64,
-            MemoryInstruction::Read,
-            B256::zero(),
-            B256::from(100),
-        );
+        let trace = generate_trace_record();
 
         // Get the polynomial
         let poly_trace = kzg_scheme.poly_from_trace(trace);
@@ -415,14 +423,9 @@ mod test {
     #[test]
     fn test_correct_memory_opening() {
         let mut kzg_scheme = KZGMemoryCommitment::<B256, B256, 32, 32>::new();
+
         // Initialize a trace record
-        let trace = TraceRecord::<B256, B256, 32, 32>::new(
-            1u64,
-            2u64,
-            MemoryInstruction::Read,
-            B256::zero(),
-            B256::from(100),
-        );
+        let trace = generate_trace_record();
         //Commit the trace
         let commitment = kzg_scheme.commit(trace);
 
@@ -437,22 +440,12 @@ mod test {
     fn test_wrong_memory_opening() {
         let mut kzg_scheme = KZGMemoryCommitment::<B256, B256, 32, 32>::new();
         // Initialize a trace record
-        let trace = TraceRecord::<B256, B256, 32, 32>::new(
-            1u64,
-            2u64,
-            MemoryInstruction::Read,
-            B256::zero(),
-            B256::from(100),
-        );
+        let trace = generate_trace_record();
+
         // Initialize another trace record
         // which is used to create a false proof for the first trace
-        let trace2 = TraceRecord::<B256, B256, 32, 32>::new(
-            2u64,
-            2u64,
-            MemoryInstruction::Read,
-            B256::zero(),
-            B256::from(100),
-        );
+        let trace2 = generate_trace_record();
+
         //Commit the first trace
         let commitment = kzg_scheme.commit(trace);
 
