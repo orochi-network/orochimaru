@@ -286,7 +286,8 @@ where
         // Convert the trace to a polynomial p(x)
         let poly = self.poly_from_trace(trace);
 
-        // Create the point list [x_1,x_2,x_3,x_4,x_5] of opening
+        // Create the point list [1,omega,omega^2,...,omega^4] of opening
+        // where omega is the 8-th root of unity
         let mut current_point = Fr::ONE;
         let points_list: Vec<_> = (1..=5)
             .map(|_| {
@@ -300,7 +301,7 @@ where
         let commitment_list = vec![commitment; 5];
 
         // Initialize the vector of polynomials.
-        // In our case, since we want to open the values p(x_1),...,p(x_5),
+        // In our case, since we want to open the values p(1),p(omega),...,p(omega^4),
         // the polynomial list is equal to [p(x);5]
         let polynomial_list = vec![poly; 5];
 
@@ -328,7 +329,8 @@ where
         // Create the commitment list of the trace
         let commitment_list = vec![commitment; 5];
 
-        // Create the point list [x_1,x_2,x_3,x_4,x_5] of opening
+        // Create the point list [1,omega,omega^2,...,omega^4] of opening
+        // where omega is the 8-th root of unity
         let mut current_point = Fr::ONE;
         let points_list: Vec<_> = (1..=5)
             .map(|_| {
@@ -338,7 +340,7 @@ where
             })
             .collect();
 
-        // Create the evaluations p(x_1),p(x_2),...,p(x_5)
+        // Create the evaluations p(1),p(omega),...,p(omega^4)
         // for the polynomial p(x) converted from the trace
         let eval = Vec::from(self.trace_to_field(trace));
 
@@ -358,8 +360,6 @@ where
 
 #[cfg(test)]
 mod test {
-    //use std::println;
-
     use super::*;
     use crate::{base::B256, machine::AbstractTraceRecord};
     use halo2_proofs::arithmetic::eval_polynomial;
@@ -368,11 +368,16 @@ mod test {
     // Generate a trace record
     fn generate_trace_record() -> TraceRecord<B256, B256, 32, 32> {
         let mut rng = rand::thread_rng();
+        let instruction = if rng.gen() {
+            MemoryInstruction::Read
+        } else {
+            MemoryInstruction::Write
+        };
 
         TraceRecord::<B256, B256, 32, 32>::new(
             rng.gen_range(0..u64::MAX),
             rng.gen_range(0..u64::MAX),
-            MemoryInstruction::Read,
+            instruction,
             B256::from(rng.gen_range(std::i32::MIN..std::i32::MAX)),
             B256::from(rng.gen_range(std::i32::MIN..std::i32::MAX)),
         )
@@ -395,7 +400,7 @@ mod test {
         // Convert the array to  Fr
         let fr = kzg_scheme.be_bytes_to_field(chunk.as_mut_slice());
 
-        // Convert back to bytes
+        // Convert back from Fr to bytes
         let chunk_fr: [u8; 32] = fr.try_into().unwrap();
 
         assert_eq!(chunk_fr, chunk);
