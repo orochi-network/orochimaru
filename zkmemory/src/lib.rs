@@ -23,7 +23,6 @@ pub mod config;
 pub mod error;
 /// Definition of abstract machine (instruction, trace and context)
 pub mod machine;
-///
 
 #[cfg(test)]
 mod tests {
