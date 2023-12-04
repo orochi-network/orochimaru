@@ -275,10 +275,13 @@ where
         let polynomial_list = vec![poly; 5];
 
         // Create the proof
+        // I use the anonymous lifetime parameter '_ here, since currently
+        // I do not know how to add a specific life time parameter in the script.
         self.create_kzg_proof::<
         KZGCommitmentScheme<Bn256>,
-        ProverSHPLONK<'_,_>,
-        _, Blake2bWrite<_, _, Challenge255<_>>>(
+        ProverSHPLONK<'_,Bn256>,
+        Challenge255<G1Affine>,
+        Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>>(
         &self.kzg_params,
         OMEGA_POWER[0..5].to_vec(),
         polynomial_list,
@@ -303,12 +306,14 @@ where
         let eval = Vec::from(self.trace_to_field(trace));
 
         // Finally, verify the correctness of the trace record
+        // I use the anonymous lifetime parameter '_ here, since currently
+        // I do not know how to add a specific life time parameter in the script.
         self.verify_kzg_proof::<
         KZGCommitmentScheme<Bn256>,
-        VerifierSHPLONK<'_,_>,
-        _,
-        Blake2bRead<_, _, Challenge255<_>>,
-        AccumulatorStrategy<'_,_>,
+        VerifierSHPLONK<'_,Bn256>,
+        Challenge255<G1Affine>,
+        Blake2bRead<&'_[u8], G1Affine, Challenge255<G1Affine>>,
+        AccumulatorStrategy<'_,Bn256>,
         >(&self.kzg_params, OMEGA_POWER[0..5].to_vec(),
         eval,
         commitment_list,
@@ -358,7 +363,7 @@ mod test {
         let fr = Fr::from_bytes(&chunk).expect("Unable to convert to Fr");
 
         // Convert back from Fr to bytes
-        let chunk_fr: [u8; 32] = fr.try_into().unwrap();
+        let chunk_fr: [u8; 32] = fr.try_into().expect("Cannot convert from Fr to bytes");
 
         assert_eq!(chunk_fr, chunk);
     }
