@@ -1,12 +1,19 @@
 [workspace]
-members = ["libecvrf", "zkmemory", "zkrisc", "zkdb", "node", "wano", "verkletree"]
+members = [
+    "libecvrf",
+    "zkmemory",
+    "zkrisc",
+    "zkdb",
+    "node",
+    "node/migration",
+    "wano",
+    "verkletree",
+]
 exclude = []
 resolver = "2"
 
 [workspace.package]
-authors = [
-    "Chiro <chiro@orochi.network>",
-]
+authors = ["Chiro <chiro@orochi.network>"]
 repository = "https://github.com/orochi-network/orochimaru/"
 edition = "2021"
 readme = "README.md"
@@ -18,3 +25,16 @@ categories = ["zkp", "cryptography", "distributed", "mpc"]
 lto = "fat"
 codegen-units = 1
 
+[workspace.dependencies]
+cargo-llvm-cov = "0.5.27"
+ethnum = "1.3.2"
+hex = "0.4.3"
+rbtree = "0.1.5"
+halo2_proofs = { git = "https://github.com/orochi-network/halo2", tag = "v0_0_2" }
+halo2curves = { git = "https://github.com/privacy-scaling-explorations/halo2curves", tag = "0.3.2" }
+ff = "0.13.0"
+group = "0.13.0"
+rand_core = "0.6.4"
+rand = "0.8.5"
+serde_json = "1.0.87"
+serde = "1.0.147"
