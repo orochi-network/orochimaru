@@ -19,11 +19,13 @@ pub mod base;
 pub mod commitment;
 /// Define all configuration of [StateMachine](crate::machine::StateMachine) and [RawMemory](crate::memory::RawMemory)
 pub mod config;
+/// Define all the constraints for checking the consistency of memory, including
+/// permutation check and lexicographic ordering check
+pub mod constraints;
 /// Define all errors of [StateMachine](crate::machine::StateMachine) and [RawMemory](crate::memory::RawMemory)
 pub mod error;
 /// Definition of abstract machine (instruction, trace and context)
 pub mod machine;
-///
 
 #[cfg(test)]
 mod tests {

@@ -1,12 +1,11 @@
 extern crate alloc;
-use crate::{base::Base, machine::MemoryInstruction, machine::TraceRecord};
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{format, vec::Vec};
 use core::marker::PhantomData;
-use group::Curve;
 use halo2_proofs::{
-    halo2curves::bn256::{Bn256, Fr, G1Affine},
-    plonk::{Advice, Column, ConstraintSystem, Error, Fixed},
+    arithmetic::Field,
+    circuit::Region,
+    plonk::{Advice, Column, Expression, VirtualCells},
+    poly::Rotation,
 };
 
 // this file contains the auxiliary components which are necessary for
@@ -102,7 +101,7 @@ where
     }
 
     /// Annotates columns of this gadget embedded within a circuit region.
-    pub fn annotate_columns_in_region<F: Field>(&self, region: &mut Region<F>, prefix: &str) {
+    pub fn annotate_columns_in_region<F: Field>(&self, region: &mut Region<'_, F>, prefix: &str) {
         let mut annotations = Vec::new();
         for (i, _) in self.bits.iter().enumerate() {
             annotations.push(format!("GADGETS_binary_number_{}", i));
@@ -112,4 +111,10 @@ where
             .zip(annotations.iter())
             .for_each(|(col, ann)| region.name_column(|| format!("{}_{}", prefix, ann), *col));
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct BinaryNumberChip<F, T, const N: usize> {
+    config: BinaryNumberConfig<T, N>,
+    _marker: PhantomData<F>,
 }
