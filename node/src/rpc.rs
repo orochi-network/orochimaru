@@ -18,8 +18,12 @@ pub enum JSONRPCMethod {
     OrandGetEpoch(u32, String, u32),
     /// New epoch of given network (network id, receiver address)
     OrandNewPrivateEpoch(u32, String),
-    /// Get public key (name)
+    /// Get public key (username)
     OrandGetPublicKey(String),
+    /// Create new user (username)
+    AdminAddUser(String),
+    /// Create new receiver (username, receiver address, network)
+    AdminAddReceiver(String, String, u32),
 }
 
 /// Zero address
@@ -78,6 +82,12 @@ impl JSONRPCMethod {
             "orand_getPublicKey" => {
                 Self::OrandGetPublicKey(decode_name(json_rpc.params[0].clone()))
             }
+            "admin_addUser" => Self::AdminAddUser(decode_name(json_rpc.params[0].clone())),
+            "admin_addReceiver" => Self::AdminAddReceiver(
+                decode_name(json_rpc.params[0].clone()),
+                decode_address(json_rpc.params[1].clone()),
+                decode_u32(json_rpc.params[2].clone()),
+            ),
             _ => return Err(Error("INVALID_METHOD", "Unsupported method")),
         };
         Ok(result)

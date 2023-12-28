@@ -4,7 +4,6 @@ use crate::{
     hash::{hash_points, hash_points_prefix, hash_to_curve, hash_to_curve_prefix},
     helper::*,
 };
-
 use alloc::string::String;
 use libsecp256k1::{
     curve::{Affine, ECMultContext, ECMultGenContext, Field, Jacobian, Scalar, AFFINE_G},

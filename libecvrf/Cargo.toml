@@ -17,10 +17,12 @@ name = "libecvrf"
 path = "src/lib.rs"
 
 [dependencies]
-tiny-keccak = { version = "2.0.2", default-features = false, features=["keccak"] }
+tiny-keccak = { version = "2.0.2", default-features = false, features = [
+    "keccak",
+] }
 libsecp256k1 = "0.7.1"
-rand = "0.8.5"
-hex = "0.4.3"
+rand = { workspace = true }
+hex = { workspace = true }
 
 [features]
 default = ["no_std"]
