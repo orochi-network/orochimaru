@@ -3,8 +3,8 @@ extern crate alloc;
 use alloc::vec;
 use halo2_proofs::{
     arithmetic::Field,
-    circuit::Region,
-    plonk::{Advice, Column, ConstraintSystem, Expression, Fixed},
+    circuit::{Region, Value},
+    plonk::{Advice, Column, ConstraintSystem, Error, Expression, Fixed},
     poly::Rotation,
 };
 // We use this chip to show that the rows of the memory trace table are sorted
@@ -20,6 +20,9 @@ use halo2_proofs::{
 
 // Constraints:
 // 1. limb_difference must be non-zero.
+// 2. all the pairwise limb differences before the first_different_limb is
+// zero, due to the definition of first_different_limb.
+// 3. limb_difference equals the difference of the limbs at first_different_limb.
 
 #[derive(Clone, Copy, Debug)]
 pub enum LimbIndex {}
@@ -58,7 +61,7 @@ impl Config {
 
         // This constraint requires that the limb_difference is not zero. To do this, we
         // consider the inverse of limb_difference, say, limb_difference_inverse and checks
-        // that their product is equal to 1.
+        // that their product is equal to 1, done.
         meta.create_gate("limb_difference is not zero", |meta| {
             let selector = meta.query_fixed(selector, Rotation::cur());
             let limb_difference = meta.query_advice(limb_difference, Rotation::cur());
@@ -71,9 +74,34 @@ impl Config {
             ]
         });
 
+        // This constraint requires all the pairwise limb differences before the first_different_limb
+        // is zero. To do this, we sample a randomness r
+        // need to understand what these lines do
+
+        meta.create_gate(
+            "limb differences before first_different_limb are all 0",
+            |meta| {
+                let selector = meta.query_fixed(selector, Rotation::cur());
+                let mut constraints = vec![];
+                constraints
+            },
+        );
+
         config
     }
 
-    //
-    pub fn assign<F: Field>(&self, region: &mut Region<'_, F>) {}
+    // Returns true if the `cur` row is a first access to a group (at least one of
+    // address, time log, opcode is different from 'prev'), and false otherwise
+    pub fn assign<F: Field>(
+        &self,
+        region: &mut Region<'_, F>,
+        offset: usize,
+    ) -> Result<LimbIndex, Error> {
+        region.assign_fixed(
+            || "upper_limb_difference",
+            self.selector,
+            offset,
+            || Value::known(F::ONE),
+        )?;
+    }
 }

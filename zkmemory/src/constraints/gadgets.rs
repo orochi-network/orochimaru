@@ -54,7 +54,9 @@ where
         move |meta: &mut VirtualCells<'_, F>| {
             let bits = bits.map(|bit| meta.query_advice(bit, rotation));
             bits.iter()
-                .fold(0.expr(), |result, bit| bit.clone() + result * 2.expr())
+                .fold(Expression::Constant(F::ZERO), |result, bit| {
+                    bit.clone() + result * 2.expr()
+                })
         }
     }
 
