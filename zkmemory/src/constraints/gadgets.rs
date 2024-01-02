@@ -1,12 +1,13 @@
 extern crate alloc;
-use alloc::{format, vec::Vec};
+use alloc::{format, vec, vec::Vec};
 use core::marker::PhantomData;
 use halo2_proofs::{
     arithmetic::Field,
-    circuit::Region,
-    plonk::{Advice, Column, Expression, VirtualCells},
+    circuit::{Region, Value},
+    plonk::{Advice, Column, ConstraintSystem, Error, Expression, Fixed, VirtualCells},
     poly::Rotation,
 };
+use strum::IntoEnumIterator;
 
 // this file contains the auxiliary components which are necessary for
 // implementing the functions in permutation checks and lexicographic ordering
@@ -119,4 +120,91 @@ where
 pub struct BinaryNumberChip<F, T, const N: usize> {
     config: BinaryNumberConfig<T, N>,
     _marker: PhantomData<F>,
+}
+impl<F: Field, T: IntoEnumIterator, const N: usize> BinaryNumberChip<F, T, N>
+where
+    T: AsBits<N>,
+{
+    /// Construct the binary number chip given a config.
+    pub fn construct(config: BinaryNumberConfig<T, N>) -> Self {
+        Self {
+            config,
+            _marker: PhantomData,
+        }
+    }
+
+    /// Configure constraints for the binary number chip.
+    pub fn configure(
+        meta: &mut ConstraintSystem<F>,
+        selector: Column<Fixed>,
+        value: Option<Column<Advice>>,
+    ) -> BinaryNumberConfig<T, N> {
+        let bits = [0; N].map(|_| meta.advice_column());
+        // this constraint requires each bit column to be 0 or 1
+        bits.map(|bit| {
+            meta.create_gate("bit column is 0 or 1", |meta| {
+                let selector = meta.query_fixed(selector, Rotation::cur());
+                let bit = meta.query_advice(bit, Rotation::cur());
+                vec![selector * bit.clone() * (1.expr() - bit)]
+            })
+        });
+
+        let config = BinaryNumberConfig {
+            bits,
+            _marker: PhantomData,
+        };
+
+        if let Some(value) = value {
+            meta.create_gate("binary number value", |meta| {
+                let selector = meta.query_fixed(selector, Rotation::cur());
+                vec![
+                    selector
+                        * (config.value(Rotation::cur())(meta)
+                            - meta.query_advice(value, Rotation::cur())),
+                ]
+            });
+        }
+
+        // Disallow bit patterns (if any) that don't correspond to a variant of T.
+        let valid_values: BTreeSet<usize> = T::iter().map(|t| from_bits(&t.as_bits())).collect();
+        let mut invalid_values = (0..1 << N).filter(|i| !valid_values.contains(i)).peekable();
+        if invalid_values.peek().is_some() {
+            meta.create_gate("binary number value in range", |meta| {
+                let selector = meta.query_fixed(selector, Rotation::cur());
+                invalid_values
+                    .map(|i| {
+                        let value_equals_i = config.value_equals(i, Rotation::cur());
+                        selector.clone() * value_equals_i(meta)
+                    })
+                    .collect::<Vec<_>>()
+            });
+        }
+
+        config
+    }
+
+    /// Assign a value to the binary number chip. A generic type that implements
+    /// the AsBits trait can be provided for assignment.
+    pub fn assign(
+        &self,
+        region: &mut Region<'_, F>,
+        offset: usize,
+        value: &T,
+    ) -> Result<(), Error> {
+        for (&bit, &column) in value.as_bits().iter().zip(&self.config.bits) {
+            region.assign_advice(
+                || format!("binary number {:?}", column),
+                column,
+                offset,
+                || Value::known(F::from(bit as u64)),
+            )?;
+        }
+        Ok(())
+    }
+}
+
+/// Helper function to get a decimal representation given the bits.
+pub fn from_bits(bits: &[bool]) -> usize {
+    bits.iter()
+        .fold(0, |result, &bit| bit as usize + 2 * result)
 }

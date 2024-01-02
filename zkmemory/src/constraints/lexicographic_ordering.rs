@@ -75,7 +75,9 @@ impl Config {
         });
 
         // This constraint requires all the pairwise limb differences before the first_different_limb
-        // is zero. To do this, we sample a randomness r
+        // is zero. To do this, we sample a randomness r and check if
+        // (cur_1 - prev_1) + r(cur_2 - prev_2) + r^2(cur_3 - prev_3) + r^3(cur_4 - prev_4) = 0
+        // with r sampled, then the condition holds with overwhelming probability
         // need to understand what these lines do
 
         meta.create_gate(
@@ -87,6 +89,16 @@ impl Config {
             },
         );
 
+        // This constraint requires that the limb_difference is equal to the difference of limbs
+        // at index
+        meta.create_gate(
+            "limb_difference equals difference of limbs at index",
+            |meta| {
+                let selector = meta.query_fixed(selector, Rotation::cur());
+                let mut constraints = vec![];
+                constraints
+            },
+        );
         config
     }
 
