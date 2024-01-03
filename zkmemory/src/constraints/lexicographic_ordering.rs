@@ -1,6 +1,6 @@
 use super::gadgets::BinaryNumberConfig;
 extern crate alloc;
-use alloc::vec;
+use alloc::{format, vec};
 use halo2_proofs::{
     arithmetic::Field,
     circuit::{Region, Value},
@@ -115,5 +115,20 @@ impl Config {
             offset,
             || Value::known(F::ONE),
         )?;
+    }
+
+    /// Annotates columns of this gadget embedded within a circuit region.
+    pub fn annotate_columns_in_region<F: Field>(&self, region: &mut Region<'_, F>, prefix: &str) {
+        [
+            (self.limb_difference, "LO_limb_difference"),
+            (self.limb_difference_inverse, "LO_limb_difference_inverse"),
+        ]
+        .iter()
+        .for_each(|(col, ann)| region.name_column(|| format!("{}_{}", prefix, ann), *col));
+        // fixed column
+        region.name_column(
+            || format!("{}_LO_upper_limb_difference", prefix),
+            self.selector,
+        );
     }
 }
