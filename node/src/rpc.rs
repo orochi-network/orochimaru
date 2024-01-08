@@ -12,8 +12,8 @@ pub struct JSONRPCPayload {
 
 /// JSON RPC Method
 pub enum JSONRPCMethod {
-    /// New epoch (network id, receiver address)
-    OrandNewEpoch(u32, String),
+    /// New epoch (network id, receiver address, epoch id)
+    OrandNewEpoch(u32, String, u32),
     /// Get epoch (network id, receiver address, epoch id)
     OrandGetEpoch(u32, String, u32),
     /// New epoch of given network (network id, receiver address)
@@ -74,10 +74,12 @@ impl JSONRPCMethod {
             "orand_newPublicEpoch" => Self::OrandNewEpoch(
                 decode_u32(json_rpc.params[0].clone()),
                 ZERO_ADDRESS.to_string(),
+                decode_u32(json_rpc.params[1].clone()),
             ),
             "orand_newPrivateEpoch" => Self::OrandNewEpoch(
                 decode_u32(json_rpc.params[0].clone()),
                 decode_address(json_rpc.params[1].clone()),
+                decode_u32(json_rpc.params[2].clone()),
             ),
             "orand_getPublicKey" => {
                 Self::OrandGetPublicKey(decode_name(json_rpc.params[0].clone()))

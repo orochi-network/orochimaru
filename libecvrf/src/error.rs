@@ -7,6 +7,8 @@ pub enum Error {
     OutOfRange,
     /// Unable to convert bytes to scalar
     UnableToConvertBytesToScalar,
+    /// Retries exceeded
+    RetriesExceeded,
 }
 
 #[cfg(feature = "std")]
@@ -18,6 +20,7 @@ impl core::fmt::Display for Error {
             Error::UnknowError => write!(f, "Unknow error"),
             Error::OutOfRange => write!(f, "Out of range"),
             Error::UnableToConvertBytesToScalar => write!(f, "Unable to convert bytes to scalar"),
+            Error::RetriesExceeded => write!(f, "Retries exceeded"),
         }
     }
 }

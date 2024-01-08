@@ -49,7 +49,7 @@ impl QuickResponse {
         Ok(Response::builder()
             .header("Access-Control-Allow-Origin", "*")
             .header("Content-Type", "application/json")
-            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .status(StatusCode::OK)
             .body(full(body))
             .expect("Unable to construct response"))
     }

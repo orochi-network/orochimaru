@@ -1,7 +1,6 @@
 use crate::receiver::{ActiveModel, Column, Entity, Model};
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait,
-    QueryFilter,
+    ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait, QueryFilter,
 };
 
 /// Receiver table
@@ -21,57 +20,8 @@ impl<'a> ReceiverTable<'a> {
     }
 
     /// Find receiver record by its network and address
-    pub async fn update(
-        &self,
-        record: &Model,
-        network: u32,
-        address: &str,
-    ) -> Result<Option<Model>, DbErr> {
-        Entity::update(ActiveModel {
-            id: ActiveValue::set(record.id),
-            name: ActiveValue::set(record.name.clone()),
-            network: ActiveValue::set(network),
-            address: ActiveValue::set(address.to_owned()),
-            nonce: ActiveValue::set(record.nonce + 1),
-            created_date: ActiveValue::default(),
-        })
-        .exec(self.connection)
-        .await
-        .expect("Unable to update receiver");
-        self.find_by_id(record.id).await
-
-        /*
-        match receiver {
-            Some(r) => {
-                Entity::update(ActiveModel {
-                    id: ActiveValue::set(r.id),
-                    name: ActiveValue::set(r.name),
-                    network: ActiveValue::set(network),
-                    address: ActiveValue::set(address.clone()),
-                    nonce: ActiveValue::set(r.nonce + 1),
-                    created_date: ActiveValue::default(),
-                })
-                .exec(self.connection)
-                .await
-                .expect("Unable to update receiver");
-                self.find_by_id(r.id).await
-            }
-            None => Err(DbErr::Custom("Unable to insert new record".to_string())),
-        }
-        {
-            let returning_receiver = Entity::insert(ActiveModel {
-                id: ActiveValue::not_set(),
-                name: ActiveValue::set(Uuid::new_v4().to_string()),
-                network: ActiveValue::set(network),
-                address: ActiveValue::set(address.clone()),
-                nonce: ActiveValue::set(0),
-                created_date: ActiveValue::default(),
-            })
-            .exec_with_returning(self.connection)
-            .await
-            .expect("Unable to insert new receiver record");
-            Ok(Some(returning_receiver))
-        }*/
+    pub async fn update(&self, record: ActiveModel) -> Result<Model, DbErr> {
+        record.update(self.connection).await
     }
 
     /// Find receiver record by its network and address

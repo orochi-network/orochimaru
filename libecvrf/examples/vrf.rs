@@ -10,7 +10,9 @@ fn main() {
     let ecvrf = ECVRF::new(secret_key);
     let alpha = Scalar::randomize();
 
-    let proof = ecvrf.prove(&alpha);
+    let proof = ecvrf
+        .prove(&alpha)
+        .expect("Failed to prove ECVRF randomness");
     println!("result: {:#?}", proof);
 
     println!("{:?}", ecvrf.verify(&alpha, &proof));

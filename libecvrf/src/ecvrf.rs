@@ -1,5 +1,6 @@
 extern crate alloc;
 use crate::{
+    error,
     extends::{AffineExtend, ScalarExtend},
     hash::{hash_points, hash_points_prefix, hash_to_curve, hash_to_curve_prefix},
     helper::*,
@@ -11,6 +12,9 @@ use libsecp256k1::{
     PublicKey, SecretKey, ECMULT_CONTEXT, ECMULT_GEN_CONTEXT,
 };
 use rand::thread_rng;
+
+/// Max retries for randomize scalar or repeat hash
+pub const MAX_RETRIES: u32 = 100;
 
 /// Zeroable trait
 pub trait Zeroable {
@@ -196,11 +200,13 @@ impl ECVRF<'_> {
     /// u_witness is a represent of u, used ecrecover to minimize gas cost
     /// we're also add projective EC add to make the proof compatible with
     /// on-chain verifier.
-    pub fn prove_contract(&self, alpha: &Scalar) -> ECVRFContractProof {
+    pub fn prove_contract(&self, alpha: &Scalar) -> Result<ECVRFContractProof, error::Error> {
         let mut pub_affine: Affine = self.public_key.into();
         let mut secret_key: Scalar = self.secret_key.into();
         pub_affine.x.normalize();
         pub_affine.y.normalize();
+
+        assert!(pub_affine.is_valid_var());
 
         // On-chain compatible HASH_TO_CURVE_PREFIX
         let h = hash_to_curve_prefix(alpha, &pub_affine);
@@ -211,8 +217,13 @@ impl ECVRF<'_> {
         // k = random()
         // We need to make sure that k < GROUP_ORDER
         let mut k = Scalar::randomize();
+        let mut retries = 0;
         while k.gte(&GROUP_ORDER) || k.is_zero() {
+            if retries > MAX_RETRIES {
+                return Err(error::Error::RetriesExceeded);
+            }
             k = Scalar::randomize();
+            retries += 1;
         }
 
         // Calculate k * G = u
@@ -256,7 +267,7 @@ impl ECVRF<'_> {
         let mut inverse_z = v.z.inv();
         inverse_z.normalize();
 
-        ECVRFContractProof {
+        Ok(ECVRFContractProof {
             pk: self.public_key,
             gamma,
             c,
@@ -267,11 +278,11 @@ impl ECVRF<'_> {
             witness_gamma,
             witness_hash,
             inverse_z,
-        }
+        })
     }
 
     /// Ordinary prover
-    pub fn prove(&self, alpha: &Scalar) -> ECVRFProof {
+    pub fn prove(&self, alpha: &Scalar) -> Result<ECVRFProof, error::Error> {
         let mut pub_affine: Affine = self.public_key.into();
         let mut secret_key: Scalar = self.secret_key.into();
         pub_affine.x.normalize();
@@ -286,8 +297,13 @@ impl ECVRF<'_> {
         // k = random()
         // We need to make sure that k < GROUP_ORDER
         let mut k = Scalar::randomize();
+        let mut retries = 0;
         while k.gte(&GROUP_ORDER) || k.is_zero() {
+            if retries > MAX_RETRIES {
+                return Err(error::Error::RetriesExceeded);
+            }
             k = Scalar::randomize();
+            retries += 1;
         }
 
         // Calculate k * G <=> u
@@ -308,13 +324,13 @@ impl ECVRF<'_> {
         // y = keccak256(gama.encode())
         let y = Scalar::from_bytes(&gamma.keccak256());
 
-        ECVRFProof {
+        Ok(ECVRFProof {
             gamma,
             c,
             s,
             y,
             pk: self.public_key,
-        }
+        })
     }
 
     /// Ordinary verifier
@@ -388,7 +404,7 @@ mod tests {
         let r1 = ecvrf.prove(&alpha);
 
         // Verify
-        let r2 = ecvrf.verify(&alpha, &r1);
+        let r2 = ecvrf.verify(&alpha, &r1.expect("Can not prove the randomness"));
 
         assert!(r2);
     }

@@ -70,6 +70,33 @@ impl<'a> RandomnessTable<'a> {
         }
     }
 
+    /// Find randomness record by its network, address and epoch_id
+    pub async fn find_given_epoch(
+        &self,
+        network: u32,
+        address: &str,
+        epoch_id: u32,
+    ) -> Result<Option<Model>, DbErr> {
+        let receiver = ReceiverTable::new(self.connection)
+            .find_one(network, address)
+            .await
+            .expect("Unable to query receiver from database");
+        match receiver {
+            Some(receiver_record) => {
+                Entity::find()
+                    .filter(
+                        Condition::all()
+                            .add(Column::ReceiverId.eq(receiver_record.id))
+                            .add(Column::Epoch.eq(epoch_id)),
+                    )
+                    .order_by(Column::Epoch, Order::Desc)
+                    .one(self.connection)
+                    .await
+            }
+            None => Ok(None),
+        }
+    }
+
     /// Find randomness record by its network and address
     pub async fn insert(&self, json_record: serde_json::Value) -> Result<Model, DbErr> {
         let new_record = ActiveModel::from_json(json_record)?;
@@ -77,5 +104,10 @@ impl<'a> RandomnessTable<'a> {
         Entity::insert(new_record)
             .exec_with_returning(self.connection)
             .await
+    }
+
+    /// Find randomness record by its network and address
+    pub async fn update(&self, active_model: ActiveModel) -> Result<Model, DbErr> {
+        active_model.update(self.connection).await
     }
 }
