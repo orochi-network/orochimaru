@@ -21,6 +21,16 @@ pub struct JWTPayload {
     pub timestamp: u64,
 }
 
+impl Default for JWTPayload {
+    fn default() -> Self {
+        Self {
+            user: String::from(""),
+            nonce: 0,
+            timestamp: 0,
+        }
+    }
+}
+
 /// JWT
 pub struct JWT {
     secret_key: Vec<u8>,
