@@ -5,7 +5,7 @@
     future_incompatible,
     nonstandard_style,
     rust_2018_idioms,
-    missing_docs,
+    //missing_docs,
     unused_imports
 )]
 #![forbid(unsafe_code)]
