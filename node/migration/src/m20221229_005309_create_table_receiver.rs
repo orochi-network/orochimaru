@@ -13,26 +13,14 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(
                         ColumnDef::new(Receiver::Id)
-                            .integer()
-                            .unsigned()
-                            .not_null()
+                            .big_integer()
                             .auto_increment()
                             .primary_key(),
                     )
                     .col(ColumnDef::new(Receiver::Name).string().not_null())
                     .col(ColumnDef::new(Receiver::Address).string().not_null())
-                    .col(
-                        ColumnDef::new(Receiver::Network)
-                            .big_integer()
-                            .unsigned()
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(Receiver::Nonce)
-                            .big_integer()
-                            .unsigned()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(Receiver::Network).big_unsigned().not_null())
+                    .col(ColumnDef::new(Receiver::Nonce).big_unsigned().not_null())
                     .col(
                         ColumnDef::new(Receiver::CreatedDate)
                             .timestamp()

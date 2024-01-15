@@ -14,30 +14,21 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(
                         ColumnDef::new(Randomness::Id)
-                            .integer()
-                            .unsigned()
-                            .not_null()
+                            .big_integer()
                             .auto_increment()
                             .primary_key(),
                     )
                     .col(
                         ColumnDef::new(Randomness::KeyringId)
-                            .integer()
-                            .unsigned()
+                            .big_integer()
                             .not_null(),
                     )
                     .col(
                         ColumnDef::new(Randomness::ReceiverId)
-                            .integer()
-                            .unsigned()
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(Randomness::Epoch)
                             .big_integer()
-                            .unsigned()
                             .not_null(),
                     )
+                    .col(ColumnDef::new(Randomness::Epoch).big_integer().not_null())
                     .col(ColumnDef::new(Randomness::Alpha).string().not_null())
                     .col(ColumnDef::new(Randomness::Gamma).string().not_null())
                     .col(ColumnDef::new(Randomness::C).string().not_null())

@@ -13,8 +13,8 @@
 /// Handle ethereum signing
 pub mod ethereum;
 
-mod sqlite;
-pub use sqlite::*;
+mod postgres;
+pub use postgres::*;
 
 /// JSON Web Token
 pub mod jwt;

@@ -2,7 +2,7 @@ use clap::{arg, Command};
 use core::panic;
 use dotenv::dotenv;
 use libecvrf::{helper::random_bytes, KeyPair};
-use node::SQLiteDB;
+use node::postgres_sql::Postgres;
 use regex::Regex;
 use serde_json::json;
 use std::env;
@@ -38,13 +38,13 @@ fn cli() -> Command {
         .arg_required_else_help(true)
         .allow_external_subcommands(true)
         .subcommand(
-            Command::new("addUser")
+            Command::new("user")
                 .about("Add new user with given username")
                 .arg(arg!(username: <USERNAME> "Username of user"))
                 .arg_required_else_help(true),
         )
         .subcommand(
-            Command::new("addReceiver")
+            Command::new("receiver")
                 .about("Add new target receiver smart contract")
                 .arg(arg!(name: <NAME> "The remote to target"))
                 .arg(arg!(address: <ADDRESS> "Ethereum address of receiver"))
@@ -59,11 +59,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let matches = cli().get_matches();
     let database_url = env::var("DATABASE_URL").expect("Can not connect to the database");
     // @todo: Move these to another module, we should separate between KEYS and API
-    let sqlite = SQLiteDB::new(database_url).await;
+    let postgres = Postgres::new(database_url).await;
 
     match matches.subcommand() {
-        Some(("addUser", sub_matches)) => {
-            let keyring = sqlite.table_keyring();
+        Some(("user", sub_matches)) => {
+            let keyring = postgres.table_keyring();
             let new_key_pair = KeyPair::new();
             let username = sub_matches
                 .get_one::<String>("username")
@@ -92,8 +92,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 hex::encode(new_key_pair.secret_key.serialize())
             );
         }
-        Some(("addReceiver", sub_matches)) => {
-            let table_receiver = sqlite.table_receiver();
+        Some(("receiver", sub_matches)) => {
+            let table_receiver = postgres.table_receiver();
             let name = sub_matches
                 .get_one::<String>("name")
                 .expect("Unable to get name")

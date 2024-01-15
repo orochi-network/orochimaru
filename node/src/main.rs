@@ -30,13 +30,14 @@ use libecvrf::{
 use node::{
     ethereum::{compose_operator_proof, sign_ethereum_message},
     jwt::{JWTPayload, JWT},
+    postgres_sql::Postgres,
     randomness::ActiveModel as RadomnessActiveModel,
     receiver::ActiveModel as ReceiverActiveModel,
     rpc::{JSONRPCMethod, ZERO_ADDRESS},
-    NodeContext, QuickResponse, SQLiteDB,
+    NodeContext, QuickResponse,
 };
 
-use sea_orm::ActiveValue;
+use sea_orm::{prelude::DateTime, ActiveValue};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{borrow::Borrow, env, net::SocketAddr, str::from_utf8, sync::Arc};
@@ -56,17 +57,17 @@ pub struct UserResponse {
     /// Public key
     pub public_key: String,
     /// Created date
-    pub created_date: String,
+    pub created_date: DateTime,
 }
 
 async fn orand_get_epoch(
-    network: u32,
+    network: i64,
     address: String,
-    epoch: u32,
+    epoch: i64,
     context: Arc<NodeContext>,
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
-    let sqlite = context.sqlite();
-    let randomness = sqlite.table_randomness();
+    let postgres = context.postgres();
+    let randomness = postgres.table_randomness();
     match randomness.find_recent_epoch(network, &address, epoch).await {
         Ok(recent_epochs) => QuickResponse::res_json(&recent_epochs),
         Err(_) => QuickResponse::err(node::Error("NOT_FOUND", "Epoch was not found")),
@@ -75,14 +76,14 @@ async fn orand_get_epoch(
 
 async fn orand_new_epoch(
     jwt_payload: JWTPayload,
-    network: u32,
+    network: i64,
     address: String,
-    epoch_id: u32,
+    epoch_id: i64,
     context: Arc<NodeContext>,
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
-    let sqlite = context.sqlite();
-    let receiver = sqlite.table_receiver();
-    let randomness = sqlite.table_randomness();
+    let postgres = context.postgres();
+    let receiver = postgres.table_receiver();
+    let randomness = postgres.table_randomness();
     let ecvrf = context.ecvrf();
 
     // Reconstruct secret key from database
@@ -283,7 +284,7 @@ async fn orand(
                 }
             };
 
-            let keyring = context.sqlite().table_keyring();
+            let keyring = context.postgres().table_keyring();
 
             let authorized_jwt = match json_rpc_payload {
                 JSONRPCMethod::OrandNewEpoch(_, _, _) => {
@@ -367,7 +368,7 @@ async fn orand(
                     )),
                 },
                 JSONRPCMethod::OrandGetPublicKey(key_name) => {
-                    let keyring = context.sqlite().table_keyring();
+                    let keyring = context.postgres().table_keyring();
                     let key_record = keyring
                         .find_by_name(key_name)
                         .await
@@ -429,7 +430,7 @@ async fn orand(
                         .user
                         .eq(ORAND_KEYRING_NAME)
                     {
-                        let table_receiver = context.sqlite().table_receiver();
+                        let table_receiver = context.postgres().table_receiver();
                         match table_receiver
                             .insert(json!({
                                 "name": receiver_name,
@@ -476,8 +477,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         _ => false,
     };
     // @todo: Move these to another module, we should separate between KEYS and API
-    let sqlite = SQLiteDB::new(database_url).await;
-    let keyring = sqlite.table_keyring();
+    let postgres = Postgres::new(database_url).await;
+    let keyring = postgres.table_keyring();
     let result_keyring = keyring
         .find_by_name(ORAND_KEYRING_NAME.to_string())
         .await
@@ -524,7 +525,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     );
 
     // Create new node context
-    let node_context = NodeContext::new(keyring_record.id, keypair, is_testnet, sqlite);
+    let node_context = NodeContext::new(keyring_record.id, keypair, is_testnet, postgres);
 
     let listener = TcpListener::bind(addr).await?;
 

@@ -15,7 +15,7 @@ impl<'a> ReceiverTable<'a> {
     }
 
     /// Find receiver record by its network and address
-    pub async fn find_by_id(&self, id: u32) -> Result<Option<Model>, DbErr> {
+    pub async fn find_by_id(&self, id: i64) -> Result<Option<Model>, DbErr> {
         Entity::find_by_id(id).one(self.connection).await
     }
 
@@ -25,7 +25,7 @@ impl<'a> ReceiverTable<'a> {
     }
 
     /// Find receiver record by its network and address
-    pub async fn find_one(&self, network: u32, address: &str) -> Result<Option<Model>, DbErr> {
+    pub async fn find_one(&self, network: i64, address: &str) -> Result<Option<Model>, DbErr> {
         Entity::find()
             .filter(
                 Condition::all()
