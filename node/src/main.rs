@@ -29,6 +29,7 @@ use libecvrf::{
 
 use node::{
     ethereum::{compose_operator_proof, sign_ethereum_message},
+    evm::evm_verify,
     jwt::{JWTPayload, JWT},
     postgres_sql::Postgres,
     randomness::ActiveModel as RadomnessActiveModel,
@@ -143,6 +144,13 @@ async fn orand_new_epoch(
                 }
             };
 
+            if !evm_verify(contract_proof) {
+                return QuickResponse::err(node::Error(
+                    "ECVRF_ERROR",
+                    "Unable to double check proof",
+                ));
+            }
+
             let mut bytes_address = [0u8; 20];
             hex::decode_to_slice(
                 address.replace("0x", "").replace("0X", ""),
@@ -150,11 +158,8 @@ async fn orand_new_epoch(
             )
             .expect("Unable to decode address");
 
-            let raw_proof = compose_operator_proof(
-                randomness_record.epoch as u64,
-                &bytes_address,
-                &contract_proof.y,
-            );
+            let raw_proof =
+                compose_operator_proof(randomness_record.epoch, &bytes_address, &contract_proof.y);
             let ecdsa_proof = sign_ethereum_message(&context.keypair().secret_key, &raw_proof);
 
             let mut active_model = RadomnessActiveModel::from(randomness_record);
@@ -213,6 +218,13 @@ async fn orand_new_epoch(
                 }
             };
 
+            if !evm_verify(contract_proof) {
+                return QuickResponse::err(node::Error(
+                    "ECVRF_ERROR",
+                    "Unable to double check proof",
+                ));
+            }
+
             let mut bytes_address = [0u8; 20];
             hex::decode_to_slice(
                 address.replace("0x", "").replace("0X", ""),
@@ -220,11 +232,8 @@ async fn orand_new_epoch(
             )
             .expect("Unable to decode address");
 
-            let raw_proof = compose_operator_proof(
-                receiver_record.nonce as u64,
-                &bytes_address,
-                &contract_proof.y,
-            );
+            let raw_proof =
+                compose_operator_proof(receiver_record.nonce, &bytes_address, &contract_proof.y);
             let ecdsa_proof = sign_ethereum_message(&context.keypair().secret_key, &raw_proof);
 
             randomness

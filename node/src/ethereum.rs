@@ -29,10 +29,10 @@ pub fn sign_ethereum_message(sk: &SecretKey, message: &Vec<u8>) -> Vec<u8> {
 }
 
 /// Compose operator proof
-pub fn compose_operator_proof(nonce: u64, receiver: &[u8; 20], y: &Scalar) -> Vec<u8> {
+pub fn compose_operator_proof(nonce: i64, receiver: &[u8; 20], y: &Scalar) -> Vec<u8> {
     let mut buf = BytesMut::with_capacity(256);
     buf.put_u32(0);
-    buf.put_u64(nonce);
+    buf.put_i64(nonce);
     buf.put(receiver.as_slice());
     buf.put(y.b32().as_slice());
     buf.to_vec()

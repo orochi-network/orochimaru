@@ -25,6 +25,7 @@ path = "src/lib.rs"
 serde = { workspace = true }
 serde_json = { workspace = true }
 hex = { workspace = true }
+revm = { git="https://github.com/bluealloy/revm.git", rev = "5e6546e" }
 clap = "4.4.16"
 libecvrf = { version = "^1.1.2", path = "../libecvrf" }
 tiny-keccak = { version = "2.0.2", default-features = false, features = [
