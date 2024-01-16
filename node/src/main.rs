@@ -82,6 +82,7 @@ async fn orand_new_epoch(
     epoch_id: i64,
     context: Arc<NodeContext>,
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
+    let _lock = context.sync.lock().await;
     let postgres = context.postgres();
     let receiver = postgres.table_receiver();
     let randomness = postgres.table_randomness();
@@ -183,15 +184,7 @@ async fn orand_new_epoch(
                 .expect("Unable to update epoch")
         }
         None => {
-            // Update nonce of the receiver
             let receiver_nonce = receiver_record.nonce;
-            let mut receiver_active_model = ReceiverActiveModel::from(receiver_record);
-            receiver_active_model.nonce = ActiveValue::Set(receiver_nonce + 1);
-            let receiver_record = receiver
-                .update(receiver_active_model)
-                .await
-                .expect("Unable to update nonce");
-
             let (current_alpha, next_epoch) = match randomness
                 .find_latest_epoch(network, &address)
                 .await
@@ -233,13 +226,20 @@ async fn orand_new_epoch(
             .expect("Unable to decode address");
 
             let raw_proof =
-                compose_operator_proof(receiver_record.nonce, &bytes_address, &contract_proof.y);
+                compose_operator_proof(receiver_nonce, &bytes_address, &contract_proof.y);
             let ecdsa_proof = sign_ethereum_message(&context.keypair().secret_key, &raw_proof);
+            let mut receiver_active_model = ReceiverActiveModel::from(receiver_record);
+            // Update nonce of the receiver
+            receiver_active_model.nonce = ActiveValue::Set(receiver_nonce + 1);
+            let update_receiver_record = receiver
+                .update(receiver_active_model)
+                .await
+                .expect("Unable to update nonce");
 
             randomness
                 .insert(json!({
                     "keyring_id": context.key_id(),
-                    "receiver_id": receiver_record.id,
+                    "receiver_id": update_receiver_record.id,
                     "epoch": next_epoch,
                     "alpha":hex::encode(current_alpha.b32()),
                     "gamma": contract_proof.gamma.to_hex_string(),
@@ -542,9 +542,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     loop {
         let (stream, _) = listener.accept().await?;
-        let io = TokioIo::new(stream);
         let ctx = Arc::clone(&node_context);
-
+        let io = TokioIo::new(stream);
         tokio::task::spawn(async move {
             if let Err(err) = http1::Builder::new()
                 .serve_connection(io, service_fn(move |req| orand(req, Arc::clone(&ctx))))

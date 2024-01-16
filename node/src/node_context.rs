@@ -1,5 +1,6 @@
 use libecvrf::{KeyPair, ECVRF};
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use crate::postgres_sql::Postgres;
 
@@ -10,6 +11,7 @@ pub struct NodeContext {
     postgres: Postgres,
     key_id: i64,
     keypair: KeyPair,
+    pub sync: Mutex<bool>,
 }
 
 impl NodeContext {
@@ -22,6 +24,7 @@ impl NodeContext {
             is_testnet,
             postgres,
             keypair,
+            sync: Mutex::new(false),
         })
     }
 
