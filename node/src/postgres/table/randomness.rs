@@ -237,10 +237,7 @@ impl<'a> RandomnessTable<'a> {
         let mut receiver_active_model = receiver::ActiveModel::from(receiver_record);
         receiver_active_model.nonce = ActiveValue::Set(receiver_nonce + 1);
         // Update database receiver record
-        match receiver_active_model.save(&txn).await {
-            Err(e) => return Err(e),
-            _ => {}
-        }
+        receiver_active_model.save(&txn).await?;
 
         let result = Entity::insert(new_randomness_record)
             .exec_with_returning(&txn)
@@ -248,7 +245,7 @@ impl<'a> RandomnessTable<'a> {
 
         match txn.commit().await {
             Ok(_) => result,
-            Err(e) => return Err(e),
+            Err(e) => Err(e),
         }
     }
 

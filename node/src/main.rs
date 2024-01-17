@@ -79,10 +79,7 @@ async fn orand_new_epoch(
         .await
     {
         Ok(randomness_returning_record) => QuickResponse::res_json(&randomness_returning_record),
-        Err(_) => QuickResponse::err(node::Error(
-            "INTERNAL_SERVER_ERROR",
-            "Unable to create a new record",
-        )),
+        Err(_) => QuickResponse::err(node::Error("INTERNAL_SERVER_ERROR", "Unkow error")),
     }
 }
 
@@ -246,10 +243,10 @@ async fn orand(
                             }
                         }
                     }
-                    return QuickResponse::err(node::Error(
+                    QuickResponse::err(node::Error(
                         "ACCESS_DENIED",
                         "Access denied, you do not have ability to create public epoch",
-                    ));
+                    ))
                 }
                 JSONRPCMethod::AdminAddReceiver(receiver_name, receiver_address, network) => {
                     // Only orand could able pair with ZERO_ADDRESS
@@ -277,10 +274,10 @@ async fn orand(
                             }
                         }
                     }
-                    return QuickResponse::err(node::Error(
+                    QuickResponse::err(node::Error(
                         "ACCESS_DENIED",
                         "Access denied, you do not have ability to create public epoch",
-                    ));
+                    ))
                 }
                 _ => QuickResponse::err(node::Error(
                     "NOT_IMPLEMENTED",

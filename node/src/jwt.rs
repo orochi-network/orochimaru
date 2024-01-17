@@ -11,7 +11,7 @@ use std::str;
 type HmacSha256 = Hmac<Sha256>;
 
 /// JWT Payload
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct JWTPayload {
     /// User name
     pub user: String,
@@ -19,16 +19,6 @@ pub struct JWTPayload {
     pub nonce: u32,
     /// Unix timestamp
     pub timestamp: u64,
-}
-
-impl Default for JWTPayload {
-    fn default() -> Self {
-        Self {
-            user: String::from(""),
-            nonce: 0,
-            timestamp: 0,
-        }
-    }
 }
 
 /// JWT

@@ -11,6 +11,8 @@ pub struct NodeContext {
     postgres: Postgres,
     key_id: i64,
     keypair: KeyPair,
+    // Single lock will be the botle neck when we have more user
+    // I'm prefer to use [HashMap] to mapping from receiver_id -> lock
     pub sync: Mutex<bool>,
 }
 
