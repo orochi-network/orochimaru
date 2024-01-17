@@ -21,29 +21,20 @@ use hyper::{
 };
 use hyper_util::rt::TokioIo;
 use libecvrf::{
-    extends::{AffineExtend, ScalarExtend},
     helper::{get_address, random_bytes},
-    secp256k1::curve::Scalar,
     KeyPair, RawKeyPair, Zeroable,
 };
-
 use node::{
-    ethereum::{compose_operator_proof, sign_ethereum_message},
-    evm::evm_verify,
-    jwt::{JWTPayload, JWT},
+    jwt::JWT,
     postgres_sql::Postgres,
-    randomness::ActiveModel as RadomnessActiveModel,
-    receiver::ActiveModel as ReceiverActiveModel,
     rpc::{JSONRPCMethod, ZERO_ADDRESS},
     NodeContext, QuickResponse,
 };
-
-use sea_orm::{prelude::DateTime, ActiveValue};
+use sea_orm::prelude::DateTime;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{borrow::Borrow, env, net::SocketAddr, str::from_utf8, sync::Arc};
 use tokio::net::TcpListener;
-use uuid::Uuid;
 
 const ORAND_KEYRING_NAME: &str = "orand";
 const ORAND_HMAC_KEY_SIZE: usize = 32;
@@ -76,188 +67,23 @@ async fn orand_get_epoch(
 }
 
 async fn orand_new_epoch(
-    jwt_payload: JWTPayload,
+    context: Arc<NodeContext>,
     network: i64,
     address: String,
-    epoch_id: i64,
-    context: Arc<NodeContext>,
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
-    let _lock = context.sync.lock().await;
     let postgres = context.postgres();
-    let receiver = postgres.table_receiver();
     let randomness = postgres.table_randomness();
-    let ecvrf = context.ecvrf();
 
-    // Reconstruct secret key from database
-    let receiver_record = match receiver
-        .find_one(network, &address)
+    match randomness
+        .safe_insert(Arc::clone(&context), network, address)
         .await
-        .expect("Can not query our database")
     {
-        Some(record) => record,
-        None => {
-            if context.is_testnet() {
-                // Add new record of receiver if we're on testnet
-                match receiver
-                    .insert(json!({
-                        "name": format!("{}-{}", jwt_payload.user.clone(), Uuid::new_v4()),
-                        "network": network,
-                        "address": address.clone(),
-                        "nonce": 0
-                    }))
-                    .await
-                {
-                    Ok(r) => r,
-                    Err(_) => {
-                        return QuickResponse::err(node::Error(
-                            "DATABASE_ERROR",
-                            "Unable to insert new receiver",
-                        ));
-                    }
-                }
-            } else {
-                return QuickResponse::err(node::Error(
-                    "RECEIVER_NOT_FOUND",
-                    "Receiver was not found",
-                ));
-            }
-        }
-    };
-
-    let returning_randomness = match randomness
-        .find_given_epoch(network, &address, epoch_id)
-        .await
-        .expect("Unable to query randomness table")
-    {
-        Some(randomness_record) => {
-            // Retry given epoch
-            let mut buf = [0u8; 32];
-            hex::decode_to_slice(randomness_record.alpha.clone(), &mut buf)
-                .expect("Unable to decode previous result");
-
-            let contract_proof = match ecvrf.prove_contract(&Scalar::from_bytes(&buf)) {
-                Ok(r) => r,
-                Err(_) => {
-                    return QuickResponse::err(node::Error(
-                        "ECVRF_ERROR",
-                        "Unable to generate proof",
-                    ));
-                }
-            };
-
-            if !evm_verify(contract_proof) {
-                return QuickResponse::err(node::Error(
-                    "ECVRF_ERROR",
-                    "Unable to double check proof",
-                ));
-            }
-
-            let mut bytes_address = [0u8; 20];
-            hex::decode_to_slice(
-                address.replace("0x", "").replace("0X", ""),
-                &mut bytes_address,
-            )
-            .expect("Unable to decode address");
-
-            let raw_proof =
-                compose_operator_proof(randomness_record.epoch, &bytes_address, &contract_proof.y);
-            let ecdsa_proof = sign_ethereum_message(&context.keypair().secret_key, &raw_proof);
-
-            let mut active_model = RadomnessActiveModel::from(randomness_record);
-            active_model.gamma = ActiveValue::Set(contract_proof.gamma.to_hex_string());
-            active_model.c = ActiveValue::Set(hex::encode(contract_proof.c.b32()));
-            active_model.s = ActiveValue::Set(hex::encode(contract_proof.s.b32()));
-            active_model.y = ActiveValue::Set(hex::encode(contract_proof.y.b32()));
-            active_model.witness_address = ActiveValue::Set(
-                hex::encode(contract_proof.witness_address.b32())[0..40].to_string(),
-            );
-            active_model.witness_gamma =
-                ActiveValue::Set(contract_proof.witness_gamma.to_hex_string());
-            active_model.witness_hash =
-                ActiveValue::Set(contract_proof.witness_hash.to_hex_string());
-            active_model.inverse_z = ActiveValue::Set(hex::encode(contract_proof.inverse_z.b32()));
-            active_model.signature_proof = ActiveValue::Set(hex::encode(&ecdsa_proof));
-
-            randomness
-                .update(active_model)
-                .await
-                .expect("Unable to update epoch")
-        }
-        None => {
-            let receiver_nonce = receiver_record.nonce;
-            let (current_alpha, next_epoch) = match randomness
-                .find_latest_epoch(network, &address)
-                .await
-                .expect("Can not get latest epoch")
-            {
-                Some(latest_epoch) => {
-                    let mut buf = [0u8; 32];
-                    hex::decode_to_slice(latest_epoch.y, &mut buf)
-                        .expect("Unable to decode previous result");
-                    (Scalar::from_bytes(&buf), latest_epoch.epoch + 1)
-                }
-                None => {
-                    // Get alpha from random entropy
-                    (Scalar::randomize(), 0)
-                }
-            };
-            let contract_proof = match ecvrf.prove_contract(&current_alpha) {
-                Ok(r) => r,
-                Err(_) => {
-                    return QuickResponse::err(node::Error(
-                        "ECVRF_ERROR",
-                        "Unable to generate proof",
-                    ));
-                }
-            };
-
-            if !evm_verify(contract_proof) {
-                return QuickResponse::err(node::Error(
-                    "ECVRF_ERROR",
-                    "Unable to double check proof",
-                ));
-            }
-
-            let mut bytes_address = [0u8; 20];
-            hex::decode_to_slice(
-                address.replace("0x", "").replace("0X", ""),
-                &mut bytes_address,
-            )
-            .expect("Unable to decode address");
-
-            let raw_proof =
-                compose_operator_proof(receiver_nonce, &bytes_address, &contract_proof.y);
-            let ecdsa_proof = sign_ethereum_message(&context.keypair().secret_key, &raw_proof);
-            let mut receiver_active_model = ReceiverActiveModel::from(receiver_record);
-            // Update nonce of the receiver
-            receiver_active_model.nonce = ActiveValue::Set(receiver_nonce + 1);
-            let update_receiver_record = receiver
-                .update(receiver_active_model)
-                .await
-                .expect("Unable to update nonce");
-
-            randomness
-                .insert(json!({
-                    "keyring_id": context.key_id(),
-                    "receiver_id": update_receiver_record.id,
-                    "epoch": next_epoch,
-                    "alpha":hex::encode(current_alpha.b32()),
-                    "gamma": contract_proof.gamma.to_hex_string(),
-                    "c":hex::encode(contract_proof.c.b32()),
-                    "s":hex::encode(contract_proof.s.b32()),
-                    "y":hex::encode(contract_proof.y.b32()),
-                    "witness_address": hex::encode(contract_proof.witness_address.b32())[0..40],
-                    "witness_gamma": contract_proof.witness_gamma.to_hex_string(),
-                    "witness_hash": contract_proof.witness_hash.to_hex_string(),
-                    "inverse_z": hex::encode(contract_proof.inverse_z.b32()),
-                    "signature_proof": hex::encode(&ecdsa_proof),
-                }))
-                .await
-                .expect("Unable to insert new epoch")
-        }
-    };
-
-    QuickResponse::res_json(&returning_randomness)
+        Ok(randomness_returning_record) => QuickResponse::res_json(&randomness_returning_record),
+        Err(_) => QuickResponse::err(node::Error(
+            "INTERNAL_SERVER_ERROR",
+            "Unable to create a new record",
+        )),
+    }
 }
 
 /// This is our service handler. It receives a Request, routes on its
@@ -296,7 +122,7 @@ async fn orand(
             let keyring = context.postgres().table_keyring();
 
             let authorized_jwt = match json_rpc_payload {
-                JSONRPCMethod::OrandNewEpoch(_, _, _) => {
+                JSONRPCMethod::OrandNewEpoch(_, _) => {
                     let (jwt_payload, json_web_token) = match header.headers.get("authorization") {
                         Some(e) => match e.to_str() {
                             Ok(s) => match JWT::decode_payload(s) {
@@ -352,7 +178,7 @@ async fn orand(
                     orand_get_epoch(network, address, epoch, context).await
                 }
                 // Get epoch, it's alias of orand_newPublicEpoch() and orand_newPrivateEpoch()
-                JSONRPCMethod::OrandNewEpoch(network, address, epoch_id) => match authorized_jwt {
+                JSONRPCMethod::OrandNewEpoch(network, address) => match authorized_jwt {
                     Some(jwt_payload) => {
                         // Only orand could able pair with ZERO_ADDRESS
                         if address.eq(ZERO_ADDRESS) && !jwt_payload.user.eq(ORAND_KEYRING_NAME) {
@@ -362,14 +188,7 @@ async fn orand(
                             ));
                         }
                         // Create new epoch
-                        orand_new_epoch(
-                            jwt_payload,
-                            network,
-                            address,
-                            epoch_id,
-                            Arc::clone(&context),
-                        )
-                        .await
+                        orand_new_epoch(Arc::clone(&context), network, address).await
                     }
                     None => QuickResponse::err(node::Error(
                         "INVALID_JWT",

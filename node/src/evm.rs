@@ -18,7 +18,7 @@ const SMART_CONTRACT_CALLEE: Address = address!("0000000000000000000000000000000
 
 /// Emulate the ECVRF inside REVM to makesure that the result is correct
 /// This consider to be a double check, we trade-off performance for accuracy
-pub fn evm_verify(smart_contract_proof: ECVRFContractProof) -> bool {
+pub fn evm_verify(smart_contract_proof: &ECVRFContractProof) -> bool {
     let bytecode_raw = Bytecode::new_raw(SMART_CONTRACT_BYTESCODE.clone());
     let mut affine_pub_key: Affine = smart_contract_proof.pk.into();
 
