@@ -1,10 +1,11 @@
-FROM rust:1.74.0-alpine3.18 AS builder
+FROM rust:1.74.0-bookworm AS builder
 
-RUN apk update && apk upgrade && apk add git pkgconfig gcc cmake musl-dev && \
+RUN apt-get update && \
+    apt-get install -y sudo git build-essential pkg-config libssl-dev cmake clang && \
     git clone --depth=1 https://github.com/orochi-network/orochimaru && \
     cd orochimaru && cargo build --release -p node
 
-FROM alpine:latest
+FROM debian:bookworm
 
 COPY --from=builder /orochimaru/target/release/node /bin/orand
 COPY --from=builder /orochimaru/target/release/cli /bin/orand-cli

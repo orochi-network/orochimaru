@@ -2,6 +2,8 @@ create user orand with password 'orandpassword';
 
 create database orand owner orand LOCALE 'en_US.utf8' encoding UTF8;
 
+\c orand
+
 -- public.keyring definition
 -- Drop table
 -- DROP TABLE public.keyring;
@@ -18,6 +20,9 @@ create table public.keyring (
 	constraint keyring_public_key_key unique (public_key),
 	constraint keyring_secret_key_key unique (secret_key)
 );
+
+ALTER TABLE public.keyring OWNER TO orand;
+
 -- public.receiver definition
 -- Drop table
 -- DROP TABLE public.receiver;
@@ -32,6 +37,9 @@ create table public.receiver (
 	constraint index_name unique (name),
 	constraint receiver_pkey primary key (id)
 );
+
+ALTER TABLE public.receiver OWNER TO orand;
+
 -- public.seaql_migrations definition
 -- Drop table
 -- DROP TABLE public.seaql_migrations;
@@ -41,6 +49,9 @@ create table public.seaql_migrations (
 	applied_at int8 not null,
 	constraint seaql_migrations_pkey primary key (version)
 );
+
+ALTER TABLE public.receiver OWNER TO seaql_migrations;
+
 -- public.randomness definition
 -- Drop table
 -- DROP TABLE public.randomness;
@@ -68,3 +79,5 @@ create table public.randomness (
 	constraint link_randomness_to_keyring foreign key (keyring_id) references public.keyring(id),
 	constraint link_randomness_to_receiver foreign key (receiver_id) references public.receiver(id)
 );
+
+ALTER TABLE public.randomness OWNER TO seaql_migrations;
