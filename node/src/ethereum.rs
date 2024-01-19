@@ -1,4 +1,4 @@
-use bytes::{BufMut, BytesMut};
+use bytes::{BufMut, Bytes, BytesMut};
 use libecvrf::{
     extends::ScalarExtend,
     secp256k1::{
@@ -32,6 +32,42 @@ pub fn sign_ethereum_message(sk: &SecretKey, message: &Vec<u8>) -> Vec<u8> {
     r
 }
 
+pub fn ecvrf_proof_pack(smart_contract_proof: &ECVRFContractProof) -> Bytes {
+    let mut affine_pub_key: Affine = smart_contract_proof.pk.into();
+    let mut buf = BytesMut::new();
+    affine_pub_key.x.normalize();
+    affine_pub_key.y.normalize();
+
+    // Public key
+    buf.put_slice(&affine_pub_key.x.b32());
+    buf.put_slice(&affine_pub_key.y.b32());
+    // Gamma
+    buf.put_slice(&smart_contract_proof.gamma.x.b32());
+    buf.put_slice(&smart_contract_proof.gamma.y.b32());
+    // C
+    buf.put_slice(&smart_contract_proof.c.b32());
+    // S
+    buf.put_slice(&smart_contract_proof.s.b32());
+    // Alpha
+    buf.put_slice(&smart_contract_proof.alpha.b32());
+    // Witness address
+    // Padding 96 bits on ther left then 160 bits of witness address
+    // Witness address was calculated before, so it store in 0 -> 20
+    // not 12 -> 32
+    // buf.put_slice(&[0u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    buf.put_slice(&smart_contract_proof.witness_address.b32()[0..20]);
+    // Gama Witness
+    buf.put_slice(&smart_contract_proof.witness_gamma.x.b32());
+    buf.put_slice(&smart_contract_proof.witness_gamma.y.b32());
+    // Hash Witness
+    buf.put_slice(&smart_contract_proof.witness_hash.x.b32());
+    buf.put_slice(&smart_contract_proof.witness_hash.y.b32());
+    // Inverted Z
+    buf.put_slice(&smart_contract_proof.inverse_z.b32());
+
+    buf.freeze()
+}
+
 pub fn ecvrf_proof_digest(smart_contract_proof: &ECVRFContractProof) -> [u8; 32] {
     let mut affine_pub_key: Affine = smart_contract_proof.pk.into();
     let mut output = [0u8; 32];
@@ -54,7 +90,9 @@ pub fn ecvrf_proof_digest(smart_contract_proof: &ECVRFContractProof) -> [u8; 32]
     buf.put_slice(&smart_contract_proof.alpha.b32());
     // Witness address
     // Padding 96 bits on ther left then 160 bits of witness address
-    buf.put_slice(&[0u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    // Witness address was calculated before, so it store in 0 -> 20
+    // not 12 -> 32
+    // buf.put_slice(&[0u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
     buf.put_slice(&smart_contract_proof.witness_address.b32()[0..20]);
     // Gama Witness
     buf.put_slice(&smart_contract_proof.witness_gamma.x.b32());

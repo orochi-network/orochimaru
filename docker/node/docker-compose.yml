@@ -1,0 +1,33 @@
+services:
+  orandpg:
+    image: postgres:latest
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: postgres
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - orand_db:/var/lib/postgresql/data
+      - ./docker/node/pg-init.sql:/docker-entrypoint-initdb.d/pg-init.sql
+    ports:
+      # Mapping from host 4321 -> 5432
+      # For production may be we shouldn't expose this port
+      - 4321:5432
+    networks:
+      orand:
+        aliases:
+          - orandpg
+  orandservice:
+    image: orand/service
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    ports:
+      - 31337:1337
+    networks:
+      orand:
+        aliases:
+          - orandservice
+volumes:
+  orand_db:
+networks:
+  orand:
