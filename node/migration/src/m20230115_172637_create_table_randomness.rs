@@ -56,7 +56,7 @@ impl MigrationTrait for Migration {
                             .not_null(),
                     )
                     .foreign_key(
-                        &mut ForeignKeyCreateStatement::new()
+                        ForeignKeyCreateStatement::new()
                             .name("link_randomness_to_keyring")
                             .from_tbl(Randomness::Table)
                             .from_col(Randomness::KeyringId)
@@ -64,7 +64,7 @@ impl MigrationTrait for Migration {
                             .to_col(Keyring::Id),
                     )
                     .foreign_key(
-                        &mut ForeignKeyCreateStatement::new()
+                        ForeignKeyCreateStatement::new()
                             .name("link_randomness_to_receiver")
                             .from_tbl(Randomness::Table)
                             .from_col(Randomness::ReceiverId)
