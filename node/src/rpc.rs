@@ -12,24 +12,28 @@ pub struct JSONRPCPayload {
 
 /// JSON RPC Method
 pub enum JSONRPCMethod {
-    /// New epoch (network id, receiver address)
-    OrandNewEpoch(u32, String),
+    /// New epoch (network id, receiver address, epoch id)
+    OrandNewEpoch(i64, String),
     /// Get epoch (network id, receiver address, epoch id)
-    OrandGetEpoch(u32, String, u32),
+    OrandGetEpoch(i64, String, i64),
     /// New epoch of given network (network id, receiver address)
-    OrandNewPrivateEpoch(u32, String),
-    /// Get public key (name)
+    OrandNewPrivateEpoch(i64, String),
+    /// Get public key (username)
     OrandGetPublicKey(String),
+    /// Create new user (username)
+    AdminAddUser(String),
+    /// Create new receiver (username, receiver address, network)
+    AdminAddReceiver(String, String, i64),
 }
 
 /// Zero address
 pub const ZERO_ADDRESS: &str = "0x0000000000000000000000000000000000000000";
 
-fn decode_u32(val: String) -> u32 {
-    let regex_u32 = Regex::new(r#"\d{1,10}"#).expect("Unable to init Regex");
-    match regex_u32.is_match(val.as_str().as_ref()) {
-        true => val.as_str().parse::<u32>().expect("Unable to parse u32"),
-        false => panic!("Invalid input u32 value"),
+fn decode_i64(val: String) -> i64 {
+    let regex_i64 = Regex::new(r#"\d{1,10}"#).expect("Unable to init Regex");
+    match regex_i64.is_match(val.as_str().as_ref()) {
+        true => val.as_str().parse::<i64>().expect("Unable to parse i64"),
+        false => panic!("Invalid input i64 value"),
     }
 }
 
@@ -58,26 +62,32 @@ impl JSONRPCMethod {
         };
         let result = match json_rpc.method.as_str() {
             "orand_getPublicEpoch" => Self::OrandGetEpoch(
-                decode_u32(json_rpc.params[0].clone()),
+                decode_i64(json_rpc.params[0].clone()),
                 ZERO_ADDRESS.to_string(),
-                decode_u32(json_rpc.params[1].clone()),
+                decode_i64(json_rpc.params[1].clone()),
             ),
             "orand_getPrivateEpoch" => Self::OrandGetEpoch(
-                decode_u32(json_rpc.params[0].clone()),
+                decode_i64(json_rpc.params[0].clone()),
                 decode_address(json_rpc.params[1].clone()),
-                decode_u32(json_rpc.params[2].clone()),
+                decode_i64(json_rpc.params[2].clone()),
             ),
             "orand_newPublicEpoch" => Self::OrandNewEpoch(
-                decode_u32(json_rpc.params[0].clone()),
+                decode_i64(json_rpc.params[0].clone()),
                 ZERO_ADDRESS.to_string(),
             ),
             "orand_newPrivateEpoch" => Self::OrandNewEpoch(
-                decode_u32(json_rpc.params[0].clone()),
+                decode_i64(json_rpc.params[0].clone()),
                 decode_address(json_rpc.params[1].clone()),
             ),
             "orand_getPublicKey" => {
                 Self::OrandGetPublicKey(decode_name(json_rpc.params[0].clone()))
             }
+            "admin_addUser" => Self::AdminAddUser(decode_name(json_rpc.params[0].clone())),
+            "admin_addReceiver" => Self::AdminAddReceiver(
+                decode_name(json_rpc.params[0].clone()),
+                decode_address(json_rpc.params[1].clone()),
+                decode_i64(json_rpc.params[2].clone()),
+            ),
             _ => return Err(Error("INVALID_METHOD", "Unsupported method")),
         };
         Ok(result)

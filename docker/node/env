@@ -1,0 +1,2 @@
+DATABASE_URL="postgres://orand:orandpassword@orandpg/orand"
+ORAND_TESTNET="true"

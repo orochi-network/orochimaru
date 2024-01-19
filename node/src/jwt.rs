@@ -11,7 +11,7 @@ use std::str;
 type HmacSha256 = Hmac<Sha256>;
 
 /// JWT Payload
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct JWTPayload {
     /// User name
     pub user: String,
@@ -43,7 +43,7 @@ impl JWT {
                 Ok(payload) => payload,
                 Err(_) => return Err(Error("INVALID_PAYLOAD", "Unable to decode payload")),
             };
-            let regex_name = Regex::new(r#"^[a-zA-Z0-9\s]{3,40}$"#).expect("Unable to init Regex");
+            let regex_name = Regex::new(r#"^[a-zA-Z0-9]{3,40}$"#).expect("Unable to init Regex");
             let jwt_payload: JWTPayload = match serde_json::from_slice(&decoded_payload) {
                 Ok(payload) => payload,
                 Err(_) => return Err(Error("INVALID_PAYLOAD", "Unable to deserialize payload")),

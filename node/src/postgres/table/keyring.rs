@@ -14,7 +14,7 @@ impl<'a> KeyringTable<'a> {
     }
 
     /// Find keyring record by its id
-    pub async fn find_by_id(&self, id: u32) -> Result<Option<Model>, DbErr> {
+    pub async fn find_by_id(&self, id: i64) -> Result<Option<Model>, DbErr> {
         Entity::find_by_id(id).one(self.connection).await
     }
 

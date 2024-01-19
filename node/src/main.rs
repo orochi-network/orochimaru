@@ -21,34 +21,45 @@ use hyper::{
 };
 use hyper_util::rt::TokioIo;
 use libecvrf::{
-    extends::{AffineExtend, ScalarExtend},
     helper::{get_address, random_bytes},
-    secp256k1::curve::Scalar,
     KeyPair, RawKeyPair, Zeroable,
 };
-
 use node::{
-    ethereum::{compose_operator_proof, sign_ethereum_message},
-    jwt::{JWTPayload, JWT},
+    jwt::JWT,
+    postgres_sql::Postgres,
     rpc::{JSONRPCMethod, ZERO_ADDRESS},
-    NodeContext, QuickResponse, SQLiteDB,
+    NodeContext, QuickResponse,
 };
-
+use sea_orm::prelude::DateTime;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{borrow::Borrow, env, net::SocketAddr, str::from_utf8, sync::Arc};
 use tokio::net::TcpListener;
-use uuid::Uuid;
 
 const ORAND_KEYRING_NAME: &str = "orand";
+const ORAND_HMAC_KEY_SIZE: usize = 32;
+
+/// Return a JSON record of user
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UserResponse {
+    /// Username
+    pub username: String,
+    /// Hmac secret
+    pub hmac_secret: String,
+    /// Public key
+    pub public_key: String,
+    /// Created date
+    pub created_date: DateTime,
+}
 
 async fn orand_get_epoch(
-    network: u32,
+    network: i64,
     address: String,
-    epoch: u32,
+    epoch: i64,
     context: Arc<NodeContext>,
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
-    let sqlite = context.sqlite();
-    let randomness = sqlite.table_randomness();
+    let postgres = context.postgres();
+    let randomness = postgres.table_randomness();
     match randomness.find_recent_epoch(network, &address, epoch).await {
         Ok(recent_epochs) => QuickResponse::res_json(&recent_epochs),
         Err(_) => QuickResponse::err(node::Error("NOT_FOUND", "Epoch was not found")),
@@ -56,122 +67,20 @@ async fn orand_get_epoch(
 }
 
 async fn orand_new_epoch(
-    jwt_payload: JWTPayload,
-    network: u32,
-    address: String,
     context: Arc<NodeContext>,
+    network: i64,
+    address: String,
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
-    let sqlite = context.sqlite();
-    let receiver = sqlite.table_receiver();
-    let randomness = sqlite.table_randomness();
+    let postgres = context.postgres();
+    let randomness = postgres.table_randomness();
 
-    // Reconstruct secret key from database
-    let receiver_record = match receiver
-        .find_one(network, &address)
+    match randomness
+        .safe_insert(Arc::clone(&context), network, address)
         .await
-        .expect("Can not query our database")
     {
-        Some(record) => record,
-        None => {
-            if context.is_testnet() {
-                // Add new record of receiver if we're on testnet
-                match receiver
-                    .insert(json!({
-                        "name": format!("{}-{}", jwt_payload.user.clone(), Uuid::new_v4()),
-                        "network": network,
-                        "address": address.clone(),
-                        "nonce": 0
-                    }))
-                    .await
-                {
-                    Ok(r) => r,
-                    Err(_) => {
-                        return QuickResponse::err(node::Error(
-                            "DATABASE_ERROR",
-                            "Unable to insert new receiver",
-                        ));
-                    }
-                }
-            } else {
-                return QuickResponse::err(node::Error(
-                    "RECEIVER_NOT_FOUND",
-                    "Receiver was not found",
-                ));
-            }
-        }
-    };
-
-    let returning_receiver = match receiver.update(&receiver_record, network, &address).await {
-        Ok(r) => match r {
-            Some(m) => m,
-            None => {
-                return QuickResponse::err(node::Error(
-                    "RECORD_NOT_FOUND",
-                    "Data was insert but not found, why?",
-                ));
-            }
-        },
-        Err(_) => {
-            return QuickResponse::err(node::Error("DATABASE_ERROR", "Unable to update receiver"));
-        }
-    };
-
-    let ecvrf = context.ecvrf();
-
-    let latest_epoch_record = randomness
-        .find_latest_epoch(network, &address)
-        .await
-        .expect("Can not get latest epoch");
-
-    let (current_alpha, next_epoch) = match latest_epoch_record {
-        Some(latest_epoch) => {
-            let mut buf = [0u8; 32];
-            hex::decode_to_slice(latest_epoch.y, &mut buf)
-                .expect("Unable to decode previous result");
-            (Scalar::from_bytes(&buf), latest_epoch.epoch + 1)
-        }
-        None => {
-            // Get alpha from random entropy
-            (Scalar::randomize(), 0)
-        }
-    };
-
-    let contract_proof = ecvrf.prove_contract(&current_alpha);
-
-    let mut bytes_address = [0u8; 20];
-    hex::decode_to_slice(
-        address.replace("0x", "").replace("0X", ""),
-        &mut bytes_address,
-    )
-    .expect("Unable to decode address");
-
-    let raw_proof = compose_operator_proof(
-        receiver_record.nonce as u64,
-        &bytes_address,
-        &contract_proof.y,
-    );
-    let ecdsa_proof = sign_ethereum_message(&context.keypair().secret_key, &raw_proof);
-
-    let returning_randomness = randomness
-        .insert(json!({
-            "keyring_id": context.key_id(),
-            "receiver_id": returning_receiver.id,
-            "epoch": next_epoch,
-            "alpha":hex::encode(current_alpha.b32()),
-            "gamma": contract_proof.gamma.to_hex_string(),
-            "c":hex::encode(contract_proof.c.b32()),
-            "s":hex::encode(contract_proof.s.b32()),
-            "y":hex::encode(contract_proof.y.b32()),
-            "witness_address": hex::encode(contract_proof.witness_address.b32())[24..64],
-            "witness_gamma": contract_proof.witness_gamma.to_hex_string(),
-            "witness_hash": contract_proof.witness_hash.to_hex_string(),
-            "inverse_z": hex::encode(contract_proof.inverse_z.b32()),
-            "signature_proof": hex::encode(&ecdsa_proof),
-        }))
-        .await
-        .expect("Unable to insert new epoch");
-
-    QuickResponse::res_json(&returning_randomness)
+        Ok(randomness_returning_record) => QuickResponse::res_json(&randomness_returning_record),
+        Err(_) => QuickResponse::err(node::Error("INTERNAL_SERVER_ERROR", "Unkow error")),
+    }
 }
 
 /// This is our service handler. It receives a Request, routes on its
@@ -207,16 +116,10 @@ async fn orand(
                 }
             };
 
-            match json_rpc_payload {
-                // Get epoch, it's alias of orand_getPublicEpoch() and orand_getPrivateEpoch()
-                JSONRPCMethod::OrandGetEpoch(network, address, epoch) => {
-                    orand_get_epoch(network, address, epoch, context).await
-                }
+            let keyring = context.postgres().table_keyring();
 
-                // Get epoch, it's alias of orand_newPublicEpoch() and orand_newPrivateEpoch()
-                JSONRPCMethod::OrandNewEpoch(network, address) => {
-                    let keyring = context.sqlite().table_keyring();
-                    // Decode JWT payload, this code is dirty let try catch_unwind next time
+            let authorized_jwt = match json_rpc_payload {
+                JSONRPCMethod::OrandNewEpoch(_, _) => {
                     let (jwt_payload, json_web_token) = match header.headers.get("authorization") {
                         Some(e) => match e.to_str() {
                             Ok(s) => match JWT::decode_payload(s) {
@@ -239,14 +142,7 @@ async fn orand(
                             ));
                         }
                     };
-                    // Only orand could able to create public epoch
-                    if address.eq(ZERO_ADDRESS) && !jwt_payload.user.eq(ORAND_KEYRING_NAME) {
-                        return QuickResponse::err(node::Error(
-                            "ACCESS_DENIED",
-                            "Access denied, you do not have ability to create public",
-                        ));
-                    }
-                    // Reconstruct secret key from database
+
                     let user_record = match keyring
                         .find_by_name(jwt_payload.user.clone())
                         .await
@@ -268,16 +164,120 @@ async fn orand(
                             "Access denied, incorrect key",
                         ));
                     }
-                    orand_new_epoch(jwt_payload, network, address, Arc::clone(&context)).await
+                    Some(jwt_payload)
                 }
+                _ => None,
+            };
+
+            match json_rpc_payload {
+                // Get epoch, it's alias of orand_getPublicEpoch() and orand_getPrivateEpoch()
+                JSONRPCMethod::OrandGetEpoch(network, address, epoch) => {
+                    orand_get_epoch(network, address, epoch, context).await
+                }
+                // Get epoch, it's alias of orand_newPublicEpoch() and orand_newPrivateEpoch()
+                JSONRPCMethod::OrandNewEpoch(network, address) => match authorized_jwt {
+                    Some(jwt_payload) => {
+                        // Only orand could able pair with ZERO_ADDRESS
+                        if address.eq(ZERO_ADDRESS) && !jwt_payload.user.eq(ORAND_KEYRING_NAME) {
+                            return QuickResponse::err(node::Error(
+                                "ACCESS_DENIED",
+                                "Access denied, you do not have ability to create public epoch",
+                            ));
+                        }
+                        // Create new epoch
+                        orand_new_epoch(Arc::clone(&context), network, address).await
+                    }
+                    None => QuickResponse::err(node::Error(
+                        "INVALID_JWT",
+                        "Access denied, this method required authorization",
+                    )),
+                },
                 JSONRPCMethod::OrandGetPublicKey(key_name) => {
-                    let keyring = context.sqlite().table_keyring();
+                    let keyring = context.postgres().table_keyring();
                     let key_record = keyring
                         .find_by_name(key_name)
                         .await
                         .expect("Can find the given key name");
 
                     QuickResponse::res_json(&key_record)
+                }
+                JSONRPCMethod::AdminAddUser(username) => {
+                    // Only orand could able pair with ZERO_ADDRESS
+                    if authorized_jwt
+                        .unwrap_or_default()
+                        .user
+                        .eq(ORAND_KEYRING_NAME)
+                    {
+                        match keyring
+                            .find_by_name(username.clone())
+                            .await
+                            .expect("Unable to query user from database")
+                        {
+                            Some(_) => {
+                                return QuickResponse::err(node::Error(
+                                    "UNABLE_TO_CREATE_USER",
+                                    "Unable to create user",
+                                ))
+                            }
+                            _ => {
+                                // Generate hmac key if it didn't exist
+                                let mut hmac_secret = [0u8; ORAND_HMAC_KEY_SIZE];
+                                random_bytes(&mut hmac_secret);
+                                let mut raw_keypair = RawKeyPair::from(KeyPair::new());
+                                let insert_result = keyring
+                                    .insert(json!({
+                                    "username": username,
+                                    "hmac_secret": hex::encode(hmac_secret),
+                                    "public_key": hex::encode(raw_keypair.public_key), 
+                                    "secret_key": hex::encode(raw_keypair.secret_key)}))
+                                    .await
+                                    .expect("Unable to insert new key to keyring table");
+                                // Wipe raw keypair from memory
+                                raw_keypair.zeroize();
+                                return QuickResponse::res_json(&UserResponse {
+                                    username: insert_result.username,
+                                    hmac_secret: insert_result.hmac_secret,
+                                    public_key: insert_result.public_key,
+                                    created_date: insert_result.created_date,
+                                });
+                            }
+                        }
+                    }
+                    QuickResponse::err(node::Error(
+                        "ACCESS_DENIED",
+                        "Access denied, you do not have ability to create public epoch",
+                    ))
+                }
+                JSONRPCMethod::AdminAddReceiver(receiver_name, receiver_address, network) => {
+                    // Only orand could able pair with ZERO_ADDRESS
+                    if authorized_jwt
+                        .unwrap_or_default()
+                        .user
+                        .eq(ORAND_KEYRING_NAME)
+                    {
+                        let table_receiver = context.postgres().table_receiver();
+                        match table_receiver
+                            .insert(json!({
+                                "name": receiver_name,
+                                "address": receiver_address,
+                                "network": network,
+                                "nonce": 0,
+                            }))
+                            .await
+                        {
+                            Ok(model_receiver) => return QuickResponse::res_json(&model_receiver),
+                            Err(_) => {
+                                return QuickResponse::err(node::Error(
+                                    "INTERNAL_SERVER_ERROR",
+                                    "Unable to add new receiver",
+                                ));
+                            }
+                        }
+                    }
+                    QuickResponse::err(node::Error(
+                        "ACCESS_DENIED",
+                        "Access denied, you do not have ability to create public epoch",
+                    ))
                 }
                 _ => QuickResponse::err(node::Error(
                     "NOT_IMPLEMENTED",
@@ -302,8 +302,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         _ => false,
     };
     // @todo: Move these to another module, we should separate between KEYS and API
-    let sqlite = SQLiteDB::new(database_url).await;
-    let keyring = sqlite.table_keyring();
+    let postgres = Postgres::new(database_url).await;
+    let keyring = postgres.table_keyring();
     let result_keyring = keyring
         .find_by_name(ORAND_KEYRING_NAME.to_string())
         .await
@@ -313,7 +313,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (keyring_record, keypair) = match result_keyring {
         None => {
             // Generate key if it didn't exist
-            let mut hmac_secret = [0u8; 16];
+            let mut hmac_secret = [0u8; ORAND_HMAC_KEY_SIZE];
             random_bytes(&mut hmac_secret);
             let new_keypair = match env::var("SECRET_KEY") {
                 // Get secret from .env file
@@ -350,7 +350,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     );
 
     // Create new node context
-    let node_context = NodeContext::new(keyring_record.id, keypair, is_testnet, sqlite);
+    let node_context = NodeContext::new(keyring_record.id, keypair, is_testnet, postgres);
 
     let listener = TcpListener::bind(addr).await?;
 
@@ -358,9 +358,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     loop {
         let (stream, _) = listener.accept().await?;
-        let io = TokioIo::new(stream);
         let ctx = Arc::clone(&node_context);
-
+        let io = TokioIo::new(stream);
         tokio::task::spawn(async move {
             if let Err(err) = http1::Builder::new()
                 .serve_connection(io, service_fn(move |req| orand(req, Arc::clone(&ctx))))
