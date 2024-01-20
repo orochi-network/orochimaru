@@ -37,6 +37,30 @@ impl<'a> RandomnessTable<'a> {
         &self,
         network: i64,
         address: &str,
+    ) -> Result<Vec<Model>, DbErr> {
+        let receiver = ReceiverTable::new(self.connection)
+            .find_one(network, address)
+            .await
+            .expect("Unable to query receiver from database");
+        match receiver {
+            Some(receiver_record) => {
+                Entity::find()
+                    .filter(Condition::all().add(Column::ReceiverId.eq(receiver_record.id)))
+                    // 20 is the limit of number of records
+                    .limit(20)
+                    .order_by(Column::Epoch, Order::Desc)
+                    .all(self.connection)
+                    .await
+            }
+            None => Ok(vec![]),
+        }
+    }
+
+    /// Find randomness record by its network and address
+    pub async fn find_closure_epoch(
+        &self,
+        network: i64,
+        address: &str,
         epoch: i64,
     ) -> Result<Vec<Model>, DbErr> {
         let receiver = ReceiverTable::new(self.connection)
@@ -49,11 +73,11 @@ impl<'a> RandomnessTable<'a> {
                     .filter(
                         Condition::all()
                             .add(Column::ReceiverId.eq(receiver_record.id))
-                            .add(Column::Epoch.gte(epoch)),
+                            .add(Column::Epoch.lte(epoch)),
                     )
                     // 20 is the limit of number of records
                     .limit(20)
-                    .order_by(Column::Epoch, Order::Asc)
+                    .order_by(Column::Epoch, Order::Desc)
                     .all(self.connection)
                     .await
             }
