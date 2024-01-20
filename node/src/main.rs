@@ -60,9 +60,20 @@ async fn orand_get_epoch(
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
     let postgres = context.postgres();
     let randomness = postgres.table_randomness();
-    match randomness.find_recent_epoch(network, &address, epoch).await {
-        Ok(recent_epochs) => QuickResponse::res_json(&recent_epochs),
-        Err(_) => QuickResponse::err(node::Error("NOT_FOUND", "Epoch was not found")),
+
+    if epoch == i64::MAX {
+        match randomness.find_recent_epoch(network, &address).await {
+            Ok(recent_epochs) => QuickResponse::res_json(&recent_epochs),
+            Err(_) => QuickResponse::err(node::Error("NOT_FOUND", "Epoch was not found")),
+        }
+    } else {
+        match randomness
+            .find_closure_epoch(network, &address, epoch)
+            .await
+        {
+            Ok(recent_epochs) => QuickResponse::res_json(&recent_epochs),
+            Err(_) => QuickResponse::err(node::Error("NOT_FOUND", "Epoch was not found")),
+        }
     }
 }
 
