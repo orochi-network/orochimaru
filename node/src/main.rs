@@ -256,7 +256,7 @@ async fn orand(
                     }
                     QuickResponse::err(node::Error(
                         "ACCESS_DENIED",
-                        "Access denied, you do not have ability to create public epoch",
+                        "Access denied, you do not have ability add new user",
                     ))
                 }
                 JSONRPCMethod::AdminAddReceiver(receiver_name, receiver_address, network) => {
@@ -287,7 +287,7 @@ async fn orand(
                     }
                     QuickResponse::err(node::Error(
                         "ACCESS_DENIED",
-                        "Access denied, you do not have ability to create public epoch",
+                        "Access denied, you do not have ability to add new receiver",
                     ))
                 }
                 _ => QuickResponse::err(node::Error(

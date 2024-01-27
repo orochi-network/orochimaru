@@ -1,6 +1,6 @@
 create user orand with password 'orandpassword';
 
-create database orand owner orand LOCALE 'en_US.utf8' encoding UTF8;
+create database orand owner orand LOCALE 'en_US.UTF-8' encoding UTF8;
 
 \c orand
 

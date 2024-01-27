@@ -1,4 +1,4 @@
-use bytes::{BufMut, Bytes, BytesMut};
+use bytes::{BufMut, BytesMut};
 use libecvrf::{
     extends::ScalarExtend,
     secp256k1::{
@@ -9,6 +9,8 @@ use libecvrf::{
 };
 use std::{io::Write, str};
 use tiny_keccak::{Hasher, Keccak};
+
+use crate::rpc::decode_address;
 
 const ETHEREUM_MESSAGE_PREFIX: &str = "\x19Ethereum Signed Message:\n";
 
@@ -32,15 +34,21 @@ pub fn sign_ethereum_message(sk: &SecretKey, message: &Vec<u8>) -> Vec<u8> {
     r
 }
 
-pub fn ecvrf_proof_pack(smart_contract_proof: &ECVRFContractProof) -> Bytes {
-    let mut affine_pub_key: Affine = smart_contract_proof.pk.into();
+pub fn ecvrf_proof_checksum(
+    receiver_address: String,
+    smart_contract_proof: &ECVRFContractProof,
+) -> [u8; 32] {
+    let mut hasher = Keccak::v256();
     let mut buf = BytesMut::new();
-    affine_pub_key.x.normalize();
-    affine_pub_key.y.normalize();
+    let mut output = [0u8; 32];
 
-    // Public key
-    buf.put_slice(&affine_pub_key.x.b32());
-    buf.put_slice(&affine_pub_key.y.b32());
+    // Receiver address
+    buf.put_slice(
+        hex::decode(decode_address(receiver_address).replace("0x", ""))
+            .expect("Unable to decode receiver address")
+            .as_slice(),
+    );
+
     // Gamma
     buf.put_slice(&smart_contract_proof.gamma.x.b32());
     buf.put_slice(&smart_contract_proof.gamma.y.b32());
@@ -65,7 +73,10 @@ pub fn ecvrf_proof_pack(smart_contract_proof: &ECVRFContractProof) -> Bytes {
     // Inverted Z
     buf.put_slice(&smart_contract_proof.inverse_z.b32());
 
-    buf.freeze()
+    hasher.update(&buf.freeze());
+    hasher.finalize(&mut output);
+
+    output
 }
 
 pub fn ecvrf_proof_digest(smart_contract_proof: &ECVRFContractProof) -> [u8; 32] {
