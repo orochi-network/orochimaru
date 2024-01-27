@@ -5,7 +5,6 @@ use hmac::{Hmac, Mac};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
-use std::str;
 
 // Create alias for HMAC-SHA256
 type HmacSha256 = Hmac<Sha256>;

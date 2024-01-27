@@ -29,7 +29,7 @@ pub enum JSONRPCMethod {
 /// Zero address
 pub const ZERO_ADDRESS: &str = "0x0000000000000000000000000000000000000000";
 
-fn decode_i64(val: String) -> i64 {
+pub fn decode_i64(val: String) -> i64 {
     let regex_i64 = Regex::new(r#"\d{1,10}"#).expect("Unable to init Regex");
     match regex_i64.is_match(val.as_str().as_ref()) {
         true => val.as_str().parse::<i64>().expect("Unable to parse i64"),
@@ -37,7 +37,7 @@ fn decode_i64(val: String) -> i64 {
     }
 }
 
-fn decode_address(val: String) -> String {
+pub fn decode_address(val: String) -> String {
     let regex_address = Regex::new(r#"^0x[a-fA-F0-9]{40}$"#).expect("Unable to init Regex");
     match regex_address.is_match(val.as_str().as_ref()) {
         true => val.clone().to_lowercase(),
@@ -45,7 +45,7 @@ fn decode_address(val: String) -> String {
     }
 }
 
-fn decode_name(val: String) -> String {
+pub fn decode_name(val: String) -> String {
     let regex_name = Regex::new(r#"^[a-zA-Z0-9]{3,40}$"#).expect("Unable to init Regex");
     match regex_name.is_match(val.as_str().as_ref()) {
         true => val.clone(),
