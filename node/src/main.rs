@@ -306,6 +306,7 @@ async fn orand(
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     dotenv().ok();
+    env_logger::init();
     let addr = SocketAddr::from(([0, 0, 0, 0], 1337));
     let database_url = env::var("DATABASE_URL").expect("Can not connect to the database");
     let is_testnet = match env::var("ORAND_TESTNET") {
@@ -351,11 +352,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
     };
 
-    println!(
+    log::info!(
         "Public Key: {}",
         hex::encode(keypair.public_key.serialize())
     );
-    println!(
+    log::info!(
         "Address of public key: 0x{}",
         hex::encode(get_address(keypair.public_key))
     );
@@ -365,7 +366,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let listener = TcpListener::bind(addr).await?;
 
-    println!("Listening on http://{}", addr);
+    log::info!("Listening on http://{}", addr);
 
     loop {
         let (stream, _) = listener.accept().await?;
@@ -376,7 +377,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 .serve_connection(io, service_fn(move |req| orand(req, Arc::clone(&ctx))))
                 .await
             {
-                println!("Error serving connection: {:?}", err);
+                log::error!("Error serving connection: {:?}", err);
             }
         });
     }
