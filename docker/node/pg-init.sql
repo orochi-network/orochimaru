@@ -1,6 +1,6 @@
 create user orand with password 'orandpassword';
 
-create database orand owner orand LOCALE 'en_US.UTF-8' encoding UTF8;
+create database orand owner orand template template0;
 
 \c orand
 
@@ -40,18 +40,6 @@ create table public.receiver (
 
 ALTER TABLE public.receiver OWNER TO orand;
 
--- public.seaql_migrations definition
--- Drop table
--- DROP TABLE public.seaql_migrations;
-
-create table public.seaql_migrations (
-	"version" varchar not null,
-	applied_at int8 not null,
-	constraint seaql_migrations_pkey primary key (version)
-);
-
-ALTER TABLE public.receiver OWNER TO seaql_migrations;
-
 -- public.randomness definition
 -- Drop table
 -- DROP TABLE public.randomness;
@@ -80,4 +68,4 @@ create table public.randomness (
 	constraint link_randomness_to_receiver foreign key (receiver_id) references public.receiver(id)
 );
 
-ALTER TABLE public.randomness OWNER TO seaql_migrations;
+ALTER TABLE public.randomness OWNER TO orand;

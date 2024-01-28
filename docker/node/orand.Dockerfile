@@ -7,6 +7,8 @@ RUN apt-get update && \
 
 FROM debian:bookworm
 
+ENV RUST_LOG="debug"
+
 COPY --from=builder /orochimaru/target/release/node /bin/orand
 COPY --from=builder /orochimaru/target/release/cli /bin/orand-cli
 COPY ./env /.env

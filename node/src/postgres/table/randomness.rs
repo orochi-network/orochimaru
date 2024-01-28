@@ -172,12 +172,16 @@ impl<'a> RandomnessTable<'a> {
                                     .await
                                 {
                                     Ok(receiver_model) => receiver_model,
-                                    Err(e) => return Err(e),
+                                    Err(e) => {
+                                        log::error!("Unable to insert new receiver");
+                                        return Err(e);
+                                    }
                                 }
                             }
                             Err(e) => return Err(e),
                         }
                     } else {
+                        log::error!("There is no receiver record");
                         return Err(DbErr::RecordNotFound(
                             "Receiver record not found".to_string(),
                         ));
@@ -204,19 +208,24 @@ impl<'a> RandomnessTable<'a> {
                 }
                 None => Scalar::randomize(),
             },
-            Err(e) => return Err(e),
+            Err(e) => {
+                log::error!("Unable get alpha of the recent epoch");
+                return Err(e);
+            }
         };
 
         let contract_proof = match ecvrf.prove_contract(&alpha) {
             Ok(r) => r,
             Err(_) => {
+                log::error!("ECVRF can not generate proof");
                 return Err(DbErr::Exec(sea_orm::RuntimeErr::Internal(
                     "Unable to prove contract".to_string(),
-                )))
+                )));
             }
         };
 
         if !evm_verify(&contract_proof) {
+            log::error!("Double check on rEVM was failed");
             return Err(DbErr::Exec(sea_orm::RuntimeErr::Internal(
                 "EVM unable to verify".to_string(),
             )));
@@ -255,7 +264,10 @@ impl<'a> RandomnessTable<'a> {
             "signature_proof": hex::encode(&ecdsa_proof),
         })) {
             Ok(rr) => rr,
-            Err(e) => return Err(e),
+            Err(e) => {
+                log::error!("Unable to insert new epoch");
+                return Err(e);
+            }
         };
 
         let mut receiver_active_model = receiver::ActiveModel::from(receiver_record);
@@ -269,7 +281,10 @@ impl<'a> RandomnessTable<'a> {
 
         match txn.commit().await {
             Ok(_) => result,
-            Err(e) => Err(e),
+            Err(e) => {
+                log::error!("Can not finalize transction");
+                Err(e)
+            }
         }
     }
 
