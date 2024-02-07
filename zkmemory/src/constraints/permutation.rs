@@ -43,3 +43,9 @@ trait NumericInstructions<F: Field>: Chip<F> {
     ) -> Result<(), Error>;
 
 }
+
+// Define a chip struct that implements our instructions.
+struct PermutationChip<F: Field> {
+    config: PermutationConfig,
+    _marker: PhantomData<F>,
+}
