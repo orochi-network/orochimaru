@@ -15,8 +15,11 @@
 /// Base trait for generic type
 pub mod base;
 /// A commitment module that commit to the memory trace through the execution trace
-/// Currently supports: KZG, Merkle Tree, Verkle Tree.
+/// Currently supports: KZG, Merkle Tree, and Verkle Tree.
 pub mod commitment;
+/// A module implementing circuits for proving the memory consistency using Halo2.
+/// Currently supports: Permutation circuit and Lexicographical ordering circuit.
+pub mod constraints;
 /// Define all configuration of [StateMachine](crate::machine::StateMachine) and [RawMemory](crate::memory::RawMemory)
 pub mod config;
 /// Define all errors of [StateMachine](crate::machine::StateMachine) and [RawMemory](crate::memory::RawMemory)
