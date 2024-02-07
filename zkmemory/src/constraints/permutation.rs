@@ -1,15 +1,14 @@
-use std::marker::PhantomData;
 use group::ff::Field;
 use halo2_proofs::{
     circuit::{AssignedCell, Chip, Layouter, Region, SimpleFloorPlanner, Value},
     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Fixed, Instance, Selector},
     poly::Rotation,
 };
+use std::marker::PhantomData;
 
 // Define instructions used in the circuit
 // Includes: load_private, load_constant, add, mul, and expose_public.
 trait NumericInstructions<F: Field>: Chip<F> {
-    
     type Num;
 
     /// Loads a private input into a circuit.
@@ -41,7 +40,6 @@ trait NumericInstructions<F: Field>: Chip<F> {
         num: Self::Num,
         row: usize,
     ) -> Result<(), Error>;
-
 }
 
 // Define a chip struct that implements our instructions.
@@ -49,3 +47,6 @@ struct PermutationChip<F: Field> {
     config: PermutationConfig,
     _marker: PhantomData<F>,
 }
+
+// Define that chip config struct
+struct PermutationConfig {}
