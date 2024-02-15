@@ -1,10 +1,10 @@
+use core::marker::PhantomData;
 use group::ff::Field;
 use halo2_proofs::{
     circuit::{AssignedCell, Chip, Layouter, Region, SimpleFloorPlanner, Value},
     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Fixed, Instance, Selector},
     poly::Rotation,
 };
-use core::marker::PhantomData;
 
 // Define instructions used in the circuit
 // Includes: load_private, load_constant, add, mul, and expose_public.
@@ -60,7 +60,6 @@ struct PermutationConfig {
 }
 
 impl<F: Field> PermutationChip<F> {
-    
     // Construct a permutation chip using the config
     fn construct(config: PermutationConfig) -> Self {
         Self {
@@ -71,7 +70,6 @@ impl<F: Field> PermutationChip<F> {
 }
 
 fn main() {
-
     // Test params of the permutation circuit example
     use halo2_proofs::dev::MockProver;
     use halo2curves::pasta::Fp;
