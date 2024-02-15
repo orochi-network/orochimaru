@@ -4,7 +4,7 @@ use halo2_proofs::{
     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Fixed, Instance, Selector},
     poly::Rotation,
 };
-use std::marker::PhantomData;
+use core::marker::PhantomData;
 
 // Define instructions used in the circuit
 // Includes: load_private, load_constant, add, mul, and expose_public.
@@ -18,6 +18,7 @@ trait NumericInstructions<F: Field>: Chip<F> {
     fn load_constant(&self, layouter: impl Layouter<F>, constant: F) -> Result<Self::Num, Error>;
 
     /// Adds a and b, returns c = a + b.
+    /// In the newer version of Halo2, a or b can also be a constant.
     fn add(
         &self,
         layouter: impl Layouter<F>,
@@ -26,7 +27,8 @@ trait NumericInstructions<F: Field>: Chip<F> {
     ) -> Result<Self::Num, Error>;
 
     /// Multiplies a and b, returns c = a * b.
-    fn muls(
+    /// In the newer version of Halo2, a or b can also be a constant.
+    fn mul(
         &self,
         layouter: impl Layouter<F>,
         a: Self::Num,
@@ -49,4 +51,39 @@ struct PermutationChip<F: Field> {
 }
 
 // Define that chip config struct
-struct PermutationConfig {}
+#[derive(Clone, Debug)]
+struct PermutationConfig {
+    // Input: an array of field elements
+    input: Column<Advice>,
+    // Output: an array of shuffled field elements of input
+    output: Column<Advice>,
+}
+
+impl<F: Field> PermutationChip<F> {
+    
+    // Construct a permutation chip using the config
+    fn construct(config: PermutationConfig) -> Self {
+        Self {
+            config,
+            _marker: PhantomData,
+        }
+    }
+}
+
+fn main() {
+
+    // Test params of the permutation circuit example
+    use halo2_proofs::dev::MockProver;
+    use halo2curves::pasta::Fp;
+    const K: u32 = 4;
+    let input_0 = [1, 2, 4, 1]
+        .map(|e: u64| Value::known(Fp::from(e)))
+        .to_vec();
+    let input_1 = [10, 20, 40, 10].map(Fp::from).to_vec();
+    let shuffle_0 = [4, 1, 1, 2]
+        .map(|e: u64| Value::known(Fp::from(e)))
+        .to_vec();
+    let shuffle_1 = [40, 10, 10, 20]
+        .map(|e: u64| Value::known(Fp::from(e)))
+        .to_vec();
+}
