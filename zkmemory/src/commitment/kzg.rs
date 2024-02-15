@@ -1,14 +1,13 @@
-extern crate std;
-use core::marker::PhantomData;
-use ff::{Field, PrimeField, WithSmallOrderMulGroup};
-use group::Curve;
-use rand_core::OsRng;
-use std::vec::Vec;
-
+extern crate alloc;
 use crate::{base::Base, machine::MemoryInstruction, machine::TraceRecord};
-use halo2_proofs::halo2curves::bn256::{Bn256, Fr, G1Affine};
+use alloc::vec;
+use alloc::vec::Vec;
+use core::marker::PhantomData;
+use ff::{Field, WithSmallOrderMulGroup};
+use group::Curve;
 use halo2_proofs::{
     arithmetic::{eval_polynomial, lagrange_interpolate},
+    halo2curves::bn256::{Bn256, Fr, G1Affine},
     plonk::Error,
     poly::{
         commitment::{Blind, CommitmentScheme, ParamsProver, Prover, Verifier},
@@ -24,6 +23,19 @@ use halo2_proofs::{
         TranscriptWriterBuffer,
     },
 };
+use rand_core::OsRng;
+
+/// Omega power omega^0 to omega^7
+const OMEGA_POWER: [Fr; 8] = [
+    Fr::from_raw([0x01, 0, 0, 0]),
+    Fr::from_raw([0x07, 0, 0, 0]),
+    Fr::from_raw([0x31, 0, 0, 0]),
+    Fr::from_raw([0x0157, 0, 0, 0]),
+    Fr::from_raw([0x0961, 0, 0, 0]),
+    Fr::from_raw([0x041a7, 0, 0, 0]),
+    Fr::from_raw([0x01cb91, 0, 0, 0]),
+    Fr::from_raw([0x0c90f7, 0, 0, 0]),
+];
 
 /// A KZG module that commit to the memory trace through the execution trace
 #[derive(Debug, Clone)]
@@ -36,17 +48,19 @@ where
     kzg_params: ParamsKZG<Bn256>,
     // Domain used for creating polynomials
     domain: EvaluationDomain<Fr>,
-    _marker1: PhantomData<K>,
-    _marker2: PhantomData<V>,
+    phantom_data: PhantomData<(K, V)>,
 }
 
 impl<K, V, const S: usize, const T: usize> Default for KZGMemoryCommitment<K, V, S, T>
 where
     K: Base<S>,
     V: Base<T>,
+    halo2_proofs::halo2curves::bn256::Fr: From<K>,
+    halo2_proofs::halo2curves::bn256::Fr: From<V>,
 {
     fn default() -> Self {
-        Self::new()
+        // K = 3 since we need the poly degree to be 2^3 = 8
+        Self::new(3)
     }
 }
 
@@ -54,50 +68,49 @@ impl<K, V, const S: usize, const T: usize> KZGMemoryCommitment<K, V, S, T>
 where
     K: Base<S>,
     V: Base<T>,
+    halo2_proofs::halo2curves::bn256::Fr: From<K>,
+    halo2_proofs::halo2curves::bn256::Fr: From<V>,
 {
     /// Initialize KZG parameters
-    /// K = 3 since we need the poly degree to be 2^3 = 8
-    pub fn new() -> Self {
-        const K: u32 = 3;
+    pub fn new(k: u32) -> Self {
         Self {
-            kzg_params: ParamsKZG::<Bn256>::new(K),
-            domain: EvaluationDomain::new(1, K),
-            _marker1: PhantomData::<K>,
-            _marker2: PhantomData::<V>,
+            kzg_params: ParamsKZG::<Bn256>::new(k),
+            domain: EvaluationDomain::new(1, k),
+            phantom_data: PhantomData,
         }
     }
+
     /// Commit a trace record in an execution trace
+    /// This function, given input a trace record,
+    /// outputs the commitment of the trace
     pub fn commit(&mut self, trace: TraceRecord<K, V, S, T>) -> G1Affine {
-        // Convert trace record into polynomial
-        let poly = self.poly_from_trace(trace);
-        // Commit the polynomial using Halo2's code
-        let alpha = Blind(Fr::random(OsRng));
-        let commitment = self.kzg_params.commit(&poly, alpha);
-        commitment.to_affine()
+        self.kzg_params
+            .commit(&self.poly_from_trace(trace), Blind(Fr::random(OsRng)))
+            .to_affine()
     }
 
     // Convert a trace record to 8 field elements
     // The last 3 elements will be ZERO
     fn trace_to_field(&self, trace: TraceRecord<K, V, S, T>) -> [Fr; 8] {
-        let (t, s, i, l, d) = trace.get_tuple();
+        let (time_log, stack_depth, instruction, address, value) = trace.get_tuple();
         // Encode instruction to number : 1 for Write, 0 for Read
-        match i {
+        match instruction {
             MemoryInstruction::Read => [
-                Fr::from(t),
-                Fr::from(s),
+                Fr::from(time_log),
+                Fr::from(stack_depth),
                 Fr::ZERO,
-                self.be_bytes_to_field(l.zfill32().as_mut_slice()),
-                self.be_bytes_to_field(d.zfill32().as_mut_slice()),
+                Fr::from(address),
+                Fr::from(value),
                 Fr::ZERO,
                 Fr::ZERO,
                 Fr::ZERO,
             ],
             MemoryInstruction::Write => [
-                Fr::from(t),
-                Fr::from(s),
+                Fr::from(time_log),
+                Fr::from(stack_depth),
                 Fr::ONE,
-                self.be_bytes_to_field(l.zfill32().as_mut_slice()),
-                self.be_bytes_to_field(d.zfill32().as_mut_slice()),
+                Fr::from(address),
+                Fr::from(value),
                 Fr::ZERO,
                 Fr::ZERO,
                 Fr::ZERO,
@@ -107,46 +120,22 @@ where
 
     // Convert the trace record into a polynomial
     fn poly_from_trace(&self, trace: TraceRecord<K, V, S, T>) -> Polynomial<Fr, Coeff> {
-        let evals = self.trace_to_field(trace);
-        self.poly_from_evals(evals)
+        self.poly_from_evals(self.trace_to_field(trace))
     }
 
-    // Convert 8 field elements of a trace record
-    // into a polynomial
+    // Convert 8 field elements of a trace record into a polynomial
     fn poly_from_evals(&self, evals: [Fr; 8]) -> Polynomial<Fr, Coeff> {
-        let mut points_arr = [Fr::ONE; 8];
-        let mut current_point = Fr::ONE;
-
-        // We use successive powers of primitive roots as points
-        // We use elements in trace record to be the evals
-        // 3 last evals should be ZERO
-        for (_i, point) in (1..=8).zip(points_arr.iter_mut().skip(1)) {
-            current_point *= Fr::MULTIPLICATIVE_GENERATOR;
-            *point = current_point;
-        }
-
         // Use Lagrange interpolation
-        self.domain.coeff_from_vec(lagrange_interpolate(
-            points_arr.as_slice(),
-            evals.as_slice(),
-        ))
+        self.domain
+            .coeff_from_vec(lagrange_interpolate(&OMEGA_POWER, &evals))
     }
-
-    // Convert 32 bytes number to field elements
-    // This is made compatible with the Fr endianess
-    fn be_bytes_to_field(&self, bytes: &mut [u8]) -> Fr {
-        bytes.reverse();
-        //let b = bytes.as_ref();
-        let inner = [0, 8, 16, 24].map(|i| u64::from_le_bytes(bytes[i..i + 8].try_into().unwrap()));
-        Fr::from_raw(inner)
-    }
-
-    //WARNING: the functions below have not been tested yet
-    //due to the field private error
 
     // Create the list of proof for KZG openings
-    // Used to create a friendly KZG API opening function
-    fn create_proof_sh_plonk<
+    // More specifially, this function, given a list of points x_1,x_2,...,x_n
+    // and polynomials p_1(x),p_2(x),...,p_n(x),
+    // create a witness for the value p_1(x_1), p_2(x_2),...,p_n(x_n).
+    // Used as a misc function to create the proof of the trace record
+    fn create_kzg_proof<
         'params,
         Scheme: CommitmentScheme,
         P: Prover<'params, Scheme>,
@@ -165,44 +154,48 @@ where
     where
         Scheme::Scalar: WithSmallOrderMulGroup<3>,
     {
-        assert!(points_list.len() == polynomial_list.len());
-        assert!(points_list.len() == commitment_list.len());
-        // this function, given a list of points x_1,x_2,...,x_n
-        // and polynomials p_1(x),p_2(x),...,p_n(x)
-        // create a witness for the value p_1(x_1), p_2(x_2),...,p_n(x_n)
+        assert_eq!(
+            (points_list.len(), polynomial_list.len()),
+            (points_list.len(), commitment_list.len())
+        );
+
         let mut transcript = TW::init(Vec::new());
-
         let blind = Blind::new(&mut OsRng);
-        // Add the commitment the polynomial p_i(x) to transcript
-        for item in &commitment_list {
-            transcript.write_point(*item).unwrap();
-        }
-        // evaluate the values p_i(x_i) for i=1,2,...,n
-        for i in 0..polynomial_list.len() {
-            let av = eval_polynomial(&polynomial_list[i], points_list[i]);
-            transcript.write_scalar(av).unwrap();
-        }
 
-        // this query is used to list all the values p_1(x_1), p_2(x_2),...,p_n(x_n)
-        // in the query list of shplonk prover
+        // Add the commitment the polynomial p_i(x) to transcript
+        for commitment in &commitment_list {
+            // Add the commitment of the polynomial p_i(x) to transcript
+            transcript
+                .write_point(*commitment)
+                .expect("Unable to write point")
+        }
 
         let mut queries: Vec<ProverQuery<'_, <Scheme as CommitmentScheme>::Curve>> = Vec::new();
-        for i in 0..polynomial_list.len() {
-            let temp = ProverQuery::new(points_list[i], &polynomial_list[i], blind);
-            queries.push(temp);
+        for (i, point) in points_list.iter().enumerate() {
+            // Evaluate the values p_i(x_i) for i=1,2,...,n and add to the transcript
+            transcript
+                .write_scalar(eval_polynomial(&polynomial_list[i], *point))
+                .expect("Unable to write scalar to transcript");
+
+            // This query is used to list all the values p_1(x_1), p_2(x_2),...,p_n(x_n)
+            // in the query list of SHPLONK prover
+            queries.push(ProverQuery::new(*point, &polynomial_list[i], blind));
         }
 
-        let prover = P::new(params);
-        prover
+        // Create the proof
+        P::new(params)
             .create_proof(&mut OsRng, &mut transcript, queries)
-            .unwrap();
-
+            .expect("Unable to create proof");
         transcript.finalize()
     }
 
-    //Verify KZG openings
-    // Used to create a friendly KZG API verification function
-    fn verify_shplonk<
+    // Verify KZG openings
+    // This function, given the list of points x_1,x_2,...,x_n,
+    // a list of openings p_1(x_1),p_2(x_2),...,p_n(x_n)
+    // and a list of commitment c_1,c_2,..c_n
+    // then returns True or False to determine the correctness of the opening.
+    // Used as a misc function to help verifying the trace record
+    fn verify_kzg_proof<
         'a,
         'params,
         Scheme: CommitmentScheme,
@@ -213,118 +206,118 @@ where
     >(
         &self,
         params: &'params Scheme::ParamsVerifier,
-        // // a list of point x_1,x_2,...x_n
+        // A list of points x_1,x_2,...x_n
         points_list: Vec<Scheme::Scalar>,
-        // the evaluation of p_1(x_1),p_2(x_2),...,p_n(x_n)
-        opening: Vec<Scheme::Scalar>,
-        // the commitment of the polynomials p_1(x),p_2(x),...,p_n(x)
-        commitment: Vec<Scheme::Curve>,
-        // the proof of opening
+        // The evaluation of p_1(x_1),p_2(x_2),...,p_n(x_n)
+        eval: Vec<Scheme::Scalar>,
+        // The commitments of the polynomials p_1(x),p_2(x),...,p_n(x)
+        commitments: Vec<Scheme::Curve>,
+        // The proof of opening
         proof: &'a [u8],
     ) -> bool {
         let verifier = Vr::new(params);
-        let mut check = true;
         let mut transcript = Tr::init(proof);
-        // read commitment list from transcript
-        let mut commitment_list = Vec::new();
-        for i in 0..points_list.len() {
-            let temp = transcript.read_point().unwrap();
-            commitment_list.push(temp);
-            // the  "proof" consists of the commitment of the polynomials p_1(x),p_2(x),...,p_n(x)
-            // which should be equal to the "commitment" input, hence we need to check this
-            check = check && (commitment[i] == commitment_list[i]);
-        }
-        // read the opening list from transcript
-        let mut eval_list: Vec<<Scheme as CommitmentScheme>::Scalar> = Vec::new();
-        for i in 0..points_list.len() {
-            let temp: Scheme::Scalar = transcript.read_scalar().unwrap();
-            eval_list.push(temp);
-            // the proof "proof" consists of the evaluations of p_1(x_1), p_2(x_2),...,p_n(x_n)
-            // which should be equal to the "opening" input, hence we need to check this
-            check = check && (opening[i] == eval_list[i]);
-        }
-        // add the queries
+        let mut check = true;
+        let mut eval_list = Vec::new();
         let mut queries = Vec::new();
-        for i in 0..points_list.len() {
-            let temp =
-                VerifierQuery::new_commitment(&commitment_list[i], points_list[i], eval_list[i]);
-            queries.push(temp);
+
+        let commitment_list: Vec<<Scheme as CommitmentScheme>::Curve> = points_list
+            .iter()
+            .map(|_| transcript.read_point().expect("Unable to read point"))
+            .collect();
+
+        for (i, point) in points_list.iter().enumerate() {
+            // Check if commitment list input matches the commitment list from the Prover's proof
+            check = check && (commitments[i] == commitment_list[i]);
+
+            // Read the eval list from transcript
+            eval_list.push(transcript.read_scalar().expect("Unable to read scalar"));
+
+            // Check if eval list input matches the eval list from the Prover's proof
+            check = check && (eval[i] == eval_list[i]);
+
+            queries.push(VerifierQuery::new_commitment(
+                &commitment_list[i],
+                *point,
+                eval[i],
+            ));
         }
-        // now, we apply the verify function from SHPLONK to return the result
-        let strategy = Strategy::new(params);
-        let strategy = strategy
-            .process(|msm_accumulator| {
-                verifier
-                    .verify_proof(&mut transcript, queries.clone(), msm_accumulator)
-                    .map_err(|_| Error::Opening)
-            })
-            .unwrap();
-        check && strategy.finalize()
+
+        // Apply the verify function from SHPLONK to return the result
+        check
+            && Strategy::new(params)
+                .process(|msm_accumulator| {
+                    verifier
+                        .verify_proof(&mut transcript, queries, msm_accumulator)
+                        .map_err(|_| Error::Opening)
+                })
+                .expect("Unable to verify proof")
+                .finalize()
     }
 
     /// Open all fields from the trace record
-    pub fn prove_trace_element(
+    /// The function, given input a trace record and its commitment,
+    /// outputs a proof of correct opening
+    pub fn prove_trace_record(
         &self,
         trace: TraceRecord<K, V, S, T>,
         commitment: <KZGCommitmentScheme<Bn256> as CommitmentScheme>::Curve,
     ) -> Vec<u8> {
-        //convert the trace to the polynomial
-        //borrowed from Thang's commit function
+        // Convert the trace to a polynomial p(x)
         let poly = self.poly_from_trace(trace);
-        // create the point list of opening
-        let mut points_list = Vec::from([Fr::ONE; 5]);
-        let mut current_point = Fr::ONE;
-        for (_i, point) in (1..=5).zip(points_list.iter_mut().skip(1)) {
-            current_point *= Fr::MULTIPLICATIVE_GENERATOR;
-            *point = current_point;
-        }
-        // initialize the vector of commitments for the create_proof_for_shplonk function
-        let mut commitment_list = Vec::new();
-        commitment_list.extend([commitment; 5]);
-        // initialize the vector of polynomials for the create_proof_for_shplonk function
-        let mut poly_list = Vec::new();
-        for _i in 0..5 {
-            poly_list.push(poly.clone());
-        }
-        //create the proof
-        self.create_proof_sh_plonk::<
+
+        // Initialize the vector of commitments
+        let commitment_list = vec![commitment; 5];
+
+        // Initialize the vector of polynomials.
+        // In our case, since we want to open the values p(1),p(omega),...,p(omega^4),
+        // the polynomial list is equal to [p(x);5]
+        let polynomial_list = vec![poly; 5];
+
+        // Create the proof
+        // I use the anonymous lifetime parameter '_ here, since currently
+        // I do not know how to add a specific life time parameter in the script.
+        self.create_kzg_proof::<
         KZGCommitmentScheme<Bn256>,
-        ProverSHPLONK<'_,_>,
-        _, Blake2bWrite<_, _, Challenge255<_>>>(
+        ProverSHPLONK<'_,Bn256>,
+        Challenge255<G1Affine>,
+        Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>>(
         &self.kzg_params,
-        points_list.clone(),
-        poly_list,
+        OMEGA_POWER[0..5].to_vec(),
+        polynomial_list,
         commitment_list)
     }
 
-    /// verify the correctness of the tract record
-    pub fn verify_trace_element(
+    /// Verify the correctness of the trace record
+    /// This function, given input a trace record,
+    /// it commitment and the proof of correctness opening,
+    /// returns True or False to determine the correctness of the opening
+    pub fn verify_trace_record(
         &self,
         trace: TraceRecord<K, V, S, T>,
         commitment: <KZGCommitmentScheme<Bn256> as CommitmentScheme>::Curve,
         proof: Vec<u8>,
     ) -> bool {
-        // create the opening for the polynomial from the trace
-        let opening = Vec::from(self.trace_to_field(trace));
-        // create the commitment list of the trace
-        let mut commitment_list = Vec::new();
-        commitment_list.extend([commitment; 5]);
-        // create the point list of opening of the polynomial
-        let mut points_list = Vec::new();
-        points_list.extend([Fr::ONE; 5]);
-        let mut current_point = Fr::ONE;
-        for (_i, point) in (1..=5).zip(points_list.iter_mut().skip(1)) {
-            current_point *= Fr::MULTIPLICATIVE_GENERATOR;
-            *point = current_point;
-        }
-        // finally, verify the opening
-        self.verify_shplonk::<
+        // Create the commitment list of the trace
+        let commitment_list = vec![commitment; 5];
+
+        // Create the evaluations p(1),p(omega),...,p(omega^4)
+        // for the polynomial p(x) converted from the trace
+        let eval = Vec::from(self.trace_to_field(trace));
+
+        // Finally, verify the correctness of the trace record
+        // I use the anonymous lifetime parameter '_ here, since currently
+        // I do not know how to add a specific life time parameter in the script.
+        self.verify_kzg_proof::<
         KZGCommitmentScheme<Bn256>,
-        VerifierSHPLONK<'_,_>,
-        _,
-        Blake2bRead<_, _, Challenge255<_>>,
-        AccumulatorStrategy<'_,_>,
-        >(&self.kzg_params, points_list.clone(), opening, commitment_list,proof.as_slice())
+        VerifierSHPLONK<'_,Bn256>,
+        Challenge255<G1Affine>,
+        Blake2bRead<&'_[u8], G1Affine, Challenge255<G1Affine>>,
+        AccumulatorStrategy<'_,Bn256>,
+        >(&self.kzg_params, OMEGA_POWER[0..5].to_vec(),
+        eval,
+        commitment_list,
+        proof.as_slice())
     }
 }
 
@@ -332,101 +325,104 @@ where
 mod test {
     use super::*;
     use crate::{base::B256, machine::AbstractTraceRecord};
+    use ff::PrimeField;
     use halo2_proofs::arithmetic::eval_polynomial;
     use rand::{thread_rng, Rng};
+
+    // Generate a trace record
+    fn generate_trace_record() -> TraceRecord<B256, B256, 32, 32> {
+        let mut rng = rand::thread_rng();
+        let instruction = if rng.gen() {
+            MemoryInstruction::Read
+        } else {
+            MemoryInstruction::Write
+        };
+
+        TraceRecord::<B256, B256, 32, 32>::new(
+            rng.gen_range(0..u64::MAX),
+            rng.gen_range(0..u64::MAX),
+            instruction,
+            B256::from(rng.gen_range(i32::MIN..i32::MAX)),
+            B256::from(rng.gen_range(i32::MIN..i32::MAX)),
+        )
+    }
+
     #[test]
     fn test_conversion_fr() {
-        let kzg_scheme = KZGMemoryCommitment::<B256, B256, 32, 32>::new();
-
         let mut rng = thread_rng();
 
-        // Create a 32-bytes repr of Base 256
+        // Create a 32-bytes array repr of Base 256
         let mut chunk = [0u8; 32];
         for e in chunk.iter_mut() {
-            *e = rng.gen_range(0..255);
+            *e = rng.gen_range(u8::MIN..u8::MAX);
         }
         // Clean the first byte to make sure it is not too big
-        chunk[0] = 0u8;
+        chunk[31] = 0u8;
 
-        // Use my method to convert to Fr
-        let fr = kzg_scheme.be_bytes_to_field(chunk.as_mut_slice());
+        // Convert the array to  Fr
+        let fr = Fr::from_bytes(&chunk).expect("Unable to convert to Fr");
 
-        // Use Fr's method to convert back to bytes
-        let chunk_fr: [u8; 32] = fr.try_into().unwrap();
+        // Convert back from Fr to bytes
+        let chunk_fr: [u8; 32] = fr.try_into().expect("Cannot convert from Fr to bytes");
 
         assert_eq!(chunk_fr, chunk);
     }
     #[test]
     fn test_record_polynomial_conversion() {
-        let kzg_scheme = KZGMemoryCommitment::<B256, B256, 32, 32>::new();
+        let kzg_scheme = KZGMemoryCommitment::<B256, B256, 32, 32>::default();
 
-        // Initialize a trace record
-        let trace = TraceRecord::<B256, B256, 32, 32>::new(
-            1u64,
-            2u64,
-            MemoryInstruction::Read,
-            B256::zero(),
-            B256::from(100),
-        );
+        // Initialize a random trace record
+        let trace = generate_trace_record();
 
         // Get the polynomial
         let poly_trace = kzg_scheme.poly_from_trace(trace);
+
         // Get only the evals, which is the trace record's elements converted to field elements
         let poly_evals = kzg_scheme.trace_to_field(trace);
 
         // Test each eval values
         let mut base_index = Fr::ONE;
-        for e in poly_evals {
-            assert_eq!(eval_polynomial(&poly_trace, base_index), e);
+        for (i, eval) in poly_evals.iter().enumerate() {
+            assert_eq!(eval_polynomial(&poly_trace, base_index), *eval);
+            assert_eq!(base_index, OMEGA_POWER[i]);
             base_index *= Fr::MULTIPLICATIVE_GENERATOR;
         }
     }
 
     #[test]
-    fn test_correct_memory_opening() {
-        let mut kzg_scheme = KZGMemoryCommitment::<B256, B256, 32, 32>::new();
-        // Initialize a trace record
-        let trace = TraceRecord::<B256, B256, 32, 32>::new(
-            1u64,
-            2u64,
-            MemoryInstruction::Read,
-            B256::zero(),
-            B256::from(100),
-        );
+    fn test_correct_trace_opening() {
+        let mut kzg_scheme = KZGMemoryCommitment::<B256, B256, 32, 32>::default();
+
+        // Initialize a random trace record
+        let trace = generate_trace_record();
+
         //Commit the trace
-        let commit = kzg_scheme.commit(trace);
+        let commitment = kzg_scheme.commit(trace);
+
         //Open the trace
-        let proof = kzg_scheme.prove_trace_element(trace, commit);
-        //Verify the trace
-        assert!(kzg_scheme.verify_trace_element(trace, commit, proof));
+        let proof = kzg_scheme.prove_trace_record(trace, commitment);
+
+        //Verify the correctness of the trace, should return True
+        assert!(kzg_scheme.verify_trace_record(trace, commitment, proof));
     }
 
+    // Check that two different trace records cannot have the same commitment
     #[test]
-    fn test_wrong_memory_opening() {
-        let mut kzg_scheme = KZGMemoryCommitment::<B256, B256, 32, 32>::new();
-        // Initialize a trace record
-        let trace = TraceRecord::<B256, B256, 32, 32>::new(
-            1u64,
-            2u64,
-            MemoryInstruction::Read,
-            B256::zero(),
-            B256::from(100),
-        );
-        // Initialize another trace record
-        // which is used to create a false proof for the first trace
-        let trace2 = TraceRecord::<B256, B256, 32, 32>::new(
-            2u64,
-            2u64,
-            MemoryInstruction::Read,
-            B256::zero(),
-            B256::from(100),
-        );
-        //Commit the first trace
-        let commit = kzg_scheme.commit(trace);
-        //Attempt to create the false proof of the first trace
-        let commit2 = kzg_scheme.commit(trace2);
-        let false_proof = kzg_scheme.prove_trace_element(trace2, commit2);
-        //Verify the trace
-        assert!(!kzg_scheme.verify_trace_element(trace, commit, false_proof));
+    fn test_false_trace_opening() {
+        let mut kzg_scheme = KZGMemoryCommitment::<B256, B256, 32, 32>::default();
+
+        // Initialize a random trace record
+        let trace = generate_trace_record();
+
+        // Commit the initial trace
+        let commitment = kzg_scheme.commit(trace);
+
+        // Given the "commitment", the Prover attempts to find a false trace hoping that it would also
+        // has the same commitment output like the initial trace
+        let false_trace = generate_trace_record();
+        let false_proof = kzg_scheme.prove_trace_record(false_trace, commitment);
+
+        // Verify the correctness of the false trace given the commitment "commitment", should return False
+        assert!(!kzg_scheme.verify_trace_record(false_trace, commitment, false_proof));
     }
 }
