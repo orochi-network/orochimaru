@@ -5,83 +5,105 @@ use halo2_proofs::{
     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Fixed, Instance, Selector},
     poly::Rotation,
 };
-
-// Define instructions used in the circuit
-// Includes: load_private, load_constant, add, mul, and expose_public.
-trait NumericInstructions<F: Field>: Chip<F> {
-    type Num;
-
-    /// Loads a private input into a circuit.
-    fn load_private(&self, layouter: impl Layouter<F>, a: Value<F>) -> Result<Self::Num, Error>;
-
-    /// Loads a fixed constant into a circuit.
-    fn load_constant(&self, layouter: impl Layouter<F>, constant: F) -> Result<Self::Num, Error>;
-
-    /// Adds a and b, returns c = a + b.
-    /// In the newer version of Halo2, a or b can also be a constant.
-    fn add(
-        &self,
-        layouter: impl Layouter<F>,
-        a: Self::Num,
-        b: Self::Num,
-    ) -> Result<Self::Num, Error>;
-
-    /// Multiplies a and b, returns c = a * b.
-    /// In the newer version of Halo2, a or b can also be a constant.
-    fn mul(
-        &self,
-        layouter: impl Layouter<F>,
-        a: Self::Num,
-        b: Self::Num,
-    ) -> Result<Self::Num, Error>;
-
-    /// Exposes a number as a public input to the circuit.
-    fn expose_public(
-        &self,
-        layouter: impl Layouter<F>,
-        num: Self::Num,
-        row: usize,
-    ) -> Result<(), Error>;
-}
+extern crate alloc;
+use alloc::vec;
 
 // Define a chip struct that implements our instructions.
-struct PermutationChip<F: Field> {
-    config: PermutationConfig,
+struct ShuffleChip<F: Field> {
+    config: ShuffleConfig,
     _marker: PhantomData<F>,
 }
 
 // Define that chip config struct
 #[derive(Clone, Debug)]
-struct PermutationConfig {
-    // Input: an array of field elements
-    input: Column<Advice>,
-    // Output: an array of shuffled field elements of input
-    output: Column<Advice>,
+struct ShuffleConfig {
+    input_0: Column<Advice>,
+    input_1: Column<Fixed>,
+    shuffle_0: Column<Advice>,
+    shuffle_1: Column<Advice>,
+    s_input: Selector,
+    s_shuffle: Selector,
 }
 
-impl<F: Field> PermutationChip<F> {
+impl<F: Field> ShuffleChip<F> {
     // Construct a permutation chip using the config
-    fn construct(config: PermutationConfig) -> Self {
+    fn construct(config: ShuffleConfig) -> Self {
         Self {
             config,
             _marker: PhantomData,
         }
     }
+
+    fn configure(
+        meta: &mut ConstraintSystem<F>,
+        input_0: Column<Advice>,
+        input_1: Column<Fixed>,
+        shuffle_0: Column<Advice>,
+        shuffle_1: Column<Advice>,
+    ) -> ShuffleConfig {
+        let s_shuffle = meta.complex_selector();
+        let s_input = meta.complex_selector();
+        meta.shuffle("shuffle", |meta| {
+            let s_input = meta.query_selector(s_input);
+            let s_shuffle = meta.query_selector(s_shuffle);
+            let input_0 = meta.query_advice(input_0, Rotation::cur());
+            let input_1 = meta.query_fixed(input_1, Rotation::cur());
+            let shuffle_0 = meta.query_advice(shuffle_0, Rotation::cur());
+            let shuffle_1 = meta.query_advice(shuffle_1, Rotation::cur());
+            vec![
+                (s_input.clone() * input_0, s_shuffle.clone() * shuffle_0),
+                (s_input * input_1, s_shuffle * shuffle_1),
+            ]
+        });
+
+        ShuffleConfig {
+            input_0,
+            input_1,
+            shuffle_0,
+            shuffle_1,
+            s_input,
+            s_shuffle,
+        }
+    }
 }
 
-fn main() {
-    // Test params of the permutation circuit example
-    use halo2_proofs::dev::MockProver;
-    use halo2curves::pasta::Fp;
-    const K: u32 = 4;
-    let input_0 = [1, 2, 4, 1]
-        .map(|e: u64| Value::known(Fp::from(e)))
-        .to_vec();
-    let input_1 = [10, 20, 40, 10].map(Fp::from).to_vec();
-    let shuffle_0 = [4, 1, 1, 2]
-        .map(|e: u64| Value::known(Fp::from(e)))
-        .to_vec();
-    let shuffle_1 = [40, 10, 10, 20]
-        .map(|e: u64| Value::known(Fp::from(e)))
-        .to_vec();
+// Define the circuit for the project
+#[derive(Default)]
+struct MyCircuit<F: Field> {
+    // input_idx: an array of indexes of the unpermuted array
+    input_idx: Vec<Value<F>>,
+    // input: an unpermuted array
+    input: Vec<F>,
+    // shuffle_idx: an array of indexes after permuting input
+    shuffle_idx: Vec<Value<F>>,
+    // shuffle: permuted array from input
+    shuffle: Vec<Value<F>>,
+}
+
+impl<F: Field> Circuit<F> for MyCircuit<F> {
+    // Reuse the config
+    type Config = ShuffleConfig;
+    type FloorPlanner = SimpleFloorPlanner;
+    #[cfg(feature = "circuit-params")]
+    type Params = ();
+
+    // Method: without_witness: return the circuit that has no witnesses
+    fn without_witnesses(&self) -> Self {
+        Self::default()
+    }
+
+    // Method: configure: this step is easily implemented by using shuffle API
+    fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
+        let input_idx = meta.advice_column();
+        let input = meta.fixed_column();
+        let shuffle_idx = meta.advice_column();
+        let shuffle = meta.advice_column();
+        ShuffleChip::configure(meta, input_idx, input, shuffle_idx, shuffle)
+    }
+
+    // Method: synthesize
+    // TODO: Implement this method
+    fn synthesize(&self, config: Self::Config, layouter: impl Layouter<F>) -> Result<(), Error> {
+        Err
+    }
 }
