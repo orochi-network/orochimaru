@@ -4,8 +4,8 @@ use alloc::vec;
 use core::marker::PhantomData;
 use halo2_proofs::{
     arithmetic::Field,
-    circuit::Chip,
-    plonk::{Advice, Column, ConstraintSystem, Expression, Selector, VirtualCells},
+    circuit::{Chip, Region, Value},
+    plonk::{Advice, Column, ConstraintSystem, Error, Expression, Fixed, VirtualCells},
     poly::Rotation,
 };
 
@@ -34,10 +34,7 @@ pub struct LexicographicConfig {
     // the difference between the current row and the previous row
     difference: Column<Advice>,
     difference_inverse: Column<Advice>,
-    // selector for the inversion constraint
-    sel_inv: Selector,
-    // selector for constraining all limbs before first difference are zero
-    sel_zero: Selector,
+    selector: Column<Fixed>,
 }
 
 struct LexicographicChip<F: Field, K, V, const S: usize, const T: usize>
@@ -86,20 +83,19 @@ where
 
         let difference = meta.advice_column();
         let difference_inverse = meta.advice_column();
-        let sel_inv = meta.selector();
-        let sel_zero = meta.selector();
+        let selector = meta.fixed_column();
 
         // inversion gate
         meta.create_gate("difference is non-zero", |meta| {
-            let sel_inv = meta.query_selector(sel_inv);
+            let selector = meta.query_fixed(selector, Rotation::cur());
             let difference = meta.query_advice(difference, Rotation::cur());
             let difference_inverse = meta.query_advice(difference_inverse, Rotation::cur());
-            vec![sel_inv * (difference * difference_inverse - one)]
+            vec![selector * (difference * difference_inverse - one)]
         });
 
         // limbs before first differences are zero
         meta.create_gate("limbs before first differences are zero", |meta| {
-            let sel_zero = meta.query_selector(sel_zero);
+            let selector = meta.query_fixed(selector, Rotation::cur());
             // TODO: implement Queries struct first, then use the constraints on this
             let cur = Queries::new(meta, trace, Rotation::cur());
             let prev = Queries::new(meta, trace, Rotation::prev());
@@ -116,13 +112,32 @@ where
                 .map(|(difference, col)| (difference, col))
                 .collect()
         });
-
+        // return the config after assigning the gates
         LexicographicConfig {
             difference,
             difference_inverse,
-            sel_inv,
-            sel_zero,
+            selector,
         }
+    }
+
+    // it seems that this method has the same role as systhenize, maybe
+    // anyway, let's find out what it does
+    fn assign(
+        &self,
+        region: &mut Region<'_, F>,
+        offset: usize,
+        cur: TraceRecord<K, V, S, T>,
+        prev: TraceRecord<K, V, S, T>,
+    ) -> Result<(), Error> {
+        // set the current selector to be one,
+        region.assign_fixed(
+            || "upper_limb_difference",
+            self.config.selector,
+            offset,
+            || Value::known(F::ONE),
+        )?;
+
+        Ok(())
     }
 }
 
@@ -150,6 +165,7 @@ where
     ) -> Self {
         let mut query_advice = |column| meta.query_advice(column, rotation);
         Self {
+            address: trace.address.map(&query_advice),
             phantom_data: PhantomData,
         }
     }
