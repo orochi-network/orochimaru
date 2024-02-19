@@ -1,12 +1,12 @@
 use core::marker::PhantomData;
 use group::ff::Field;
 use halo2_proofs::{
-    circuit::{AssignedCell, Chip, Layouter, Region, SimpleFloorPlanner, Value},
-    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Fixed, Instance, Selector},
+    circuit::{Layouter, SimpleFloorPlanner, Value},
+    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Fixed, Selector},
     poly::Rotation,
 };
 extern crate alloc;
-use alloc::vec;
+use alloc::{vec, vec::Vec};
 
 // Define a chip struct that implements our instructions.
 struct ShuffleChip<F: Field> {
@@ -15,7 +15,7 @@ struct ShuffleChip<F: Field> {
 }
 
 // Define that chip config struct
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone)]
 struct ShuffleConfig {
     input_0: Column<Advice>,
     input_1: Column<Fixed>,
@@ -102,8 +102,43 @@ impl<F: Field> Circuit<F> for MyCircuit<F> {
     }
 
     // Method: synthesize
-    // TODO: Implement this method
-    fn synthesize(&self, config: Self::Config, layouter: impl Layouter<F>) -> Result<(), Error> {
-        Err
+    fn synthesize(
+        &self,
+        config: Self::Config,
+        mut layouter: impl Layouter<F>,
+    ) -> Result<(), Error> {
+        let shuffle_chip = ShuffleChip::<F>::construct(config);
+        layouter.assign_region(
+            || "load inputs",
+            |mut region| {
+                for (i, (input_idx, input)) in
+                    self.input_idx.iter().zip(self.input.iter()).enumerate()
+                {
+                    region.assign_advice(|| "input_idx", shuffle_chip.config.input_0, i, || *input_idx)?;
+                    region.assign_fixed(
+                        || "input",
+                        shuffle_chip.config.input_1,
+                        i,
+                        || Value::known(*input),
+                    )?;
+                    shuffle_chip.config.s_input.enable(&mut region, i)?;
+                }
+                Ok(())
+            },
+        )?;
+        layouter.assign_region(
+            || "load shuffles",
+            |mut region| {
+                for (i, (shuffle_idx, shuffle)) in
+                    self.shuffle_idx.iter().zip(self.shuffle.iter()).enumerate()
+                {
+                    region.assign_advice(|| "shuffle_index", shuffle_chip.config.shuffle_0, i, || *shuffle_idx)?;
+                    region.assign_advice(|| "shuffle_value", shuffle_chip.config.shuffle_1, i, || *shuffle)?;
+                    shuffle_chip.config.s_shuffle.enable(&mut region, i)?;
+                }
+                Ok(())
+            },
+        )?;
+        Ok(())
     }
 }
