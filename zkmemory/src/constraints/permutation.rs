@@ -114,7 +114,12 @@ impl<F: Field> Circuit<F> for MyCircuit<F> {
                 for (i, (input_idx, input)) in
                     self.input_idx.iter().zip(self.input.iter()).enumerate()
                 {
-                    region.assign_advice(|| "input_idx", shuffle_chip.config.input_0, i, || *input_idx)?;
+                    region.assign_advice(
+                        || "input_idx",
+                        shuffle_chip.config.input_0,
+                        i,
+                        || *input_idx,
+                    )?;
                     region.assign_fixed(
                         || "input",
                         shuffle_chip.config.input_1,
@@ -132,8 +137,18 @@ impl<F: Field> Circuit<F> for MyCircuit<F> {
                 for (i, (shuffle_idx, shuffle)) in
                     self.shuffle_idx.iter().zip(self.shuffle.iter()).enumerate()
                 {
-                    region.assign_advice(|| "shuffle_index", shuffle_chip.config.shuffle_0, i, || *shuffle_idx)?;
-                    region.assign_advice(|| "shuffle_value", shuffle_chip.config.shuffle_1, i, || *shuffle)?;
+                    region.assign_advice(
+                        || "shuffle_index",
+                        shuffle_chip.config.shuffle_0,
+                        i,
+                        || *shuffle_idx,
+                    )?;
+                    region.assign_advice(
+                        || "shuffle_value",
+                        shuffle_chip.config.shuffle_1,
+                        i,
+                        || *shuffle,
+                    )?;
                     shuffle_chip.config.s_shuffle.enable(&mut region, i)?;
                 }
                 Ok(())
