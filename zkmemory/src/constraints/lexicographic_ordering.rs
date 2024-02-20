@@ -1,6 +1,10 @@
 extern crate alloc;
-use crate::{base::Base, machine::TraceRecord};
+use crate::{
+    base::{Base, B256},
+    machine::TraceRecord,
+};
 use alloc::vec;
+use alloc::vec::Vec;
 use core::marker::PhantomData;
 use halo2_proofs::{
     arithmetic::Field,
@@ -137,6 +141,27 @@ where
             || Value::known(F::ONE),
         )?;
 
+        let cur_be_limbs = trace_to_be_limbs(cur);
+        let prev_be_limbs = trace_to_be_limbs(prev);
+
+        let difference = F::ONE;
+
+        // assign the the difference witness (current row - previous row)
+        region.assign_advice(
+            || "limb_difference",
+            self.config.difference,
+            offset,
+            || Value::known(difference),
+        )?;
+
+        // assign the inverse of difference
+        region.assign_advice(
+            || "limb_difference_inverse",
+            self.config.difference_inverse,
+            offset,
+            || Value::known(difference.invert().expect("cannot find inverse")),
+        )?;
+
         Ok(())
     }
 }
@@ -150,6 +175,7 @@ where
     address: [Expression<F>; 32],  //64 bits
     time_log: [Expression<F>; 32], //64 bits
     instruction: Expression<F>,    // 0 or 1
+    value: [Expression<F>; 32],    //64 bits
     phantom_data: PhantomData<(K, V, F)>,
 }
 
@@ -164,9 +190,22 @@ where
         rotation: Rotation,
     ) -> Self {
         let mut query_advice = |column| meta.query_advice(column, rotation);
+        let (time_log, stack_depth, instruction, address, value) = trace.get_tuple();
         Self {
-            address: trace.address.map(&query_advice),
+            address: address.map(&query_advice),
+            time_log: time_log.map(&query_advice),
+            instruction: instruction.map(&query_advice),
+            value: value.map(&query_advice),
             phantom_data: PhantomData,
         }
     }
+}
+
+fn trace_to_be_limbs(trace: TraceRecord<B256, B256, 32, 32>) -> Vec<u16> {
+    let mut be_bytes = vec![0u8];
+    let (time_log, stack_depth, instruction, address, value) = trace.get_tuple();
+    be_bytes.extend_from_slice(&address.zfill32());
+    be_bytes.extend_from_slice(&time_log.to_be_bytes());
+    be_bytes.extend_from_slice(&value.zfill32());
+    be_bytes
 }
