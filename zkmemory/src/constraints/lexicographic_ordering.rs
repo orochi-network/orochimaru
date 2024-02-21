@@ -13,7 +13,7 @@ use halo2_proofs::{
     poly::Rotation,
 };
 
-use super::gadgets::UTable;
+use super::gadgets::{BinChip, BinConfig, UTable};
 // We use this chip to show that the rows of the memory trace table are sorted
 // in a lexicographic order (by address, time log, opcode).
 
@@ -32,12 +32,48 @@ use super::gadgets::UTable;
 // 3. difference equals the difference of the limbs at first_different_limb.
 
 #[derive(Clone, Copy, Debug)]
+pub enum LimbIndex {
+    Address31,
+    Address30,
+    Address29,
+    Address28,
+    Address27,
+    Address26,
+    Address25,
+    Address24,
+    Address23,
+    Address22,
+    Address21,
+    Address20,
+    Address19,
+    Address18,
+    Address17,
+    Address16,
+    Address15,
+    Address14,
+    Address13,
+    Address12,
+    Address11,
+    Address10,
+    Address9,
+    Address8,
+    Address7,
+    Address6,
+    Address5,
+    Address4,
+    Address3,
+    Address2,
+    Address1,
+    Address0,
+}
+
+#[derive(Clone, Copy, Debug)]
 // define the columns for the constraint
-// #[derive(Clone, Copy)]
 pub struct LexicographicConfig {
     // the difference between the current row and the previous row
     difference: Column<Advice>,
     difference_inverse: Column<Advice>,
+    pub first_different_limb: BinConfig<LimbIndex, 5>,
     selector: Column<Fixed>,
 }
 
@@ -88,6 +124,7 @@ where
         let difference = meta.advice_column();
         let difference_inverse = meta.advice_column();
         let selector = meta.fixed_column();
+        let first_different_limb = BinChip::configure(meta, selector, None);
 
         // inversion gate
         meta.create_gate("difference is non-zero", |meta| {
@@ -120,6 +157,7 @@ where
         LexicographicConfig {
             difference,
             difference_inverse,
+            first_different_limb,
             selector,
         }
     }
