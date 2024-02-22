@@ -1,11 +1,8 @@
 extern crate alloc;
-use crate::{
-    base::{Base, B256},
-    machine::TraceRecord,
-};
+use crate::{base::Base, machine::TraceRecord};
 use alloc::vec;
 use alloc::vec::Vec;
-use core::marker::PhantomData;
+use core::{iter::once, marker::PhantomData};
 use halo2_proofs::{
     arithmetic::Field,
     circuit::{Chip, Region, Value},
@@ -13,7 +10,7 @@ use halo2_proofs::{
     poly::Rotation,
 };
 
-use super::gadgets::{BinChip, BinConfig, UTable};
+use super::gadgets::UTable;
 // We use this chip to show that the rows of the memory trace table are sorted
 // in a lexicographic order (by address, time log, opcode).
 
@@ -32,48 +29,11 @@ use super::gadgets::{BinChip, BinConfig, UTable};
 // 3. difference equals the difference of the limbs at first_different_limb.
 
 #[derive(Clone, Copy, Debug)]
-pub enum LimbIndex {
-    Address31,
-    Address30,
-    Address29,
-    Address28,
-    Address27,
-    Address26,
-    Address25,
-    Address24,
-    Address23,
-    Address22,
-    Address21,
-    Address20,
-    Address19,
-    Address18,
-    Address17,
-    Address16,
-    Address15,
-    Address14,
-    Address13,
-    Address12,
-    Address11,
-    Address10,
-    Address9,
-    Address8,
-    Address7,
-    Address6,
-    Address5,
-    Address4,
-    Address3,
-    Address2,
-    Address1,
-    Address0,
-}
-
-#[derive(Clone, Copy, Debug)]
 // define the columns for the constraint
 pub struct LexicographicConfig {
     // the difference between the current row and the previous row
     difference: Column<Advice>,
     difference_inverse: Column<Advice>,
-    pub first_different_limb: BinConfig<LimbIndex, 5>,
     selector: Column<Fixed>,
 }
 
@@ -113,10 +73,11 @@ where
     V: Base<T>,
 {
     fn configure(
+        &self,
         meta: &mut ConstraintSystem<F>,
         trace: TraceRecord<K, V, S, T>,
         u16_table: UTable<16>,
-        alpha_power: [Expression<F>; 31],
+        alpha_power: [Expression<F>; 97],
     ) -> <Self as Chip<F>>::Config {
         let one = Expression::Constant(F::ONE);
         //   meta.enable_equality(u16_table);
@@ -124,7 +85,7 @@ where
         let difference = meta.advice_column();
         let difference_inverse = meta.advice_column();
         let selector = meta.fixed_column();
-        let first_different_limb = BinChip::configure(meta, selector, None);
+        //   let first_different_limb = BinChip::configure(meta, selector, None);
 
         // inversion gate
         meta.create_gate("difference is non-zero", |meta| {
@@ -140,7 +101,16 @@ where
             // TODO: implement Queries struct first, then use the constraints on this
             let cur = Queries::new(meta, trace, Rotation::cur());
             let prev = Queries::new(meta, trace, Rotation::prev());
-            vec![]
+            let mut LIMB_VECTOR = vec![0 as u16];
+            for i in 1..96 {
+                LIMB_VECTOR.push(i);
+            }
+            let rlc = self.rlc_limb_differences(cur, prev, alpha_power);
+            let mut constraints = vec![];
+            for (i, rlc_expression) in LIMB_VECTOR.iter().zip(rlc) {
+                constraints.push(selector.clone() * rlc_expression);
+            }
+            constraints
         });
 
         // lookup gate
@@ -157,7 +127,6 @@ where
         LexicographicConfig {
             difference,
             difference_inverse,
-            first_different_limb,
             selector,
         }
     }
@@ -179,8 +148,23 @@ where
             || Value::known(F::ONE),
         )?;
 
-        let cur_be_limbs = trace_to_be_limbs(cur);
-        let prev_be_limbs = trace_to_be_limbs(prev);
+        let cur_be_limbs = self.trace_to_be_limbs(cur);
+        let prev_be_limbs = self.trace_to_be_limbs(prev);
+        let mut LIMB_VECTOR = vec![0 as u16];
+        for i in 1..96 {
+            LIMB_VECTOR.push(i);
+        }
+        let find_result = LIMB_VECTOR
+            .iter()
+            .zip(&cur_be_limbs)
+            .zip(&prev_be_limbs)
+            .find(|((_, a), b)| a != b);
+
+        let ((index, cur_limb), prev_limb) = if cfg!(test) {
+            find_result.unwrap_or(((&96, &0), &0))
+        } else {
+            find_result.expect("two trace records cannot be the same")
+        };
 
         let difference = F::ONE;
 
@@ -201,6 +185,41 @@ where
         )?;
 
         Ok(())
+    }
+
+    // helper function to convert the trace to be_limbs
+    fn trace_to_be_limbs(&self, trace: TraceRecord<K, V, S, T>) -> Vec<u16> {
+        let mut be_bytes = vec![0u8];
+        let (time_log, stack_depth, instruction, address, value) = trace.get_tuple();
+        be_bytes.extend_from_slice(&address.zfill32());
+        be_bytes.extend_from_slice(&time_log.to_be_bytes());
+        be_bytes.extend_from_slice(&value.zfill32());
+        be_bytes
+    }
+
+    // Returns a vector of length 32 with the rlc of the limb differences between
+    // from 0 to i-l. 0 for i=0,
+    fn rlc_limb_differences(
+        &self,
+        cur: Queries<F, K, V, S, T>,
+        prev: Queries<F, K, V, S, T>,
+        powers_of_randomness: [Expression<F>; 97],
+    ) -> Vec<Expression<F>> {
+        let mut result = vec![];
+        let mut partial_sum = Expression::Constant(F::ZERO);
+        let powers_of_randomness =
+            once(Expression::Constant(F::ONE)).chain(powers_of_randomness.into_iter());
+        for ((cur_limb, prev_limb), power_of_randomness) in cur
+            .be_limbs()
+            .iter()
+            .zip(&prev.be_limbs())
+            .zip(powers_of_randomness)
+        {
+            result.push(partial_sum.clone());
+            partial_sum =
+                partial_sum + power_of_randomness * (cur_limb.clone() - prev_limb.clone());
+        }
+        result
     }
 }
 
@@ -227,23 +246,25 @@ where
         trace: TraceRecord<K, V, S, T>,
         rotation: Rotation,
     ) -> Self {
-        let mut query_advice = |column| meta.query_advice(column, rotation);
         let (time_log, stack_depth, instruction, address, value) = trace.get_tuple();
+        // TODO: Convert the elements from TraceRecord to F
+
         Self {
-            address: address.map(&query_advice),
-            time_log: time_log.map(&query_advice),
-            instruction: instruction.map(&query_advice),
-            value: value.map(&query_advice),
+            address: [Expression::Constant(F::ZERO); 32],
+            time_log: [Expression::Constant(F::ZERO); 32],
+            instruction: Expression::Constant(F::ZERO),
+            value: [Expression::Constant(F::ZERO); 32],
             phantom_data: PhantomData,
         }
     }
-}
-
-fn trace_to_be_limbs(trace: TraceRecord<B256, B256, 32, 32>) -> Vec<u16> {
-    let mut be_bytes = vec![0u8];
-    let (time_log, stack_depth, instruction, address, value) = trace.get_tuple();
-    be_bytes.extend_from_slice(&address.zfill32());
-    be_bytes.extend_from_slice(&time_log.to_be_bytes());
-    be_bytes.extend_from_slice(&value.zfill32());
-    be_bytes
+    fn be_limbs(&self) -> Vec<Expression<F>> {
+        self.address
+            .iter()
+            .rev()
+            .chain(self.time_log.iter().rev())
+            .chain(once(&self.instruction))
+            .chain(self.value.iter().rev())
+            .cloned()
+            .collect()
+    }
 }
