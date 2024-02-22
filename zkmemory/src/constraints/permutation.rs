@@ -166,6 +166,9 @@ mod test {
     use halo2_proofs::dev::MockProver;
     use halo2curves::pasta::Fp;
     /// Test the circuit function with a simple array
+    /// Use Halo2's MockProver to prove the circuit
+    /// Currently using a fixed array
+    //TODO: Use a random array
     #[test]
     fn test_functionality() {
         const K: u32 = 8;
@@ -188,4 +191,8 @@ mod test {
         let prover = MockProver::run(K, &circuit, vec![]).unwrap();
         prover.assert_satisfied();
     }
+
+    //TODO: implement this function (derive a method to map trace record elements into a single element)
+    #[test]
+    fn check_permutation_with_trace_records() {}
 }
