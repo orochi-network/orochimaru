@@ -204,7 +204,5 @@ mod test {
 
     //TODO: implement this function (derive a method to map trace record elements into a single element)
     #[test]
-    fn check_permutation_with_trace_records() {
-
-    }
+    fn check_permutation_with_trace_records() {}
 }
