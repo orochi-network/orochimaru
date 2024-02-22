@@ -158,6 +158,16 @@ impl<F: Field> Circuit<F> for PermutationCircuit<F> {
     }
 }
 
+//TODO: Inspect PSE code to implement a non-mock prover proving the permutation circuit.
+// fn prover() -> () {
+
+// }
+
+//TODO: Implement a function that map trace record elements to a single element in Fr, Fq, etc.
+// fn compress_trace_elements() -> () {
+
+// }
+
 #[cfg(test)]
 mod test {
     use crate::constraints::permutation::vec;
@@ -194,5 +204,7 @@ mod test {
 
     //TODO: implement this function (derive a method to map trace record elements into a single element)
     #[test]
-    fn check_permutation_with_trace_records() {}
+    fn check_permutation_with_trace_records() {
+
+    }
 }
