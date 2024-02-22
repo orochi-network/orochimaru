@@ -19,6 +19,9 @@ pub mod base;
 pub mod commitment;
 /// Define all configuration of [StateMachine](crate::machine::StateMachine) and [RawMemory](crate::memory::RawMemory)
 pub mod config;
+/// A module that implements arithmetic circuits
+/// Currently supports: Permutation check and Lexicographical ordering check
+pub mod constraints;
 /// Define all errors of [StateMachine](crate::machine::StateMachine) and [RawMemory](crate::memory::RawMemory)
 pub mod error;
 /// Definition of abstract machine (instruction, trace and context)

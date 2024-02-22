@@ -69,7 +69,7 @@ impl<F: Field> ShuffleChip<F> {
 
 // Define the circuit for the project
 #[derive(Default)]
-struct MyCircuit<F: Field> {
+struct PermutationCircuit<F: Field> {
     // input_idx: an array of indexes of the unpermuted array
     input_idx: Vec<Value<F>>,
     // input: an unpermuted array
@@ -80,7 +80,7 @@ struct MyCircuit<F: Field> {
     shuffle: Vec<Value<F>>,
 }
 
-impl<F: Field> Circuit<F> for MyCircuit<F> {
+impl<F: Field> Circuit<F> for PermutationCircuit<F> {
     // Reuse the config
     type Config = ShuffleConfig;
     type FloorPlanner = SimpleFloorPlanner;
@@ -155,5 +155,37 @@ impl<F: Field> Circuit<F> for MyCircuit<F> {
             },
         )?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::constraints::permutation::vec;
+    use crate::constraints::permutation::PermutationCircuit;
+    use halo2_proofs::circuit::Value;
+    use halo2_proofs::dev::MockProver;
+    use halo2curves::pasta::Fp;
+    /// Test the circuit function with a simple array
+    #[test]
+    fn test_functionality() {
+        const K: u32 = 8;
+        let input_0 = [1, 2, 3, 4, 5, 6, 7, 8]
+            .map(|e: u64| Value::known(Fp::from(e)))
+            .to_vec();
+        let input_1 = [1, 2, 4, 8, 16, 32, 64, 128].map(Fp::from).to_vec();
+        let shuffle_0 = [1, 3, 5, 2, 4, 6, 8, 7]
+            .map(|e: u64| Value::known(Fp::from(e)))
+            .to_vec();
+        let shuffle_1 = [1, 4, 16, 2, 8, 32, 128, 64]
+            .map(|e: u64| Value::known(Fp::from(e)))
+            .to_vec();
+        let circuit = PermutationCircuit {
+            input_idx: input_0,
+            input: input_1,
+            shuffle_idx: shuffle_0,
+            shuffle: shuffle_1,
+        };
+        let prover = MockProver::run(K, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
     }
 }
