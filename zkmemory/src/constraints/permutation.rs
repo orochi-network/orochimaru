@@ -163,18 +163,59 @@ impl<F: Field> Circuit<F> for PermutationCircuit<F> {
 
 // }
 
-//TODO: Implement a function that map trace record elements to a single element in Fr, Fq, etc.
-// fn compress_trace_elements() -> () {
-
-// }
-
 #[cfg(test)]
 mod test {
-    use crate::constraints::permutation::vec;
+    use crate::base::{Base, B256};
     use crate::constraints::permutation::PermutationCircuit;
+    use crate::machine::{AbstractTraceRecord, MemoryInstruction, TraceRecord};
+    use ff::Field;
     use halo2_proofs::circuit::Value;
     use halo2_proofs::dev::MockProver;
     use halo2curves::pasta::Fp;
+    use rand::seq::SliceRandom;
+    use rand::Rng;
+    extern crate alloc;
+    use alloc::{vec, vec::Vec};
+
+    // Generate a trace record
+    fn generate_trace_record() -> TraceRecord<B256, B256, 32, 32> {
+        let mut rng = rand::thread_rng();
+        let instruction = if rng.gen() {
+            MemoryInstruction::Read
+        } else {
+            MemoryInstruction::Write
+        };
+
+        TraceRecord::<B256, B256, 32, 32>::new(
+            rng.gen_range(0..u64::MAX),
+            rng.gen_range(0..u64::MAX),
+            instruction,
+            B256::from(rng.gen_range(i32::MIN..i32::MAX)),
+            B256::from(rng.gen_range(i32::MIN..i32::MAX)),
+        )
+    }
+
+    //TODO: Implement a function that map trace record elements to a single element in Fr, Fq, etc.
+    fn compress_trace_elements<K: Base<S>, V: Base<T>, const S: usize, const T: usize>(
+        trace_record: TraceRecord<K, V, S, T>,
+        seed: [Fp; 5],
+    ) -> Fp
+    where
+        halo2curves::pasta::Fp: From<K> + From<V>,
+    {
+        let (time_log, stack_depth, instruction, address, value) = trace_record.get_tuple();
+        let instruction = match instruction {
+            MemoryInstruction::Read => Fp::ONE,
+            MemoryInstruction::Write => Fp::ZERO,
+        };
+        // Dot product between trace record and seed
+        Fp::from(time_log) * seed[0]
+            + Fp::from(stack_depth) * seed[1]
+            + instruction * seed[2]
+            + Fp::from(address) * seed[3]
+            + Fp::from(value) * seed[4]
+    }
+
     /// Test the circuit function with a simple array
     /// Use Halo2's MockProver to prove the circuit
     /// Currently using a fixed array
@@ -204,5 +245,74 @@ mod test {
 
     //TODO: implement this function (derive a method to map trace record elements into a single element)
     #[test]
-    fn check_permutation_with_trace_records() {}
+    fn check_permutation_with_trace_records() {
+        const K: u32 = 4;
+        let mut rng = rand::thread_rng();
+        let mut trace = [
+            (1, generate_trace_record()),
+            (2, generate_trace_record()),
+            (3, generate_trace_record()),
+            (4, generate_trace_record()),
+        ];
+
+        // Generate seed
+        let mut seed = [Fp::ZERO; 5];
+        for i in 0..5 {
+            seed[i] = Fp::from(rng.gen_range(0..u64::MAX));
+        }
+
+        // Get the index and the value before shuffle
+        let trace_idx: Vec<Value<Fp>> = trace
+            .iter()
+            .map(|&(x, _)| Value::known(Fp::from(x)))
+            .collect();
+        let trace_value: Vec<Fp> = trace
+            .iter()
+            .map(|&(_, x)| compress_trace_elements(x, seed))
+            .collect();
+
+        trace.shuffle(&mut rng);
+
+        // Get the index and the value after shuffle
+        let trace_idx_after: Vec<Value<Fp>> = trace
+            .iter()
+            .map(|&(x, _)| Value::known(Fp::from(x)))
+            .collect();
+        let trace_value_after: Vec<Value<Fp>> = trace
+            .iter()
+            .map(|&(_, x)| Value::known(compress_trace_elements(x, seed)))
+            .collect();
+
+        let circuit = PermutationCircuit {
+            input_idx: trace_idx,
+            input: trace_value,
+            shuffle_idx: trace_idx_after,
+            shuffle: trace_value_after,
+        };
+        let prover = MockProver::run(K, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+
+    #[test]
+    fn check_trace_record_mapping() {
+        let record = generate_trace_record();
+        let (time_log, stack_depth, instruction, address, value) = record.get_tuple();
+        let instruction = match instruction {
+            MemoryInstruction::Read => Fp::ONE,
+            MemoryInstruction::Write => Fp::ZERO,
+        };
+        // Generate a random seed of type [u64; 5]
+        let mut rng = rand::thread_rng();
+        let mut seed = [Fp::ZERO; 5];
+        for i in 0..5 {
+            seed[i] = Fp::from(rng.gen_range(0..u64::MAX));
+        }
+        // Dot product between the trace record and the seed.
+        let dot_product = Fp::from(time_log) * seed[0]
+            + Fp::from(stack_depth) * seed[1]
+            + instruction * seed[2]
+            + Fp::from(address) * seed[3]
+            + Fp::from(value) * seed[4];
+        assert_eq!(dot_product, compress_trace_elements(record, seed));
+    }
 }
