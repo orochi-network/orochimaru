@@ -218,32 +218,57 @@ mod test {
 
     /// Test the circuit function with a simple array
     /// Use Halo2's MockProver to prove the circuit
-    /// Currently using a fixed array
-    //TODO: Use a random array
+    /// Currently using a randomly generated array
     #[test]
     fn test_functionality() {
         const K: u32 = 8;
-        let input_0 = [1, 2, 3, 4, 5, 6, 7, 8]
-            .map(|e: u64| Value::known(Fp::from(e)))
-            .to_vec();
-        let input_1 = [1, 2, 4, 8, 16, 32, 64, 128].map(Fp::from).to_vec();
-        let shuffle_0 = [1, 3, 5, 2, 4, 6, 8, 7]
-            .map(|e: u64| Value::known(Fp::from(e)))
-            .to_vec();
-        let shuffle_1 = [1, 4, 16, 2, 8, 32, 128, 64]
-            .map(|e: u64| Value::known(Fp::from(e)))
-            .to_vec();
+
+        let mut rng = rand::thread_rng();
+
+        let mut input = [
+            (1, Fp::from(rng.gen_range(0..u64::MAX) as u64)),
+            (2, Fp::from(rng.gen_range(0..u64::MAX) as u64)),
+            (3, Fp::from(rng.gen_range(0..u64::MAX) as u64)),
+            (4, Fp::from(rng.gen_range(0..u64::MAX) as u64)),
+            (5, Fp::from(rng.gen_range(0..u64::MAX) as u64)),
+            (6, Fp::from(rng.gen_range(0..u64::MAX) as u64)),
+            (7, Fp::from(rng.gen_range(0..u64::MAX) as u64)),
+            (8, Fp::from(rng.gen_range(0..u64::MAX) as u64)),
+        ];
+
+        // Generate seed
+        let seeds = [Fp::ZERO; 5];
+        for _seed in seeds {
+            let _seed = Fp::from(rng.gen_range(0..u64::MAX));
+        }
+
+        let input_idx: Vec<Value<Fp>> = input
+            .iter()
+            .map(|&(x, _)| Value::known(Fp::from(x)))
+            .collect();
+
+        let input_value: Vec<Fp> = input.iter().map(|&(_, x)| x).collect();
+
+        input.shuffle(&mut rng);
+
+        let shuffle_idx: Vec<Value<Fp>> = input
+            .iter()
+            .map(|&(x, _)| Value::known(Fp::from(x)))
+            .collect();
+
+        let shuffle_value: Vec<Value<Fp>> = input.iter().map(|&(_, x)| Value::known(x)).collect();
+
         let circuit = PermutationCircuit {
-            input_idx: input_0,
-            input: input_1,
-            shuffle_idx: shuffle_0,
-            shuffle: shuffle_1,
+            input_idx: input_idx,
+            input: input_value,
+            shuffle_idx: shuffle_idx,
+            shuffle: shuffle_value,
         };
         let prover = MockProver::run(K, &circuit, vec![]).unwrap();
         prover.assert_satisfied();
     }
 
-    //TODO: implement this function (derive a method to map trace record elements into a single element)
+    // Test the functionality of the permutation circuit with a shuffled trace record
     #[test]
     fn check_permutation_with_trace_records() {
         const K: u32 = 4;
@@ -256,9 +281,9 @@ mod test {
         ];
 
         // Generate seed
-        let mut seed = [Fp::ZERO; 5];
-        for i in 0..5 {
-            seed[i] = Fp::from(rng.gen_range(0..u64::MAX));
+        let seeds = [Fp::ZERO; 5];
+        for _seed in seeds {
+            let _seed = Fp::from(rng.gen_range(0..u64::MAX));
         }
 
         // Get the index and the value before shuffle
@@ -268,7 +293,7 @@ mod test {
             .collect();
         let trace_value: Vec<Fp> = trace
             .iter()
-            .map(|&(_, x)| compress_trace_elements(x, seed))
+            .map(|&(_, x)| compress_trace_elements(x, seeds))
             .collect();
 
         trace.shuffle(&mut rng);
@@ -280,7 +305,7 @@ mod test {
             .collect();
         let trace_value_after: Vec<Value<Fp>> = trace
             .iter()
-            .map(|&(_, x)| Value::known(compress_trace_elements(x, seed)))
+            .map(|&(_, x)| Value::known(compress_trace_elements(x, seeds)))
             .collect();
 
         let circuit = PermutationCircuit {
@@ -303,16 +328,16 @@ mod test {
         };
         // Generate a random seed of type [u64; 5]
         let mut rng = rand::thread_rng();
-        let mut seed = [Fp::ZERO; 5];
-        for i in 0..5 {
-            seed[i] = Fp::from(rng.gen_range(0..u64::MAX));
+        let seeds = [Fp::ZERO; 5];
+        for _seed in seeds {
+            let _seed = Fp::from(rng.gen_range(0..u64::MAX));
         }
         // Dot product between the trace record and the seed.
-        let dot_product = Fp::from(time_log) * seed[0]
-            + Fp::from(stack_depth) * seed[1]
-            + instruction * seed[2]
-            + Fp::from(address) * seed[3]
-            + Fp::from(value) * seed[4];
-        assert_eq!(dot_product, compress_trace_elements(record, seed));
+        let dot_product = Fp::from(time_log) * seeds[0]
+            + Fp::from(stack_depth) * seeds[1]
+            + instruction * seeds[2]
+            + Fp::from(address) * seeds[3]
+            + Fp::from(value) * seeds[4];
+        assert_eq!(dot_product, compress_trace_elements(record, seeds));
     }
 }
