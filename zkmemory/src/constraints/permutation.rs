@@ -1,22 +1,39 @@
 use core::marker::PhantomData;
+use ff::FromUniformBytes;
 use group::ff::Field;
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
-    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Fixed, Selector},
-    poly::Rotation,
+    plonk::{
+        create_proof, keygen_pk, keygen_vk, verify_proof, Advice, Circuit, Column,
+        ConstraintSystem, Error, Fixed, ProvingKey, Selector,
+    },
+    poly::{
+        commitment::ParamsProver,
+        ipa::{
+            commitment::{IPACommitmentScheme, ParamsIPA},
+            multiopen::ProverIPA,
+            strategy::AccumulatorStrategy,
+        },
+        Rotation, VerificationStrategy,
+    },
+    transcript::{
+        Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
+    },
 };
 extern crate alloc;
 use alloc::{vec, vec::Vec};
+use halo2curves::CurveAffine;
+use rand_core::OsRng;
 
-// Define a chip struct that implements our instructions.
+/// Define a chip struct that implements our instructions.
 struct ShuffleChip<F: Field> {
     config: ShuffleConfig,
     _marker: PhantomData<F>,
 }
 
-// Define that chip config struct
+/// Define that chip config struct
 #[derive(Debug, Clone)]
-struct ShuffleConfig {
+pub struct ShuffleConfig {
     input_0: Column<Advice>,
     input_1: Column<Fixed>,
     shuffle_0: Column<Advice>,
@@ -67,9 +84,9 @@ impl<F: Field> ShuffleChip<F> {
     }
 }
 
-// Define the circuit for the project
-#[derive(Default)]
-struct PermutationCircuit<F: Field> {
+/// Define the permutatioin circuit for the project
+#[derive(Default, Clone)]
+pub struct PermutationCircuit<F: Field> {
     // input_idx: an array of indexes of the unpermuted array
     input_idx: Vec<Value<F>>,
     // input: an unpermuted array
@@ -158,20 +175,77 @@ impl<F: Field> Circuit<F> for PermutationCircuit<F> {
     }
 }
 
-//TODO: Inspect PSE code to implement a non-mock prover proving the permutation circuit.
-// fn prover() -> () {
+/// Implement a non-mock prover proving the permutation circuit using the Inner-Product Argument.
+pub struct PermutationProver<C: CurveAffine>
+where
+    C::Scalar: FromUniformBytes<64>,
+{
+    params: ParamsIPA<C>,
+    pk: ProvingKey<C>,
+    circuit: PermutationCircuit<C::Scalar>,
+    expected: bool,
+}
 
-// }
+impl<C: CurveAffine> PermutationProver<C>
+where
+    C::Scalar: FromUniformBytes<64>,
+{
+    /// initialize the parameters for the prover
+    pub fn new(k: u32, circuit: PermutationCircuit<C::Scalar>, expected: bool) -> Self {
+        let params = ParamsIPA::<C>::new(k);
+        let vk = keygen_vk(&params, &circuit).expect("Cannot initialize verify key");
+        let pk = keygen_pk(&params, vk.clone(), &circuit).expect("Cannot initialize verify key");
+        Self {
+            params,
+            pk,
+            circuit,
+            expected,
+        }
+    }
+
+    /// Create proof for the permutation circuit
+    pub fn create_proof(&mut self) -> Vec<u8> {
+        let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
+        create_proof::<IPACommitmentScheme<C>, ProverIPA<'_, C>, _, _, _, _>(
+            &self.params,
+            &self.pk,
+            &[self.circuit.clone()],
+            &[&[]],
+            OsRng,
+            &mut transcript,
+        )
+        .expect("Fail to create proof.");
+        transcript.finalize()
+    }
+
+    /// Verify the proof (by comparing the result with expected value)
+    pub fn verify(&mut self, proof: Vec<u8>) -> bool {
+        let accepted = {
+            let strategy = AccumulatorStrategy::new(&self.params);
+            let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
+            verify_proof(
+                &self.params,
+                self.pk.get_vk(),
+                strategy,
+                &[&[]],
+                &mut transcript,
+            )
+            .map(|strategy| strategy.finalize())
+            .expect("Fail to verify proof.")
+        };
+        accepted == self.expected
+    }
+}
 
 #[cfg(test)]
 mod test {
     use crate::base::{Base, B256};
-    use crate::constraints::permutation::PermutationCircuit;
+    use crate::constraints::permutation::{PermutationCircuit, PermutationProver};
     use crate::machine::{AbstractTraceRecord, MemoryInstruction, TraceRecord};
     use ff::Field;
     use halo2_proofs::circuit::Value;
     use halo2_proofs::dev::MockProver;
-    use halo2curves::pasta::Fp;
+    use halo2curves::pasta::{EqAffine, Fp};
     use rand::seq::SliceRandom;
     use rand::Rng;
     extern crate alloc;
@@ -225,7 +299,7 @@ mod test {
 
         let mut rng = rand::thread_rng();
 
-        let mut input = [
+        let mut arr = [
             (1, Fp::from(rng.gen_range(0..u64::MAX) as u64)),
             (2, Fp::from(rng.gen_range(0..u64::MAX) as u64)),
             (3, Fp::from(rng.gen_range(0..u64::MAX) as u64)),
@@ -242,30 +316,37 @@ mod test {
             let _seed = Fp::from(rng.gen_range(0..u64::MAX));
         }
 
-        let input_idx: Vec<Value<Fp>> = input
+        let input_idx: Vec<Value<Fp>> = arr
             .iter()
             .map(|&(x, _)| Value::known(Fp::from(x)))
             .collect();
 
-        let input_value: Vec<Fp> = input.iter().map(|&(_, x)| x).collect();
+        let input: Vec<Fp> = arr.iter().map(|&(_, x)| x).collect();
 
-        input.shuffle(&mut rng);
+        arr.shuffle(&mut rng);
 
-        let shuffle_idx: Vec<Value<Fp>> = input
+        let shuffle_idx: Vec<Value<Fp>> = arr
             .iter()
             .map(|&(x, _)| Value::known(Fp::from(x)))
             .collect();
 
-        let shuffle_value: Vec<Value<Fp>> = input.iter().map(|&(_, x)| Value::known(x)).collect();
+        let shuffle: Vec<Value<Fp>> = arr.iter().map(|&(_, x)| Value::known(x)).collect();
 
         let circuit = PermutationCircuit {
-            input_idx: input_idx,
-            input: input_value,
-            shuffle_idx: shuffle_idx,
-            shuffle: shuffle_value,
+            input_idx,
+            input,
+            shuffle_idx,
+            shuffle,
         };
+
+        // Test with mock prover
         let prover = MockProver::run(K, &circuit, vec![]).unwrap();
         prover.assert_satisfied();
+
+        // Test with IPA prover
+        let mut ipa_prover = PermutationProver::<EqAffine>::new(K, circuit, true);
+        let proof = ipa_prover.create_proof();
+        assert_eq!(ipa_prover.verify(proof), ipa_prover.expected);
     }
 
     // Test the functionality of the permutation circuit with a shuffled trace record
@@ -287,11 +368,11 @@ mod test {
         }
 
         // Get the index and the value before shuffle
-        let trace_idx: Vec<Value<Fp>> = trace
+        let input_idx: Vec<Value<Fp>> = trace
             .iter()
             .map(|&(x, _)| Value::known(Fp::from(x)))
             .collect();
-        let trace_value: Vec<Fp> = trace
+        let input: Vec<Fp> = trace
             .iter()
             .map(|&(_, x)| compress_trace_elements(x, seeds))
             .collect();
@@ -299,23 +380,30 @@ mod test {
         trace.shuffle(&mut rng);
 
         // Get the index and the value after shuffle
-        let trace_idx_after: Vec<Value<Fp>> = trace
+        let shuffle_idx: Vec<Value<Fp>> = trace
             .iter()
             .map(|&(x, _)| Value::known(Fp::from(x)))
             .collect();
-        let trace_value_after: Vec<Value<Fp>> = trace
+        let shuffle: Vec<Value<Fp>> = trace
             .iter()
             .map(|&(_, x)| Value::known(compress_trace_elements(x, seeds)))
             .collect();
 
         let circuit = PermutationCircuit {
-            input_idx: trace_idx,
-            input: trace_value,
-            shuffle_idx: trace_idx_after,
-            shuffle: trace_value_after,
+            input_idx,
+            input,
+            shuffle_idx,
+            shuffle,
         };
+
+        // Test with mock prover
         let prover = MockProver::run(K, &circuit, vec![]).unwrap();
         prover.assert_satisfied();
+
+        // Test with IPA prover
+        let mut ipa_prover = PermutationProver::<EqAffine>::new(K, circuit, true);
+        let proof = ipa_prover.create_proof();
+        assert_eq!(ipa_prover.verify(proof), ipa_prover.expected);
     }
 
     #[test]
