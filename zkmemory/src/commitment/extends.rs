@@ -18,10 +18,11 @@ macro_rules! extend_field {
                 // Convert [u8; 32] to [u64; 4]
                 let mut chunk: [u64; 4] = [0u64; 4];
                 for i in 0..4 {
-                    let start = i * 8;
-                    let end = start + 8;
-                    let limb = &value[start..end];
-                    chunk[i] = u64::from_be_bytes(limb.try_into().unwrap());
+                    let limb = &value[i * 8..(i + 1) * 8];
+                    chunk[i] = u64::from_le_bytes(
+                        limb.try_into()
+                            .expect("Unable to deserialize Fp from bytes"),
+                    );
                 }
                 Fp::from_raw(chunk)
             }
