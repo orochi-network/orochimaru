@@ -1,8 +1,8 @@
 extern crate alloc;
 use alloc::vec;
 use alloc::vec::Vec;
+use ff::PrimeField;
 use halo2_proofs::{
-    arithmetic::Field,
     circuit::{Layouter, Value},
     plonk::{Column, ConstraintSystem, Error, Expression, Fixed, VirtualCells},
     poly::Rotation,
@@ -16,21 +16,14 @@ pub struct UTable<const N_BITS: usize> {
 
 impl<const N_BITS: usize> UTable<N_BITS> {
     /// Construct the UTable.
-    pub fn construct<F: Field>(meta: &mut ConstraintSystem<F>) -> Self {
+    pub fn construct<F: PrimeField>(meta: &mut ConstraintSystem<F>) -> Self {
         Self {
             col: meta.fixed_column(),
         }
     }
 
     /// Load the `UTable` for range check
-    pub fn load<F: Field>(
-        &self,
-        layouter: &mut impl Layouter<F>,
-        // constant vector consists of values in F from 1 to 2^{N_BITS}
-        // since we cannot use F::from, so we decided to add this public
-        // constant_vector as input
-        constant_vector: Vec<F>,
-    ) -> Result<(), Error> {
+    pub fn load<F: PrimeField>(&self, layouter: &mut impl Layouter<F>) -> Result<(), Error> {
         layouter.assign_region(
             || "loading column",
             |mut region| {
@@ -39,7 +32,7 @@ impl<const N_BITS: usize> UTable<N_BITS> {
                         || "assigning values to column",
                         self.col,
                         i,
-                        || Value::known(constant_vector[i]),
+                        || Value::known(F::from(i as u64)),
                     )?;
                 }
                 Ok(())
@@ -49,7 +42,7 @@ impl<const N_BITS: usize> UTable<N_BITS> {
     }
 
     /// Return the list of expressions used to define the table
-    pub fn table_exprs<F: Field>(&self, meta: &mut VirtualCells<'_, F>) -> Vec<Expression<F>> {
+    pub fn table_exprs<F: PrimeField>(&self, meta: &mut VirtualCells<'_, F>) -> Vec<Expression<F>> {
         vec![meta.query_fixed(self.col, Rotation::cur())]
     }
 }
