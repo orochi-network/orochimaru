@@ -1,6 +1,8 @@
 use core::marker::PhantomData;
 use ff::FromUniformBytes;
 use group::ff::Field;
+use rand::Rng;
+use rand_core::OsRng;
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{
@@ -20,10 +22,13 @@ use halo2_proofs::{
         Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
     },
 };
-use halo2curves::CurveAffine;
-use rand_core::OsRng;
+use halo2curves::{CurveAffine, pasta::Fp};
 extern crate alloc;
 use alloc::{vec, vec::Vec};
+use crate::{
+    base::Base,
+    machine::{AbstractTraceRecord, MemoryInstruction, TraceRecord},
+};
 
 /// Define a chip struct that implements our instructions.
 struct ShuffleChip<F: Field> {
@@ -237,20 +242,15 @@ where
     }
 }
 
-#[cfg(test)]
-mod test {
-    use crate::base::{Base, B256};
-    use crate::constraints::permutation::{PermutationCircuit, PermutationProver};
-    use crate::machine::{AbstractTraceRecord, MemoryInstruction, TraceRecord};
-    use ff::Field;
-    use halo2_proofs::{circuit::Value, dev::MockProver};
-    use halo2curves::pasta::{EqAffine, Fp};
-    use rand::{seq::SliceRandom, Rng};
-    extern crate alloc;
-    use alloc::{vec, vec::Vec};
 
-    // Generate a trace record
-    fn generate_trace_record() -> TraceRecord<B256, B256, 32, 32> {
+/// Implement methods for trace records to use for the permutation circuit.
+impl<K, V, const S: usize, const T: usize> TraceRecord<K, V, S, T>
+where
+    K: Base<S>,
+    V: Base<T>,
+{
+    /// Randomize a trace record (for debugging and testing)
+    pub fn random() -> TraceRecord<K, V, S, T> {
         let mut rng = rand::thread_rng();
         let instruction = if rng.gen() {
             MemoryInstruction::Write
@@ -258,24 +258,21 @@ mod test {
             MemoryInstruction::Read
         };
 
-        TraceRecord::<B256, B256, 32, 32>::new(
+        TraceRecord::<K, V, S, T>::new(
             rng.gen_range(0..u64::MAX),
             rng.gen_range(0..u64::MAX),
             instruction,
-            B256::from(rng.gen_range(i32::MIN..i32::MAX)),
-            B256::from(rng.gen_range(i32::MIN..i32::MAX)),
+            K::from(rng.gen_range(u64::MIN..u64::MAX)),
+            V::from(rng.gen_range(u64::MIN..u64::MAX)),
         )
     }
 
-    // Map trace record elements to a single element in Fr, Fq, etc.
-    fn compress_trace_elements<K: Base<S>, V: Base<T>, const S: usize, const T: usize>(
-        trace_record: TraceRecord<K, V, S, T>,
-        seed: [Fp; 5],
-    ) -> Fp
+    /// Compress trace elements into a single field element Fp
+    pub fn compress(&mut self, seed: [Fp; 5]) -> Fp
     where
         halo2curves::pasta::Fp: From<K> + From<V>,
     {
-        let (time_log, stack_depth, instruction, address, value) = trace_record.get_tuple();
+        let (time_log, stack_depth, instruction, address, value) = self.get_tuple();
         let instruction = match instruction {
             MemoryInstruction::Read => Fp::ZERO,
             MemoryInstruction::Write => Fp::ONE,
@@ -287,6 +284,23 @@ mod test {
             + Fp::from(address) * seed[3]
             + Fp::from(value) * seed[4]
     }
+}
+
+
+#[cfg(test)]
+mod test {
+
+    use crate::{
+        base::B256,
+        constraints::permutation::{PermutationCircuit, PermutationProver},
+        machine::{MemoryInstruction, TraceRecord},
+    };
+    use ff::Field;
+    use halo2_proofs::{circuit::Value, dev::MockProver};
+    use halo2curves::pasta::{EqAffine, Fp};
+    use rand::{seq::SliceRandom, Rng};
+    extern crate alloc;
+    use alloc::{vec, vec::Vec};
 
     /// Test the circuit function with a simple array
     /// Use Halo2's MockProver to prove the circuit
@@ -344,7 +358,7 @@ mod test {
         // Test with IPA prover
         let mut ipa_prover = PermutationProver::<EqAffine>::new(K, circuit, true);
         let proof = ipa_prover.create_proof();
-        assert_eq!(ipa_prover.verify(proof), true);
+        assert!(ipa_prover.verify(proof));
     }
 
     // Test the functionality of the permutation circuit with a shuffled trace record
@@ -353,10 +367,10 @@ mod test {
         const K: u32 = 4;
         let mut rng = rand::thread_rng();
         let mut trace = [
-            (1, generate_trace_record()),
-            (2, generate_trace_record()),
-            (3, generate_trace_record()),
-            (4, generate_trace_record()),
+            (1, TraceRecord::<B256, B256, 32, 32>::random()),
+            (2, TraceRecord::<B256, B256, 32, 32>::random()),
+            (3, TraceRecord::<B256, B256, 32, 32>::random()),
+            (4, TraceRecord::<B256, B256, 32, 32>::random()),
         ];
 
         // Generate seed
@@ -372,7 +386,7 @@ mod test {
             .collect();
         let input: Vec<Fp> = trace
             .iter()
-            .map(|&(_, x)| compress_trace_elements(x, seeds))
+            .map(|&(_, mut x)| x.compress(seeds))
             .collect();
 
         trace.shuffle(&mut rng);
@@ -384,7 +398,7 @@ mod test {
             .collect();
         let shuffle: Vec<Value<Fp>> = trace
             .iter()
-            .map(|&(_, x)| Value::known(compress_trace_elements(x, seeds)))
+            .map(|&(_, mut x)| Value::known(x.compress(seeds)))
             .collect();
 
         let circuit = PermutationCircuit {
@@ -401,16 +415,16 @@ mod test {
         // Test with IPA prover
         let mut ipa_prover = PermutationProver::<EqAffine>::new(K, circuit, true);
         let proof = ipa_prover.create_proof();
-        assert_eq!(ipa_prover.verify(proof), true);
+        assert!(ipa_prover.verify(proof));
     }
 
     #[test]
     fn check_trace_record_mapping() {
-        let record = generate_trace_record();
+        let mut record = TraceRecord::<B256, B256, 32, 32>::random();
         let (time_log, stack_depth, instruction, address, value) = record.get_tuple();
         let instruction = match instruction {
-            MemoryInstruction::Read => Fp::ONE,
-            MemoryInstruction::Write => Fp::ZERO,
+            MemoryInstruction::Read => Fp::ZERO,
+            MemoryInstruction::Write => Fp::ONE,
         };
         // Generate a random seed of type [u64; 5]
         let mut rng = rand::thread_rng();
@@ -424,7 +438,7 @@ mod test {
             + instruction * seeds[2]
             + Fp::from(address) * seeds[3]
             + Fp::from(value) * seeds[4];
-        assert_eq!(dot_product, compress_trace_elements(record, seeds));
+        assert_eq!(dot_product, record.compress(seeds));
     }
 
     #[test]
@@ -433,10 +447,10 @@ mod test {
         const K: u32 = 4;
         let mut rng = rand::thread_rng();
         let mut trace = [
-            (1, generate_trace_record()),
-            (2, generate_trace_record()),
-            (3, generate_trace_record()),
-            (4, generate_trace_record()),
+            (1, TraceRecord::<B256, B256, 32, 32>::random()),
+            (2, TraceRecord::<B256, B256, 32, 32>::random()),
+            (3, TraceRecord::<B256, B256, 32, 32>::random()),
+            (4, TraceRecord::<B256, B256, 32, 32>::random()),
         ];
 
         // Generate seed
@@ -452,7 +466,7 @@ mod test {
             .collect();
         let input: Vec<Fp> = trace
             .iter()
-            .map(|&(_, x)| compress_trace_elements(x, seeds))
+            .map(|&(_, mut x)| x.compress(seeds))
             .collect();
 
         trace.shuffle(&mut rng);
@@ -464,7 +478,7 @@ mod test {
 
         let mut shuffle: Vec<Value<Fp>> = trace
             .iter()
-            .map(|&(_, x)| Value::known(compress_trace_elements(x, seeds)))
+            .map(|&(_, mut x)| Value::known(x.compress(seeds)))
             .collect();
 
         // Tamper shuffle
@@ -484,6 +498,6 @@ mod test {
         // Test with IPA prover
         let mut ipa_prover = PermutationProver::<EqAffine>::new(K, circuit, true);
         let proof = ipa_prover.create_proof();
-        assert_eq!(ipa_prover.verify(proof), true);
+        assert!(ipa_prover.verify(proof));
     }
 }
