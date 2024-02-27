@@ -1,11 +1,11 @@
 use halo2curves::pasta::{EqAffine, Fp};
-use rand::{seq::SliceRandom, Rng};
+use rand::Rng;
 use rbtree::RBTree;
 use std::{marker::PhantomData, println};
 use zkmemory::{
     base::{Base, B256},
     config::{AllocatedSection, Config, ConfigArgs, DefaultConfig},
-    constraints::permutation::{PermutationCircuit, PermutationProver},
+    constraints::permutation::{sort_chronologically, PermutationCircuit, PermutationProver},
     error::Error,
     impl_register_machine, impl_stack_machine, impl_state_machine,
     machine::{
@@ -368,25 +368,24 @@ fn main() {
         let _seed = Fp::from(rng.gen_range(0..u64::MAX));
     }
 
-    // Extract the trace
-    let trace = machine.trace();
-    let mut buffer: Vec<(u64, TraceRecord<B256, B256, 32, 32>)> =
-        (1..trace.len() as u64).zip(trace.into_iter()).collect();
+    // Create a tuple vector of (index, trace_element)
+    let input_trace: Vec<(u64, TraceRecord<B256, B256, 32, 32>)> = (1..machine.trace().len()
+        as u64)
+        .zip(machine.trace())
+        .collect();
 
-    // Trace input of the circuit
-    let input = buffer.clone();
-
-    // Shuffle the input trace
-    buffer.shuffle(&mut rng);
-
-    // Trace shuffle of the circuit
-    let shuffle = buffer.clone();
+    // Sort the trace by ascending time_log
+    let sorted_trace = sort_chronologically(input_trace.clone());
 
     // Form the circuit
-    let circuit = PermutationCircuit::new(input, shuffle, seeds);
+    let circuit = PermutationCircuit::new(input_trace, sorted_trace, seeds);
 
     // Test with IPA prover
     let mut ipa_prover = PermutationProver::<EqAffine>::new(K, circuit, true);
+
+    // Create a proof for the circuit satisfiability
     let proof = ipa_prover.create_proof();
+
+    // Verify the proof
     assert!(ipa_prover.verify(proof));
 }

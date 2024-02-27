@@ -21,12 +21,11 @@ use halo2_proofs::{
     },
 };
 use halo2curves::CurveAffine;
-use rand::Rng;
 use rand_core::OsRng;
 extern crate alloc;
 use crate::{
     base::Base,
-    machine::{AbstractTraceRecord, MemoryInstruction, TraceRecord},
+    machine::{MemoryInstruction, TraceRecord},
 };
 use alloc::{vec, vec::Vec};
 
@@ -48,7 +47,7 @@ pub struct ShuffleConfig {
 }
 
 impl<F: Field + PrimeField> ShuffleChip<F> {
-    // Construct a permutation chip using the config
+    //^ Construct a permutation chip using the config
     fn construct(config: ShuffleConfig) -> Self {
         Self {
             config,
@@ -92,29 +91,29 @@ impl<F: Field + PrimeField> ShuffleChip<F> {
 /// Define the permutatioin circuit for the project
 #[derive(Default, Clone)]
 pub struct PermutationCircuit<F: Field + PrimeField> {
-    // input_idx: an array of indexes of the unpermuted array
+    //^ input_idx: an array of indexes of the unpermuted array
     input_idx: Vec<Value<F>>,
-    // input: an unpermuted array
+    //^ input: an unpermuted array
     input: Vec<F>,
-    // shuffle_idx: an array of indexes after permuting input
+    //^ shuffle_idx: an array of indexes after permuting input
     shuffle_idx: Vec<Value<F>>,
-    // shuffle: permuted array from input
+    //^ shuffle: permuted array from input
     shuffle: Vec<Value<F>>,
 }
 
 impl<F: Field + PrimeField> Circuit<F> for PermutationCircuit<F> {
-    // Reuse the config
+    //* Reuse the config
     type Config = ShuffleConfig;
     type FloorPlanner = SimpleFloorPlanner;
     #[cfg(feature = "circuit-params")]
     type Params = ();
 
-    // Method: without_witness: return the circuit that has no witnesses
+    //* Method: without_witness: return the circuit that has no witnesses
     fn without_witnesses(&self) -> Self {
         Self::default()
     }
 
-    // Method: configure: this step is easily implemented by using shuffle API
+    //* Method: configure: this step is easily implemented by using shuffle API
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
         let input_idx = meta.advice_column();
         let input = meta.fixed_column();
@@ -123,7 +122,7 @@ impl<F: Field + PrimeField> Circuit<F> for PermutationCircuit<F> {
         ShuffleChip::configure(meta, input_idx, input, shuffle_idx, shuffle)
     }
 
-    // Method: synthesize
+    //* Method: synthesize
     fn synthesize(
         &self,
         config: Self::Config,
@@ -285,24 +284,6 @@ where
     K: Base<S>,
     V: Base<T>,
 {
-    /// Randomize a trace record (for debugging and testing)
-    pub fn random() -> TraceRecord<K, V, S, T> {
-        let mut rng = rand::thread_rng();
-        let instruction = if rng.gen() {
-            MemoryInstruction::Write
-        } else {
-            MemoryInstruction::Read
-        };
-
-        TraceRecord::<K, V, S, T>::new(
-            rng.gen_range(0..u64::MAX),
-            rng.gen_range(0..u64::MAX),
-            instruction,
-            K::from(rng.gen_range(u64::MIN..u64::MAX)),
-            V::from(rng.gen_range(u64::MIN..u64::MAX)),
-        )
-    }
-
     /// Compress trace elements into a single field element Fp
     pub fn compress<F: From<K> + From<V> + Field + PrimeField>(&mut self, seed: [F; 5]) -> F {
         let (time_log, stack_depth, instruction, address, value) = self.get_tuple();
@@ -319,13 +300,45 @@ where
     }
 }
 
+/// Use quicksort to sort the trace in order of ascending time_log
+pub fn sort_chronologically<K, V, const S: usize, const T: usize>(
+    mut trace: Vec<(u64, TraceRecord<K, V, S, T>)>,
+) -> Vec<(u64, TraceRecord<K, V, S, T>)>
+where
+    K: Base<S>,
+    V: Base<T>,
+{
+    if trace.len() <= 1 {
+        return trace;
+    }
+
+    let pivot = trace.remove(0);
+    let mut left = vec![];
+    let mut right = vec![];
+
+    for item in trace {
+        if item.1.get_tuple().0 <= pivot.1.get_tuple().0 {
+            left.push(item);
+        } else {
+            right.push(item);
+        }
+    }
+
+    let mut sorted_left = sort_chronologically(left);
+    let mut sorted_right = sort_chronologically(right);
+
+    sorted_left.push(pivot);
+    sorted_left.append(&mut sorted_right);
+
+    sorted_left
+}
 #[cfg(test)]
 mod test {
 
     use crate::{
         base::{Base, B256},
         constraints::permutation::{PermutationCircuit, PermutationProver},
-        machine::{MemoryInstruction, TraceRecord},
+        machine::{AbstractTraceRecord, MemoryInstruction, TraceRecord},
     };
     use ff::Field;
     use halo2_proofs::{circuit::Value, dev::MockProver};
@@ -339,8 +352,27 @@ mod test {
         size: u64,
     ) -> Vec<(u64, TraceRecord<K, V, S, T>)> {
         (1..size)
-            .map(|i| (i, TraceRecord::<K, V, S, T>::random()))
+            .map(|i| (i, random_trace_record::<K, V, S, T>()))
             .collect()
+    }
+
+    // ~ Randomly create a trace record
+    fn random_trace_record<K: Base<S>, V: Base<T>, const S: usize, const T: usize>(
+    ) -> TraceRecord<K, V, S, T> {
+        let mut rng = rand::thread_rng();
+        let instruction = if rng.gen() {
+            MemoryInstruction::Write
+        } else {
+            MemoryInstruction::Read
+        };
+
+        TraceRecord::<K, V, S, T>::new(
+            rng.gen_range(0..u64::MAX),
+            rng.gen_range(0..u64::MAX),
+            instruction,
+            K::from(rng.gen_range(u64::MIN..u64::MAX)),
+            V::from(rng.gen_range(u64::MIN..u64::MAX)),
+        )
     }
 
     /// Test the circuit function with a simple array
@@ -352,16 +384,13 @@ mod test {
 
         let mut rng = rand::thread_rng();
 
-        let mut arr = [
-            (1, Fp::from(rng.gen_range(0..u64::MAX) as u64)),
-            (2, Fp::from(rng.gen_range(0..u64::MAX) as u64)),
-            (3, Fp::from(rng.gen_range(0..u64::MAX) as u64)),
-            (4, Fp::from(rng.gen_range(0..u64::MAX) as u64)),
-            (5, Fp::from(rng.gen_range(0..u64::MAX) as u64)),
-            (6, Fp::from(rng.gen_range(0..u64::MAX) as u64)),
-            (7, Fp::from(rng.gen_range(0..u64::MAX) as u64)),
-            (8, Fp::from(rng.gen_range(0..u64::MAX) as u64)),
-        ];
+        let mut arr = {
+            let mut arr: Vec<(u64, Fp)> = vec![];
+            for x in 1..30u64 {
+                arr.push((x, Fp::from(rng.gen_range(0..u64::MAX))));
+            }
+            arr
+        };
 
         // Generate seed
         let seeds = [Fp::ZERO; 5];
@@ -456,7 +485,7 @@ mod test {
 
     #[test]
     fn check_trace_record_mapping() {
-        let mut record = TraceRecord::<B256, B256, 32, 32>::random();
+        let mut record = random_trace_record::<B256, B256, 32, 32>();
         let (time_log, stack_depth, instruction, address, value) = record.get_tuple();
         let instruction = match instruction {
             MemoryInstruction::Write => Fp::ONE,
@@ -483,10 +512,10 @@ mod test {
         const K: u32 = 4;
         let mut rng = rand::thread_rng();
         let mut trace = [
-            (1, TraceRecord::<B256, B256, 32, 32>::random()),
-            (2, TraceRecord::<B256, B256, 32, 32>::random()),
-            (3, TraceRecord::<B256, B256, 32, 32>::random()),
-            (4, TraceRecord::<B256, B256, 32, 32>::random()),
+            (1, random_trace_record::<B256, B256, 32, 32>()),
+            (2, random_trace_record::<B256, B256, 32, 32>()),
+            (3, random_trace_record::<B256, B256, 32, 32>()),
+            (4, random_trace_record::<B256, B256, 32, 32>()),
         ];
 
         // Generate seed
