@@ -1,8 +1,11 @@
+use halo2curves::pasta::{EqAffine, Fp};
+use rand::{seq::SliceRandom, Rng};
 use rbtree::RBTree;
 use std::{marker::PhantomData, println};
 use zkmemory::{
     base::{Base, B256},
     config::{AllocatedSection, Config, ConfigArgs, DefaultConfig},
+    constraints::permutation::{PermutationCircuit, PermutationProver},
     error::Error,
     impl_register_machine, impl_stack_machine, impl_state_machine,
     machine::{
@@ -223,7 +226,7 @@ where
             memory: RBTree::new(),
             memory_allocated: config.memory,
             word_size: config.word_size,
-            time_log: 0,
+            time_log: 1,
 
             // Stack
             stack_allocated: config.stack,
@@ -355,4 +358,35 @@ fn main() {
     for x in machine.trace().into_iter() {
         println!("{:?}", x);
     }
+
+    const K: u32 = 6;
+    let mut rng = rand::thread_rng();
+
+    // Generate seed
+    let seeds = [Fp::zero(); 5];
+    for _seed in seeds {
+        let _seed = Fp::from(rng.gen_range(0..u64::MAX));
+    }
+
+    // Extract the trace
+    let trace = machine.trace();
+    let mut buffer: Vec<(u64, TraceRecord<B256, B256, 32, 32>)> =
+        (1..trace.len() as u64).zip(trace.into_iter()).collect();
+
+    // Trace input of the circuit
+    let input = buffer.clone();
+
+    // Shuffle the input trace
+    buffer.shuffle(&mut rng);
+
+    // Trace shuffle of the circuit
+    let shuffle = buffer.clone();
+
+    // Form the circuit
+    let circuit = PermutationCircuit::new(input, shuffle, seeds);
+
+    // Test with IPA prover
+    let mut ipa_prover = PermutationProver::<EqAffine>::new(K, circuit, true);
+    let proof = ipa_prover.create_proof();
+    assert!(ipa_prover.verify(proof));
 }
