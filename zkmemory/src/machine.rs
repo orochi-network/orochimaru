@@ -501,16 +501,17 @@ where
     K: Base<S>,
     V: Base<T>,
 {
+    // Trace records are sorted by address -> time_log -> instruction
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
         match self.address.cmp(&other.address) {
             core::cmp::Ordering::Equal => {}
             ord => return ord,
         }
-        match self.instruction.cmp(&other.instruction) {
+        match self.time_log.cmp(&other.time_log) {
             core::cmp::Ordering::Equal => {}
             ord => return ord,
         }
-        match self.time_log.cmp(&other.time_log) {
+        match self.instruction.cmp(&other.instruction) {
             core::cmp::Ordering::Equal => {
                 panic!("Time log never been equal")
             }
