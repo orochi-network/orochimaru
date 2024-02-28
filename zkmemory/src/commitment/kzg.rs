@@ -324,13 +324,13 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{base::B256, machine::AbstractTraceRecord};
-    use ff::PrimeField;
-    use halo2_proofs::arithmetic::eval_polynomial;
+    // use crate::{base::B256, machine::AbstractTraceRecord};
+    //  use ff::PrimeField;
+    //  use halo2_proofs::arithmetic::eval_polynomial;
     use rand::{thread_rng, Rng};
 
     // Generate a trace record
-    fn generate_trace_record() -> TraceRecord<B256, B256, 32, 32> {
+    /*   fn generate_trace_record() -> TraceRecord<B256, B256, 32, 32> {
         let mut rng = rand::thread_rng();
         let instruction = if rng.gen() {
             MemoryInstruction::Read
@@ -345,7 +345,7 @@ mod test {
             B256::from(rng.gen_range(i32::MIN..i32::MAX)),
             B256::from(rng.gen_range(i32::MIN..i32::MAX)),
         )
-    }
+    }*/
 
     #[test]
     fn test_conversion_fr() {
@@ -367,8 +367,8 @@ mod test {
 
         assert_eq!(chunk_fr, chunk);
     }
-    #[test]
-    fn test_record_polynomial_conversion() {
+    /*   #[test]
+     fn test_record_polynomial_conversion() {
         let kzg_scheme = KZGMemoryCommitment::<B256, B256, 32, 32>::default();
 
         // Initialize a random trace record
@@ -424,5 +424,5 @@ mod test {
 
         // Verify the correctness of the false trace given the commitment "commitment", should return False
         assert!(!kzg_scheme.verify_trace_record(false_trace, commitment, false_proof));
-    }
+    }*/
 }

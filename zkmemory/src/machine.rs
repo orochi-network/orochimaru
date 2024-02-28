@@ -506,10 +506,7 @@ where
             core::cmp::Ordering::Equal => {}
             ord => return ord,
         }
-        match self.instruction.cmp(&other.instruction) {
-            core::cmp::Ordering::Equal => {}
-            ord => return ord,
-        }
+
         match self.time_log.cmp(&other.time_log) {
             core::cmp::Ordering::Equal => {
                 panic!("Time log never been equal")

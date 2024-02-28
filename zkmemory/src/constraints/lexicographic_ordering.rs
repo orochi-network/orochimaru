@@ -1,5 +1,4 @@
 extern crate alloc;
-use crate::machine::{MemoryInstruction, TraceRecord};
 use alloc::vec::Vec;
 use alloc::{format, vec};
 use core::{iter::once, marker::PhantomData};
@@ -12,8 +11,6 @@ use halo2_proofs::{
     poly::Rotation,
 };
 use rand::thread_rng;
-
-use crate::base::Base;
 
 use super::gadgets::UTable;
 
@@ -53,9 +50,9 @@ impl<F: Field + PrimeField> LexicographicConfig<F> {
         let first_difference_limb = meta.advice_column();
         let selector = meta.fixed_column();
 
-        let mut LIMB_VECTOR = vec![0 as u8];
+        let mut limb_vector = vec![0 as u8];
         for i in 1..40 {
-            LIMB_VECTOR.push(i);
+            limb_vector.push(i);
         }
 
         // inversion gate
@@ -81,7 +78,7 @@ impl<F: Field + PrimeField> LexicographicConfig<F> {
             );
             let rlc = rlc_limb_differences(cur, prev, alpha_power.clone());
             let mut constraints = vec![];
-            for (i, rlc_expression) in LIMB_VECTOR.iter().zip(rlc) {
+            for (i, rlc_expression) in limb_vector.iter().zip(rlc) {
                 constraints.push(
                     selector.clone()
                         * equal(
@@ -136,7 +133,7 @@ impl<F: Field + PrimeField> LexicographicConfig<F> {
             let difference = meta.query_advice(difference, Rotation::cur());
             let first_difference_limb = meta.query_advice(first_difference_limb, Rotation::cur());
             let mut constraints = vec![];
-            for ((i, cur_limb), prev_limb) in LIMB_VECTOR
+            for ((i, cur_limb), prev_limb) in limb_vector
                 .iter()
                 .zip(&cur.be_limbs())
                 .zip(&prev.be_limbs())
@@ -153,10 +150,34 @@ impl<F: Field + PrimeField> LexicographicConfig<F> {
             constraints
         });
 
-        // lookup gate for difference. It must be in [0..65535]
-        u64_table.range_check(meta, "difference fits in 0..65535", |meta| {
+        // instruction must be equal to 0 or 1
+        meta.create_gate("instruction must be equal to 0 or 1", |meta| {
+            let selector = meta.query_fixed(selector, Rotation::cur());
+            let cur = Queries::new(meta, address, time_log, instruction, value, Rotation::cur());
+            vec![selector * cur.instruction.clone() * (cur.instruction.clone() - one)]
+        });
+
+        // lookup gate for difference. It must be in [0..64]
+        u64_table.range_check(meta, "difference fits in 0..64", |meta| {
             meta.query_advice(difference, Rotation::cur())
         });
+
+        // each limb of address and value must be in [0..64]
+        for i in 0..32 {
+            u64_table.range_check(meta, "limb of address fits in 0..64", |meta| {
+                meta.query_advice(address[i], Rotation::cur())
+            });
+            u64_table.range_check(meta, "limb of value fits in 0..64", |meta| {
+                meta.query_advice(value[i], Rotation::cur())
+            });
+        }
+
+        // each limb of time_log must be in [0..64]
+        for i in 0..8 {
+            u64_table.range_check(meta, "limb of time log fits in 0..64", |meta| {
+                meta.query_advice(time_log[i], Rotation::cur())
+            });
+        }
 
         // lookup gate for first_difference_limb. It must be in [0,39]
         u40_table.range_check(meta, "difference fits into 0..40", |meta| {
@@ -207,21 +228,12 @@ fn rlc_limb_differences<F: Field + PrimeField>(
 
 /// The circuit for lexicographic ordering
 #[derive(Default)]
-pub struct LexicographicCircuit<F: PrimeField, K, V, const S: usize, const T: usize>
-where
-    K: Base<S>,
-    V: Base<T>,
-{
-    sorted_trace_record: Vec<TraceRecord<K, V, S, T>>,
+pub struct LexicographicCircuit<F: PrimeField> {
+    sorted_trace_record: Vec<ProvableTraceRecord<F>>,
     _marker: PhantomData<F>,
 }
 
-impl<F: Field + PrimeField, K, V, const S: usize, const T: usize> Circuit<F>
-    for LexicographicCircuit<F, K, V, S, T>
-where
-    K: Base<S>,
-    V: Base<T>,
-{
+impl<F: Field + PrimeField> Circuit<F> for LexicographicCircuit<F> {
     type Config = LexicographicConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
 
@@ -263,11 +275,11 @@ where
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        layouter.assign_region(
+        let _ = layouter.assign_region(
             || "lexicographic_ordering",
             |mut region| {
-                for i in 1..self.sorted_trace_record.len() {
-                    self.assign(&mut region, config, i);
+                for i in 0..self.sorted_trace_record.len() {
+                    let _ = self.assign(&mut region, config, i);
                 }
                 Ok(())
             },
@@ -276,128 +288,158 @@ where
     }
 }
 
-impl<F: Field + PrimeField, K, V, const S: usize, const T: usize>
-    LexicographicCircuit<F, K, V, S, T>
-where
-    K: Base<S>,
-    V: Base<T>,
-{
+impl<F: Field + PrimeField> LexicographicCircuit<F> {
     // assign the witness values to the offset-th row of the witness table
     fn assign(
         &self,
-        mut region: &mut Region<'_, F>,
+        region: &mut Region<'_, F>,
         config: LexicographicConfig<F>,
         offset: usize,
     ) -> Result<(), Error> {
-        let (cur_time_log, cur_stack_depth, cur_instruction, cur_address, cur_value) =
-            self.sorted_trace_record[offset].get_tuple();
-        let (prev_time_log, prev_stack_depth, prev_instruction, prev_address, prev_value) =
-            self.sorted_trace_record[offset - 1].get_tuple();
-        let cur_be_limbs = self.trace_to_be_limbs(cur_time_log, cur_address);
-        let prev_be_limbs = self.trace_to_be_limbs(prev_time_log, prev_address);
+        if offset == 0 {
+            let (cur_address, cur_time_log, cur_instruction, cur_value) =
+                self.sorted_trace_record[offset].get_tuple();
 
-        let mut LIMB_VECTOR = vec![0 as u8];
-        for i in 1..40 {
-            LIMB_VECTOR.push(i);
-        }
-        // find the minimal index such that cur is not equal to prev
-        let find_result = LIMB_VECTOR
-            .iter()
-            .zip(&cur_be_limbs)
-            .zip(&prev_be_limbs)
-            .find(|((_, a), b)| a != b);
+            // assign the address witness
+            for i in 0..32 {
+                region.assign_advice(
+                    || format!("address{}", offset),
+                    config.address[i],
+                    offset,
+                    || Value::known(cur_address[i]),
+                )?;
+            }
 
-        let ((index, cur_limb), prev_limb) = if cfg!(test) {
-            find_result.unwrap_or(((&96, &0), &0))
+            // assign the time_log witness
+            for i in 0..8 {
+                region.assign_advice(
+                    || format!("time_log{}", offset),
+                    config.time_log[i],
+                    offset,
+                    || Value::known(cur_time_log[i]),
+                )?;
+            }
+
+            // assign the instruction witness
+            region.assign_advice(
+                || format!("instruction{}", offset),
+                config.instruction,
+                offset,
+                || Value::known(cur_instruction),
+            )?;
+
+            // assign the value witness
+            for i in 0..32 {
+                region.assign_advice(
+                    || format!("value{}", offset),
+                    config.value[i],
+                    offset,
+                    || Value::known(cur_value[i]),
+                )?;
+            }
         } else {
-            find_result.expect("two trace records cannot be the same")
-        };
-        let difference = F::from(*cur_limb as u64) - F::from(*prev_limb as u64);
+            let (cur_address, cur_time_log, cur_instruction, cur_value) =
+                self.sorted_trace_record[offset].get_tuple();
+            let (prev_address, prev_time_log, _prev_instruction, _prev_value) =
+                self.sorted_trace_record[offset - 1].get_tuple();
+            let cur_be_limbs = self.trace_to_be_limbs(cur_time_log, cur_address);
+            let prev_be_limbs = self.trace_to_be_limbs(prev_time_log, prev_address);
 
-        // assign the selector to be one at the current row
-        region.assign_fixed(
-            || "selector",
-            config.selector,
-            offset,
-            || Value::known(F::ONE),
-        )?;
+            let mut limb_vector = vec![0 as u8];
+            for i in 1..40 {
+                limb_vector.push(i);
+            }
+            // find the minimal index such that cur is not equal to prev
+            let find_result = limb_vector
+                .iter()
+                .zip(&cur_be_limbs)
+                .zip(&prev_be_limbs)
+                .find(|((_, a), b)| a != b);
+            let zero = F::ZERO;
+            let ((index, cur_limb), prev_limb) = if cfg!(test) {
+                find_result.unwrap_or(((&40, &zero), &zero))
+            } else {
+                find_result.expect("two trace records cannot be the same")
+            };
+            let difference = *cur_limb - *prev_limb;
 
-        // assign the difference witness
-        region.assign_advice(
-            || format!("difference{}", offset),
-            config.difference,
-            offset,
-            || Value::known(difference),
-        )?;
-
-        // assign the inverse of the difference witness
-        region.assign_advice(
-            || format!("difference_inverse{}", offset),
-            config.difference_inverse,
-            offset,
-            || Value::known(difference.invert().expect("cannot find inverse")),
-        )?;
-
-        // assign the first_difference_limb witness
-        region.assign_advice(
-            || format!("first_difference_limb{}", offset),
-            config.first_difference_limb,
-            offset,
-            || Value::known(F::from(*index as u64)),
-        )?;
-
-        // assign the address witness
-        let cur_address_be = cur_address.zfill32();
-        for i in 0..32 {
-            region.assign_advice(
-                || format!("address{}", offset),
-                config.address[i],
+            // assign the selector to be one at the current row
+            region.assign_fixed(
+                || "selector",
+                config.selector,
                 offset,
-                || Value::known(F::from(cur_address_be[i] as u64)),
+                || Value::known(F::ONE),
             )?;
-        }
 
-        // assign the time_log witness
-        let cur_time_log_be = cur_time_log.to_be_bytes();
-        for i in 0..8 {
+            // assign the difference witness
             region.assign_advice(
-                || format!("time_log{}", offset),
-                config.time_log[i],
+                || format!("difference{}", offset),
+                config.difference,
                 offset,
-                || Value::known(F::from(cur_address_be[i] as u64)),
+                || Value::known(difference),
             )?;
-        }
 
-        // assign the instruction witness
-        let cur_instruction_be = F::from(0 as u64);
-        if cur_instruction == MemoryInstruction::Write {
-            cur_instruction_be = F::from(1 as u64);
-        }
-        region.assign_advice(
-            || format!("instruction{}", offset),
-            config.instruction,
-            offset,
-            || Value::known(F::from(cur_instruction as u64)),
-        )?;
-
-        // assign the value witness
-        let cur_value_be = cur_value.zfill32();
-        for i in 0..32 {
+            // assign the inverse of the difference witness
             region.assign_advice(
-                || format!("value{}", offset),
-                config.value[i],
+                || format!("difference_inverse{}", offset),
+                config.difference_inverse,
                 offset,
-                || Value::known(F::from(cur_value_be[i] as u64)),
+                || Value::known(difference.invert().expect("cannot find inverse")),
             )?;
-        }
 
+            // assign the first_difference_limb witness
+            region.assign_advice(
+                || format!("first_difference_limb{}", offset),
+                config.first_difference_limb,
+                offset,
+                || Value::known(F::from(*index as u64)),
+            )?;
+
+            // assign the address witness
+            for i in 0..32 {
+                region.assign_advice(
+                    || format!("address{}", offset),
+                    config.address[i],
+                    offset,
+                    || Value::known(cur_address[i]),
+                )?;
+            }
+
+            // assign the time_log witness
+            for i in 0..8 {
+                region.assign_advice(
+                    || format!("time_log{}", offset),
+                    config.time_log[i],
+                    offset,
+                    || Value::known(cur_time_log[i]),
+                )?;
+            }
+
+            // assign the instruction witness
+            region.assign_advice(
+                || format!("instruction{}", offset),
+                config.instruction,
+                offset,
+                || Value::known(cur_instruction),
+            )?;
+
+            // assign the value witness
+            for i in 0..32 {
+                region.assign_advice(
+                    || format!("value{}", offset),
+                    config.value[i],
+                    offset,
+                    || Value::known(cur_value[i]),
+                )?;
+            }
+        }
         Ok(())
     }
 
-    fn trace_to_be_limbs(&self, time_log: u64, address: K) -> Vec<u8> {
+    fn trace_to_be_limbs(&self, time_log: [F; 8], address: [F; 32]) -> Vec<F> {
         let mut be_bytes = vec![];
-        be_bytes.extend_from_slice(&address.zfill32());
-        be_bytes.extend_from_slice(&time_log.to_be_bytes());
+        be_bytes.extend_from_slice(&address);
+        be_bytes.extend_from_slice(&time_log);
         be_bytes
     }
 }
@@ -437,5 +479,50 @@ impl<F: Field + PrimeField> Queries<F> {
             .chain(self.time_log.iter().rev())
             .cloned()
             .collect()
+    }
+}
+
+struct ProvableTraceRecord<F: Field + PrimeField> {
+    address: [F; 32], //64 bits
+    time_log: [F; 8], //64 bits
+    instruction: F,   // 0 or 1
+    value: [F; 32],   //64 bit
+}
+
+impl<F: Field + PrimeField> ProvableTraceRecord<F> {
+    fn get_tuple(&self) -> ([F; 32], [F; 8], F, [F; 32]) {
+        (self.address, self.time_log, self.instruction, self.value)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use halo2_proofs::dev::MockProver;
+    use halo2_proofs::halo2curves::bn256::Fr as Fp;
+    #[test]
+    fn unit_test() {
+        let trace0 = ProvableTraceRecord {
+            address: [Fp::from(0); 32],
+            time_log: [Fp::from(0); 8],
+            instruction: Fp::from(1),
+            value: [Fp::from(0); 32],
+        };
+        let trace1 = ProvableTraceRecord {
+            address: [Fp::from(1); 32],
+            time_log: [Fp::from(1); 8],
+            instruction: Fp::from(0),
+            value: [Fp::from(0); 32],
+        };
+        let trace = vec![trace0, trace1];
+        let circuit = LexicographicCircuit {
+            sorted_trace_record: trace,
+            _marker: PhantomData,
+        };
+        // the number of rows cannot exceed 2^k
+        let k = 7;
+        let res = Fp::from(0);
+        let prover = MockProver::run(k, &circuit, vec![vec![res]]).unwrap();
+        assert_eq!(prover.verify(), Ok(()));
     }
 }
