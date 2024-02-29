@@ -1,11 +1,13 @@
 use halo2curves::pasta::{EqAffine, Fp};
-use rand::Rng;
 use rbtree::RBTree;
 use std::{marker::PhantomData, println};
 use zkmemory::{
     base::{Base, B256},
     config::{AllocatedSection, Config, ConfigArgs, DefaultConfig},
-    constraints::permutation::{sort_chronologically, PermutationCircuit, PermutationProver},
+    constraints::permutation::{
+        generate_seeds, sort_chronologically, successive_powers, PermutationCircuit,
+        PermutationProver,
+    },
     error::Error,
     impl_register_machine, impl_stack_machine, impl_state_machine,
     machine::{
@@ -360,19 +362,17 @@ fn main() {
     }
 
     const K: u32 = 6;
-    let mut rng = rand::thread_rng();
+    let rng = rand::thread_rng();
 
     // Generate seed
-    let seeds = [Fp::zero(); 5];
-    for _seed in seeds {
-        let _seed = Fp::from(rng.gen_range(0..u64::MAX));
-    }
+    let seeds = generate_seeds::<Fp>(rng.clone());
 
     // Create a tuple vector of (index, trace_element)
-    let input_trace: Vec<(u64, TraceRecord<B256, B256, 32, 32>)> = (1..machine.trace().len()
-        as u64)
-        .zip(machine.trace())
-        .collect();
+    let input_trace: Vec<(Fp, TraceRecord<B256, B256, 32, 32>)> =
+        successive_powers::<Fp>(machine.trace().len() as u64)
+            .into_iter()
+            .zip(machine.trace())
+            .collect();
 
     // Sort the trace by ascending time_log
     let sorted_trace = sort_chronologically(input_trace.clone());

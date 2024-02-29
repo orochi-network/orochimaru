@@ -21,6 +21,7 @@ use halo2_proofs::{
     },
 };
 use halo2curves::CurveAffine;
+use rand::{rngs::ThreadRng, Rng};
 use rand_core::OsRng;
 extern crate alloc;
 use crate::{
@@ -47,7 +48,7 @@ pub struct ShuffleConfig {
 }
 
 impl<F: Field + PrimeField> ShuffleChip<F> {
-    //^ Construct a permutation chip using the config
+    // Construct a permutation chip using the config
     fn construct(config: ShuffleConfig) -> Self {
         Self {
             config,
@@ -91,29 +92,29 @@ impl<F: Field + PrimeField> ShuffleChip<F> {
 /// Define the permutatioin circuit for the project
 #[derive(Default, Clone)]
 pub struct PermutationCircuit<F: Field + PrimeField> {
-    //^ input_idx: an array of indexes of the unpermuted array
+    // input_idx: an array of indexes of the unpermuted array
     input_idx: Vec<Value<F>>,
-    //^ input: an unpermuted array
+    // input: an unpermuted array
     input: Vec<F>,
-    //^ shuffle_idx: an array of indexes after permuting input
+    // shuffle_idx: an array of indexes after permuting input
     shuffle_idx: Vec<Value<F>>,
-    //^ shuffle: permuted array from input
+    // shuffle: permuted array from input
     shuffle: Vec<Value<F>>,
 }
 
 impl<F: Field + PrimeField> Circuit<F> for PermutationCircuit<F> {
-    //* Reuse the config
+    // Reuse the config
     type Config = ShuffleConfig;
     type FloorPlanner = SimpleFloorPlanner;
     #[cfg(feature = "circuit-params")]
     type Params = ();
 
-    //* Method: without_witness: return the circuit that has no witnesses
+    // Method: without_witness: return the circuit that has no witnesses
     fn without_witnesses(&self) -> Self {
         Self::default()
     }
 
-    //* Method: configure: this step is easily implemented by using shuffle API
+    // Method: configure: this step is easily implemented by using shuffle API
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
         let input_idx = meta.advice_column();
         let input = meta.fixed_column();
@@ -122,7 +123,7 @@ impl<F: Field + PrimeField> Circuit<F> for PermutationCircuit<F> {
         ShuffleChip::configure(meta, input_idx, input, shuffle_idx, shuffle)
     }
 
-    //* Method: synthesize
+    // Method: synthesize
     fn synthesize(
         &self,
         config: Self::Config,
@@ -244,8 +245,8 @@ where
 impl<F: Field + PrimeField> PermutationCircuit<F> {
     /// Create a new permutation circuit with two traces and a random seed
     pub fn new<K, V, const S: usize, const T: usize>(
-        input_trace: Vec<(u64, TraceRecord<K, V, S, T>)>,
-        shuffle_trace: Vec<(u64, TraceRecord<K, V, S, T>)>,
+        input_trace: Vec<(F, TraceRecord<K, V, S, T>)>,
+        shuffle_trace: Vec<(F, TraceRecord<K, V, S, T>)>,
         seeds: [F; 5],
     ) -> Self
     where
@@ -257,7 +258,7 @@ impl<F: Field + PrimeField> PermutationCircuit<F> {
             input_idx: input_trace
                 .clone()
                 .into_iter()
-                .map(|(x, _)| Value::known(F::from(x)))
+                .map(|(x, _)| Value::known(x))
                 .collect(),
             input: input_trace
                 .clone()
@@ -267,7 +268,7 @@ impl<F: Field + PrimeField> PermutationCircuit<F> {
             shuffle_idx: shuffle_trace
                 .clone()
                 .into_iter()
-                .map(|(x, _)| Value::known(F::from(x)))
+                .map(|(x, _)| Value::known(x))
                 .collect(),
             shuffle: shuffle_trace
                 .clone()
@@ -278,7 +279,7 @@ impl<F: Field + PrimeField> PermutationCircuit<F> {
     }
 }
 
-/// Implement methods for trace records to use for the permutation circuit.
+// Implement methods for trace records to use for the permutation circuit.
 impl<K, V, const S: usize, const T: usize> TraceRecord<K, V, S, T>
 where
     K: Base<S>,
@@ -300,13 +301,31 @@ where
     }
 }
 
+/// Generate random seeds for compression of trace records
+pub fn generate_seeds<F: Field + PrimeField>(mut rng: ThreadRng) -> [F; 5] {
+    // Generate seed
+    let seeds = [F::ZERO; 5];
+    for _seed in seeds {
+        let _seed = F::from(rng.gen_range(0..u64::MAX));
+    }
+    seeds
+}
+
+/// Generate an array of successive powers of group generators as indexes
+pub fn successive_powers<F: Field + PrimeField>(size: u64) -> Vec<F> {
+    (1..size)
+        .map(|i| F::from(i) * F::MULTIPLICATIVE_GENERATOR)
+        .collect()
+}
+
 /// Use quicksort to sort the trace in order of ascending time_log
-pub fn sort_chronologically<K, V, const S: usize, const T: usize>(
-    mut trace: Vec<(u64, TraceRecord<K, V, S, T>)>,
-) -> Vec<(u64, TraceRecord<K, V, S, T>)>
+pub fn sort_chronologically<K, V, const S: usize, const T: usize, F>(
+    mut trace: Vec<(F, TraceRecord<K, V, S, T>)>,
+) -> Vec<(F, TraceRecord<K, V, S, T>)>
 where
     K: Base<S>,
     V: Base<T>,
+    F: Field + PrimeField,
 {
     if trace.len() <= 1 {
         return trace;
@@ -337,26 +356,36 @@ mod test {
 
     use crate::{
         base::{Base, B256},
-        constraints::permutation::{PermutationCircuit, PermutationProver},
+        constraints::permutation::{generate_seeds, PermutationCircuit, PermutationProver},
         machine::{AbstractTraceRecord, MemoryInstruction, TraceRecord},
     };
     use ff::Field;
+    use group::ff::PrimeField;
     use halo2_proofs::{circuit::Value, dev::MockProver};
     use halo2curves::pasta::{EqAffine, Fp};
     use rand::{seq::SliceRandom, Rng};
     extern crate alloc;
     use alloc::{vec, vec::Vec};
 
-    // ~ Randomly create a vector of 2-tuple of trace elements and an index value (for testing)
-    fn random_trace<K: Base<S>, V: Base<T>, const S: usize, const T: usize>(
+    use super::successive_powers;
+
+    // Randomly create a vector of 2-tuple of trace elements and an index value (for testing)
+    fn random_trace<
+        K: Base<S>,
+        V: Base<T>,
+        const S: usize,
+        const T: usize,
+        F: Field + PrimeField,
+    >(
         size: u64,
-    ) -> Vec<(u64, TraceRecord<K, V, S, T>)> {
-        (1..size)
+    ) -> Vec<(F, TraceRecord<K, V, S, T>)> {
+        successive_powers::<F>(size as u64)
+            .into_iter()
             .map(|i| (i, random_trace_record::<K, V, S, T>()))
             .collect()
     }
 
-    // ~ Randomly create a trace record
+    // Randomly create a trace record
     fn random_trace_record<K: Base<S>, V: Base<T>, const S: usize, const T: usize>(
     ) -> TraceRecord<K, V, S, T> {
         let mut rng = rand::thread_rng();
@@ -384,27 +413,14 @@ mod test {
 
         let mut rng = rand::thread_rng();
 
-        let mut arr = {
-            let mut arr: Vec<(u64, Fp)> = vec![];
-            for x in 1..30u64 {
-                arr.push((x, Fp::from(rng.gen_range(0..u64::MAX))));
-            }
-            arr
-        };
-
-        // Generate seed
-        let seeds = [Fp::ZERO; 5];
-        for _seed in seeds {
-            let _seed = Fp::from(rng.gen_range(0..u64::MAX));
-        }
-
-        let input_idx: Vec<Value<Fp>> = arr
-            .iter()
-            .map(|&(x, _)| Value::known(Fp::from(x)))
+        let mut arr: Vec<(Fp, Fp)> = (1..30)
+            .map(|x| (Fp::from(x), Fp::from(rng.gen_range(0..u64::MAX))))
             .collect();
 
+        let input_idx: Vec<Value<Fp>> = arr.iter().map(|&(x, _)| Value::known(x)).collect();
         let input: Vec<Fp> = arr.iter().map(|&(_, x)| x).collect();
 
+        // Random shuffle
         arr.shuffle(&mut rng);
 
         let shuffle_idx: Vec<Value<Fp>> = arr
@@ -439,28 +455,19 @@ mod test {
         let trace_size = 50;
 
         let mut rng = rand::thread_rng();
-        let mut trace = random_trace::<B256, B256, 32, 32>(trace_size);
+        let mut trace = random_trace::<B256, B256, 32, 32, Fp>(trace_size);
 
         // Generate seed
-        let seeds = [Fp::ZERO; 5];
-        for _seed in seeds {
-            let _seed = Fp::from(rng.gen_range(0..u64::MAX));
-        }
+        let seeds = generate_seeds::<Fp>(rng.clone());
 
         // Get the index and the value before shuffle
-        let input_idx: Vec<Value<Fp>> = trace
-            .iter()
-            .map(|&(x, _)| Value::known(Fp::from(x)))
-            .collect();
+        let input_idx: Vec<Value<Fp>> = trace.iter().map(|&(x, _)| Value::known(x)).collect();
         let input: Vec<Fp> = trace.iter().map(|&(_, mut x)| x.compress(seeds)).collect();
 
         trace.shuffle(&mut rng);
 
         // Get the index and the value after shuffle
-        let shuffle_idx: Vec<Value<Fp>> = trace
-            .iter()
-            .map(|&(x, _)| Value::known(Fp::from(x)))
-            .collect();
+        let shuffle_idx: Vec<Value<Fp>> = trace.iter().map(|&(x, _)| Value::known(x)).collect();
         let shuffle: Vec<Value<Fp>> = trace
             .iter()
             .map(|&(_, mut x)| Value::known(x.compress(seeds)))
@@ -492,11 +499,8 @@ mod test {
             MemoryInstruction::Read => Fp::ZERO,
         };
         // Generate a random seed of type [u64; 5]
-        let mut rng = rand::thread_rng();
-        let seeds = [Fp::ZERO; 5];
-        for _seed in seeds {
-            let _seed = Fp::from(rng.gen_range(0..u64::MAX));
-        }
+        let rng = rand::thread_rng();
+        let seeds = generate_seeds::<Fp>(rng.clone());
         // Dot product between the trace record and the seed.
         let dot_product = Fp::from(time_log) * seeds[0]
             + Fp::from(stack_depth) * seeds[1]
@@ -509,35 +513,23 @@ mod test {
     #[test]
     #[should_panic]
     fn check_wrong_permutation() {
-        const K: u32 = 4;
+        const K: u32 = 6;
+        let trace_size = 50;
+
         let mut rng = rand::thread_rng();
-        let mut trace = [
-            (1, random_trace_record::<B256, B256, 32, 32>()),
-            (2, random_trace_record::<B256, B256, 32, 32>()),
-            (3, random_trace_record::<B256, B256, 32, 32>()),
-            (4, random_trace_record::<B256, B256, 32, 32>()),
-        ];
+        let mut trace = random_trace::<B256, B256, 32, 32, Fp>(trace_size);
 
         // Generate seed
-        let seeds = [Fp::ZERO; 5];
-        for _seed in seeds {
-            let _seed = Fp::from(rng.gen_range(0..u64::MAX));
-        }
+        let seeds = generate_seeds::<Fp>(rng.clone());
 
         // Get the index and the value before shuffle
-        let input_idx: Vec<Value<Fp>> = trace
-            .iter()
-            .map(|&(x, _)| Value::known(Fp::from(x)))
-            .collect();
+        let input_idx: Vec<Value<Fp>> = trace.iter().map(|&(x, _)| Value::known(x)).collect();
         let input: Vec<Fp> = trace.iter().map(|&(_, mut x)| x.compress(seeds)).collect();
 
         trace.shuffle(&mut rng);
 
-        let shuffle_idx: Vec<Value<Fp>> = trace
-            .iter()
-            .map(|&(x, _)| Value::known(Fp::from(x)))
-            .collect();
-
+        // Get the index and the value after shuffle
+        let shuffle_idx: Vec<Value<Fp>> = trace.iter().map(|&(x, _)| Value::known(x)).collect();
         let mut shuffle: Vec<Value<Fp>> = trace
             .iter()
             .map(|&(_, mut x)| Value::known(x.compress(seeds)))
