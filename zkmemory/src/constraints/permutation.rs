@@ -89,7 +89,7 @@ impl<F: Field + PrimeField> ShuffleChip<F> {
 }
 
 /// Define the permutatioin circuit for the project
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct PermutationCircuit<F: Field + PrimeField> {
     // input_idx: an array of indexes of the unpermuted array
     input_idx: Vec<Value<F>>,
@@ -311,18 +311,22 @@ where
 // Generate random seeds for compression of trace records
 fn generate_seeds<F: Field + PrimeField>(mut rng: ThreadRng) -> [F; 5] {
     // Generate seed
-    let seeds = [F::ZERO; 5];
-    for _seed in seeds {
-        let _seed = F::from(rng.gen_range(0..u64::MAX));
+    let mut seeds = [F::ZERO; 5];
+    for i in 0..5 {
+        seeds[i] = F::from(rng.gen_range(0..u64::MAX));
     }
     seeds
 }
 
 /// Generate an array of successive powers of group generators as indexes
 pub fn successive_powers<F: Field + PrimeField>(size: u64) -> Vec<F> {
-    (1..size)
-        .map(|i| F::from(i) * F::MULTIPLICATIVE_GENERATOR)
-        .collect()
+    let mut curr_power = F::from(1);
+    let mut result = vec![];
+    for _ in 0..size {
+        result.push(curr_power);
+        curr_power *= F::MULTIPLICATIVE_GENERATOR;
+    }
+    result
 }
 
 /// Use quicksort to sort the trace in order of ascending time_log
@@ -501,7 +505,7 @@ mod test {
         let mut shuffle_trace = trace_buffer.clone();
 
         // Tamper shuffle_trace
-        shuffle_trace[0].1 = random_trace_record::<B256, B256, 32, 32>();
+        shuffle_trace[1].1 = random_trace_record::<B256, B256, 32, 32>();
 
         let circuit = PermutationCircuit::<Fp>::new(input_trace, shuffle_trace);
 
