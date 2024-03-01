@@ -24,7 +24,7 @@ use halo2_proofs::{
     },
 };
 use halo2curves::CurveAffine;
-use rand::{rngs::ThreadRng, Rng};
+use rand::Rng;
 use rand_core::OsRng;
 extern crate alloc;
 use alloc::{vec, vec::Vec};
@@ -258,8 +258,9 @@ impl<F: Field + PrimeField> PermutationCircuit<F> {
             "Two input traces are not equal in length."
         );
 
-        let rng = rand::thread_rng();
-        let seeds = generate_seeds::<F>(rng);
+        let mut rng = rand::thread_rng();
+        let mut seeds = [0u64; 5];
+        rng.fill(&mut seeds);
 
         Self {
             input_idx: input_trace
@@ -293,29 +294,19 @@ where
     V: Base<T>,
 {
     /// Compress trace elements into a single field element Fp
-    pub fn compress<F: From<K> + From<V> + Field + PrimeField>(&mut self, seed: [F; 5]) -> F {
+    pub fn compress<F: From<K> + From<V> + Field + PrimeField>(&mut self, seed: [u64; 5]) -> F {
         let (time_log, stack_depth, instruction, address, value) = self.get_tuple();
         let instruction = match instruction {
             MemoryInstruction::Write => F::ONE,
             MemoryInstruction::Read => F::ZERO,
         };
         // Dot product between trace record and seed
-        F::from(time_log) * seed[0]
-            + F::from(stack_depth) * seed[1]
-            + instruction * seed[2]
-            + F::from(address) * seed[3]
-            + F::from(value) * seed[4]
+        F::from(time_log) * F::from(seed[0])
+            + F::from(stack_depth) * F::from(seed[1])
+            + instruction * F::from(seed[2])
+            + F::from(address) * F::from(seed[3])
+            + F::from(value) * F::from(seed[4])
     }
-}
-
-// Generate random seeds for compression of trace records
-fn generate_seeds<F: Field + PrimeField>(mut rng: ThreadRng) -> [F; 5] {
-    // Generate seed
-    let mut seeds = [F::ZERO; 5];
-    for i in 0..5 {
-        seeds[i] = F::from(rng.gen_range(0..u64::MAX));
-    }
-    seeds
 }
 
 /// Generate an array of successive powers of group generators as indexes
@@ -368,7 +359,7 @@ mod test {
 
     use crate::{
         base::{Base, B256},
-        constraints::permutation::{generate_seeds, PermutationCircuit, PermutationProver},
+        constraints::permutation::{PermutationCircuit, PermutationProver},
         machine::{AbstractTraceRecord, MemoryInstruction, TraceRecord},
     };
     use ff::Field;
@@ -480,14 +471,15 @@ mod test {
             MemoryInstruction::Read => Fp::ZERO,
         };
         // Generate a random seed of type [u64; 5]
-        let rng = rand::thread_rng();
-        let seeds = generate_seeds::<Fp>(rng.clone());
+        let mut rng = rand::thread_rng();
+        let mut seeds = [0u64; 5];
+        rng.fill(&mut seeds);
         // Dot product between the trace record and the seed.
-        let dot_product = Fp::from(time_log) * seeds[0]
-            + Fp::from(stack_depth) * seeds[1]
-            + instruction * seeds[2]
-            + Fp::from(address) * seeds[3]
-            + Fp::from(value) * seeds[4];
+        let dot_product = Fp::from(time_log) * Fp::from(seeds[0])
+            + Fp::from(stack_depth) * Fp::from(seeds[1])
+            + instruction * Fp::from(seeds[2])
+            + Fp::from(address) * Fp::from(seeds[3])
+            + Fp::from(value) * Fp::from(seeds[4]);
         assert_eq!(dot_product, record.compress(seeds));
     }
 

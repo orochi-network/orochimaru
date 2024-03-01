@@ -1,6 +1,6 @@
 use halo2curves::pasta::{EqAffine, Fp};
 use rbtree::RBTree;
-use std::{marker::PhantomData, println};
+use std::marker::PhantomData;
 use zkmemory::{
     base::{Base, B256},
     config::{AllocatedSection, Config, ConfigArgs, DefaultConfig},
