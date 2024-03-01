@@ -227,7 +227,7 @@ where
             memory: RBTree::new(),
             memory_allocated: config.memory,
             word_size: config.word_size,
-            time_log: 1,
+            time_log: 0,
 
             // Stack
             stack_allocated: config.stack,
