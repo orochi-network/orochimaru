@@ -1,6 +1,9 @@
+use crate::{
+    base::Base,
+    machine::{MemoryInstruction, TraceRecord},
+};
 use core::marker::PhantomData;
-use ff::PrimeField;
-use group::ff::{Field, FromUniformBytes};
+use group::ff::{Field, FromUniformBytes, PrimeField};
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{
@@ -24,10 +27,6 @@ use halo2curves::CurveAffine;
 use rand::{rngs::ThreadRng, Rng};
 use rand_core::OsRng;
 extern crate alloc;
-use crate::{
-    base::Base,
-    machine::{MemoryInstruction, TraceRecord},
-};
 use alloc::{vec, vec::Vec};
 
 /// Define a chip struct that implements our instructions.
@@ -180,7 +179,7 @@ impl<F: Field + PrimeField> Circuit<F> for PermutationCircuit<F> {
     }
 }
 
-/// Implement a non-mock prover proving the permutation circuit using the Inner-Product Argument.
+/// Implement a prover proving the permutation circuit using the Inner-Product Argument.
 pub struct PermutationProver<C: CurveAffine>
 where
     C::Scalar: FromUniformBytes<64>,
@@ -247,13 +246,21 @@ impl<F: Field + PrimeField> PermutationCircuit<F> {
     pub fn new<K, V, const S: usize, const T: usize>(
         input_trace: Vec<(F, TraceRecord<K, V, S, T>)>,
         shuffle_trace: Vec<(F, TraceRecord<K, V, S, T>)>,
-        seeds: [F; 5],
     ) -> Self
     where
         K: Base<S>,
         V: Base<T>,
         F: Field + PrimeField + From<K> + From<V>,
     {
+        assert_eq!(
+            input_trace.len(),
+            shuffle_trace.len(),
+            "Two input traces are not equal in length."
+        );
+
+        let rng = rand::thread_rng();
+        let seeds = generate_seeds::<F>(rng);
+
         Self {
             input_idx: input_trace
                 .clone()
@@ -301,8 +308,8 @@ where
     }
 }
 
-/// Generate random seeds for compression of trace records
-pub fn generate_seeds<F: Field + PrimeField>(mut rng: ThreadRng) -> [F; 5] {
+// Generate random seeds for compression of trace records
+fn generate_seeds<F: Field + PrimeField>(mut rng: ThreadRng) -> [F; 5] {
     // Generate seed
     let seeds = [F::ZERO; 5];
     for _seed in seeds {
@@ -336,6 +343,7 @@ where
     let mut right = vec![];
 
     for item in trace {
+        // Compare the time_log values
         if item.1.get_tuple().0 <= pivot.1.get_tuple().0 {
             left.push(item);
         } else {
@@ -361,11 +369,11 @@ mod test {
     };
     use ff::Field;
     use group::ff::PrimeField;
-    use halo2_proofs::{circuit::Value, dev::MockProver};
+    use halo2_proofs::circuit::Value;
     use halo2curves::pasta::{EqAffine, Fp};
     use rand::{seq::SliceRandom, Rng};
     extern crate alloc;
-    use alloc::{vec, vec::Vec};
+    use alloc::vec::Vec;
 
     use super::successive_powers;
 
@@ -379,7 +387,7 @@ mod test {
     >(
         size: u64,
     ) -> Vec<(F, TraceRecord<K, V, S, T>)> {
-        successive_powers::<F>(size as u64)
+        successive_powers::<F>(size)
             .into_iter()
             .map(|i| (i, random_trace_record::<K, V, S, T>()))
             .collect()
@@ -404,9 +412,8 @@ mod test {
         )
     }
 
-    /// Test the circuit function with a simple array
-    /// Use Halo2's MockProver to prove the circuit
-    /// Currently using a randomly generated array
+    /// Test the circuit function with a randomly generated array
+    /// Use Halo2's Prover IPA
     #[test]
     fn test_functionality() {
         const K: u32 = 8;
@@ -423,11 +430,7 @@ mod test {
         // Random shuffle
         arr.shuffle(&mut rng);
 
-        let shuffle_idx: Vec<Value<Fp>> = arr
-            .iter()
-            .map(|&(x, _)| Value::known(Fp::from(x)))
-            .collect();
-
+        let shuffle_idx: Vec<Value<Fp>> = arr.iter().map(|&(x, _)| Value::known(x)).collect();
         let shuffle: Vec<Value<Fp>> = arr.iter().map(|&(_, x)| Value::known(x)).collect();
 
         let circuit = PermutationCircuit {
@@ -436,10 +439,6 @@ mod test {
             shuffle_idx,
             shuffle,
         };
-
-        // Test with mock prover
-        let prover = MockProver::run(K, &circuit, vec![]).unwrap();
-        prover.assert_satisfied();
 
         // Test with IPA prover
         let mut ipa_prover = PermutationProver::<EqAffine>::new(K, circuit, true);
@@ -453,36 +452,14 @@ mod test {
         const K: u32 = 6;
         // Number of trace elements in a trace, min = 2^K.
         let trace_size = 50;
-
         let mut rng = rand::thread_rng();
-        let mut trace = random_trace::<B256, B256, 32, 32, Fp>(trace_size);
+        let mut trace_buffer = random_trace::<B256, B256, 32, 32, Fp>(trace_size);
 
-        // Generate seed
-        let seeds = generate_seeds::<Fp>(rng.clone());
+        let input_trace = trace_buffer.clone();
+        trace_buffer.shuffle(&mut rng);
+        let shuffle_trace = trace_buffer.clone();
 
-        // Get the index and the value before shuffle
-        let input_idx: Vec<Value<Fp>> = trace.iter().map(|&(x, _)| Value::known(x)).collect();
-        let input: Vec<Fp> = trace.iter().map(|&(_, mut x)| x.compress(seeds)).collect();
-
-        trace.shuffle(&mut rng);
-
-        // Get the index and the value after shuffle
-        let shuffle_idx: Vec<Value<Fp>> = trace.iter().map(|&(x, _)| Value::known(x)).collect();
-        let shuffle: Vec<Value<Fp>> = trace
-            .iter()
-            .map(|&(_, mut x)| Value::known(x.compress(seeds)))
-            .collect();
-
-        let circuit = PermutationCircuit {
-            input_idx,
-            input,
-            shuffle_idx,
-            shuffle,
-        };
-
-        // Test with mock prover
-        let prover = MockProver::run(K, &circuit, vec![]).unwrap();
-        prover.assert_satisfied();
+        let circuit = PermutationCircuit::<Fp>::new(input_trace, shuffle_trace);
 
         // Test with IPA prover
         let mut ipa_prover = PermutationProver::<EqAffine>::new(K, circuit, true);
@@ -514,40 +491,19 @@ mod test {
     #[should_panic]
     fn check_wrong_permutation() {
         const K: u32 = 6;
+        // Number of trace elements in a trace, min = 2^K.
         let trace_size = 50;
-
         let mut rng = rand::thread_rng();
-        let mut trace = random_trace::<B256, B256, 32, 32, Fp>(trace_size);
+        let mut trace_buffer = random_trace::<B256, B256, 32, 32, Fp>(trace_size);
 
-        // Generate seed
-        let seeds = generate_seeds::<Fp>(rng.clone());
+        let input_trace = trace_buffer.clone();
+        trace_buffer.shuffle(&mut rng);
+        let mut shuffle_trace = trace_buffer.clone();
 
-        // Get the index and the value before shuffle
-        let input_idx: Vec<Value<Fp>> = trace.iter().map(|&(x, _)| Value::known(x)).collect();
-        let input: Vec<Fp> = trace.iter().map(|&(_, mut x)| x.compress(seeds)).collect();
+        // Tamper shuffle_trace
+        shuffle_trace[0].1 = random_trace_record::<B256, B256, 32, 32>();
 
-        trace.shuffle(&mut rng);
-
-        // Get the index and the value after shuffle
-        let shuffle_idx: Vec<Value<Fp>> = trace.iter().map(|&(x, _)| Value::known(x)).collect();
-        let mut shuffle: Vec<Value<Fp>> = trace
-            .iter()
-            .map(|&(_, mut x)| Value::known(x.compress(seeds)))
-            .collect();
-
-        // Tamper shuffle
-        shuffle[0] = Value::known(Fp::from(rng.gen_range(0..u64::MAX)));
-
-        let circuit = PermutationCircuit {
-            input_idx,
-            input,
-            shuffle_idx,
-            shuffle,
-        };
-
-        // Test with mock prover
-        let prover = MockProver::run(K, &circuit, vec![]).unwrap();
-        prover.assert_satisfied();
+        let circuit = PermutationCircuit::<Fp>::new(input_trace, shuffle_trace);
 
         // Test with IPA prover
         let mut ipa_prover = PermutationProver::<EqAffine>::new(K, circuit, true);

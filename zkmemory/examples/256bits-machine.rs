@@ -5,8 +5,7 @@ use zkmemory::{
     base::{Base, B256},
     config::{AllocatedSection, Config, ConfigArgs, DefaultConfig},
     constraints::permutation::{
-        generate_seeds, sort_chronologically, successive_powers, PermutationCircuit,
-        PermutationProver,
+        sort_chronologically, successive_powers, PermutationCircuit, PermutationProver,
     },
     error::Error,
     impl_register_machine, impl_stack_machine, impl_state_machine,
@@ -362,11 +361,6 @@ fn main() {
     }
 
     const K: u32 = 6;
-    let rng = rand::thread_rng();
-
-    // Generate seed
-    let seeds = generate_seeds::<Fp>(rng.clone());
-
     // Create a tuple vector of (index, trace_element)
     let input_trace: Vec<(Fp, TraceRecord<B256, B256, 32, 32>)> =
         successive_powers::<Fp>(machine.trace().len() as u64)
@@ -378,7 +372,7 @@ fn main() {
     let sorted_trace = sort_chronologically(input_trace.clone());
 
     // Form the circuit
-    let circuit = PermutationCircuit::new(input_trace, sorted_trace, seeds);
+    let circuit = PermutationCircuit::new(input_trace, sorted_trace);
 
     // Test with IPA prover
     let mut ipa_prover = PermutationProver::<EqAffine>::new(K, circuit, true);
