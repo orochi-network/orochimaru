@@ -1,9 +1,12 @@
 extern crate alloc;
+extern crate std;
+
 use alloc::vec::Vec;
 use alloc::{format, vec};
 use ff::{Field, PrimeField};
+use halo2_proofs::circuit::Region;
 use halo2_proofs::{
-    circuit::{Layouter, Value},
+    circuit::Value,
     plonk::{Column, ConstraintSystem, Error, Expression, Fixed, VirtualCells},
     poly::Rotation,
 };
@@ -24,21 +27,15 @@ impl<const N: usize> UTable<N> {
     }
 
     /// Load the `UTable` for range check
-    pub fn load<F: PrimeField>(&self, layouter: &mut impl Layouter<F>) -> Result<(), Error> {
-        layouter.assign_region(
-            || format!("assign u{} fixed column", 8),
-            |mut region| {
-                for i in 0..N {
-                    region.assign_fixed(
-                        || format!("assign {} in fixed column of size {}", i, N),
-                        self.col,
-                        i,
-                        || Value::known(F::from(i as u64)),
-                    )?;
-                }
-                Ok(())
-            },
-        )?;
+    pub fn load<F: Field + PrimeField>(&self, region: &mut Region<'_, F>) -> Result<(), Error> {
+        for i in 0..N {
+            region.assign_fixed(
+                || format!("assign {} in fixed column of size {}", i, N),
+                self.col,
+                i,
+                || Value::known(F::from(i as u64)),
+            )?;
+        }
         Ok(())
     }
 

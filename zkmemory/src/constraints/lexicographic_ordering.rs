@@ -4,13 +4,15 @@ use alloc::{format, vec};
 use core::{iter::once, marker::PhantomData};
 use ff::{Field, PrimeField};
 use halo2_proofs::circuit::Value;
-use halo2_proofs::plonk::Fixed;
+use halo2_proofs::plonk::{Fixed, Selector};
 use halo2_proofs::{
     circuit::{Layouter, Region, SimpleFloorPlanner},
     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Expression, VirtualCells},
     poly::Rotation,
 };
 use rand::thread_rng;
+extern crate std;
+use std::println;
 
 use super::gadgets::UTable;
 
@@ -26,6 +28,10 @@ pub struct LexicographicConfig<F: Field + PrimeField> {
     instruction: Column<Advice>,
     value: [Column<Advice>; 32],
     selector: Column<Fixed>,
+    selector_zero: Selector,
+    u64_table: UTable<64>,
+    u40_table: UTable<40>,
+    u2_table: UTable<2>,
     _marker: PhantomData<F>,
 }
 
@@ -41,6 +47,7 @@ impl<F: Field + PrimeField> LexicographicConfig<F> {
         value: [Column<Advice>; 32],
         u64_table: UTable<64>,
         u40_table: UTable<40>,
+        u2_table: UTable<2>,
         alpha_power: Vec<Expression<F>>,
     ) -> Self {
         let one = Expression::Constant(F::ONE);
@@ -48,12 +55,27 @@ impl<F: Field + PrimeField> LexicographicConfig<F> {
         let difference = meta.advice_column();
         let difference_inverse = meta.advice_column();
         let first_difference_limb = meta.advice_column();
+        let diff_addr_equal_zero = meta.advice_column();
+        let first_difference_limb_equal = [meta.advice_column(); 40];
         let selector = meta.fixed_column();
+        let selector_zero = meta.selector();
 
         let mut limb_vector = vec![0 as u8];
         for i in 1..40 {
             limb_vector.push(i);
         }
+
+        // first instruction
+        // this ONLY applies to the first trace record
+        meta.create_gate(
+            "the first time an address is accessed, it instruction must be write",
+            |meta| {
+                let cur =
+                    Queries::new(meta, address, time_log, instruction, value, Rotation::cur());
+                let selector_zero = meta.query_selector(selector_zero);
+                vec![selector_zero * (cur.instruction - one.clone())]
+            },
+        );
 
         // inversion gate
         meta.create_gate("difference is non-zero", |meta| {
@@ -91,33 +113,6 @@ impl<F: Field + PrimeField> LexicographicConfig<F> {
             constraints
         });
 
-        // if the current trace is read, then its value must be equal to the previous trace value
-        meta.create_gate("if the current trace is read, then its value must be equal to the previous trace value", |meta| {
-            let selector = meta.query_fixed(selector, Rotation::cur());
-            let cur = Queries::new(
-                meta,
-                address,
-                time_log,
-                instruction,
-                value,
-                Rotation::cur());
-            let prev = Queries::new(
-                meta,
-                address,
-                time_log,
-                instruction,
-                value,
-                Rotation::prev());
-            let mut partial_sum = Expression::Constant(F::ZERO);
-            for ((cur_value, prev_value), power_of_randomness) in
-                cur.value.iter().zip(prev.value.iter()).zip(alpha_power)
-            {
-                partial_sum =
-                    partial_sum + power_of_randomness * (cur_value.clone() - prev_value.clone());
-            }
-            vec![selector * (cur.instruction - one.clone()) * partial_sum]
-        });
-
         // difference equals difference of limbs at index
         meta.create_gate("difference equals difference of limbs at index", |meta| {
             let selector = meta.query_fixed(selector, Rotation::cur());
@@ -150,11 +145,79 @@ impl<F: Field + PrimeField> LexicographicConfig<F> {
             constraints
         });
 
-        // instruction must be equal to 0 or 1
-        meta.create_gate("instruction must be equal to 0 or 1", |meta| {
+        // if the current trace's instruction read and it address is the same as
+        // the previous trace, then its value must be equal to the previous trace value
+        meta.create_gate("if the current trace is read, then its value must be equal to the previous trace value", |meta| {
             let selector = meta.query_fixed(selector, Rotation::cur());
-            let cur = Queries::new(meta, address, time_log, instruction, value, Rotation::cur());
-            vec![selector * cur.instruction.clone() * (cur.instruction.clone() - one)]
+            let cur = Queries::new(
+                meta,
+                address,
+                time_log,
+                instruction,
+                value,
+                Rotation::cur());
+            let prev = Queries::new(
+                meta,
+                address,
+                time_log,
+                instruction,
+                value,
+                Rotation::prev());
+            let mut partial_sum = Expression::Constant(F::ZERO);
+           let mut partial_sum_2 = Expression::Constant(F::ZERO);
+            for ((cur_value, prev_value), power_of_randomness) in
+                cur.value.iter().zip(prev.value.iter()).zip(alpha_power.clone())
+            {
+                partial_sum =
+                    partial_sum + power_of_randomness * (cur_value.clone() - prev_value.clone());
+            }
+           for ((cur_addr, prev_addr), power_of_randomness) in
+                cur.address.iter().zip(prev.address.iter()).zip(alpha_power.clone())
+            {
+                partial_sum_2 =
+                partial_sum_2 + power_of_randomness * (cur_addr.clone() - prev_addr.clone());
+            }
+            vec![selector * ((cur.instruction - one.clone()) * partial_sum)*equal(partial_sum_2,Expression::Constant(F::ZERO))]
+        });
+
+        // the first time an address is accessed, it instruction must be write
+        // this apply for non-first
+        meta.create_gate(
+            "the first time an address is accessed, it instruction must be write",
+            |meta| {
+                let selector = meta.query_fixed(selector, Rotation::cur());
+                let cur =
+                    Queries::new(meta, address, time_log, instruction, value, Rotation::cur());
+                let prev = Queries::new(
+                    meta,
+                    address,
+                    time_log,
+                    instruction,
+                    value,
+                    Rotation::prev(),
+                );
+                let mut partial_sum = Expression::Constant(F::ZERO);
+                for ((cur_addr, prev_addr), power_of_randomness) in cur
+                    .address
+                    .iter()
+                    .zip(prev.address.iter())
+                    .zip(alpha_power.clone())
+                {
+                    partial_sum =
+                        partial_sum + power_of_randomness * (cur_addr.clone() - prev_addr.clone());
+                }
+                vec![
+                    selector
+                        * (cur.instruction - one.clone())
+                        * partial_sum.clone()
+                        * (one - equal(partial_sum, Expression::Constant(F::ZERO))),
+                ]
+            },
+        );
+
+        // lookup gate for instruction. It must be in [0..1]
+        u2_table.range_check(meta, "instruction must be in 0..1", |meta| {
+            meta.query_advice(instruction, Rotation::cur())
         });
 
         // lookup gate for difference. It must be in [0..64]
@@ -194,14 +257,18 @@ impl<F: Field + PrimeField> LexicographicConfig<F> {
             instruction,
             value,
             selector,
+            selector_zero,
+            u64_table,
+            u40_table,
+            u2_table,
             _marker: PhantomData,
         }
     }
 }
 // return 1 if lhs=rhs and 0 otherwise
+// TODO: FIX THIS FUNCTION
 fn equal<F: Field + PrimeField>(lhs: Expression<F>, rhs: Expression<F>) -> Expression<F> {
-    let diff = lhs - rhs;
-    if diff == Expression::Constant(F::ZERO) {
+    if lhs == rhs {
         return Expression::Constant(F::ONE);
     }
     Expression::Constant(F::ZERO)
@@ -244,19 +311,21 @@ impl<F: Field + PrimeField> Circuit<F> for LexicographicCircuit<F> {
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
         let rng = thread_rng();
 
-        let alpha = Expression::Constant(F::random(rng));
-        let mut tmp = Expression::Constant(F::ONE);
         let address = [meta.advice_column(); 32];
         let time_log = [meta.advice_column(); 8];
         let instruction = meta.advice_column();
         let value = [meta.advice_column(); 32];
         let u64_table = UTable::<64>::construct(meta);
         let u40_table = UTable::<40>::construct(meta);
+        let u2_table = UTable::<2>::construct(meta);
+        let alpha = Expression::Constant(F::random(rng));
+        let mut tmp = Expression::Constant(F::ONE);
         let mut alpha_power: Vec<Expression<F>> = vec![tmp.clone()];
         for _ in 0..40 {
             tmp = tmp * alpha.clone();
             alpha_power.push(tmp.clone());
         }
+
         LexicographicConfig::configure(
             meta,
             address,
@@ -265,6 +334,7 @@ impl<F: Field + PrimeField> Circuit<F> for LexicographicCircuit<F> {
             value,
             u64_table,
             u40_table,
+            u2_table,
             alpha_power,
         )
     }
@@ -275,15 +345,18 @@ impl<F: Field + PrimeField> Circuit<F> for LexicographicCircuit<F> {
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        let _ = layouter.assign_region(
+        layouter.assign_region(
             || "lexicographic_ordering",
             |mut region| {
                 for i in 0..self.sorted_trace_record.len() {
                     let _ = self.assign(&mut region, config, i);
                 }
+                config.u40_table.load(&mut region)?;
+                config.u64_table.load(&mut region)?;
+                config.u2_table.load(&mut region)?;
                 Ok(())
             },
-        );
+        )?;
         Ok(())
     }
 }
@@ -300,6 +373,7 @@ impl<F: Field + PrimeField> LexicographicCircuit<F> {
             let (cur_address, cur_time_log, cur_instruction, cur_value) =
                 self.sorted_trace_record[offset].get_tuple();
 
+            config.selector_zero.enable(region, offset)?;
             // assign the address witness
             for i in 0..32 {
                 region.assign_advice(
@@ -362,6 +436,7 @@ impl<F: Field + PrimeField> LexicographicCircuit<F> {
                 find_result.expect("two trace records cannot be the same")
             };
             let difference = *cur_limb - *prev_limb;
+            let index = F::from(*index as u64);
 
             // assign the selector to be one at the current row
             region.assign_fixed(
@@ -392,7 +467,7 @@ impl<F: Field + PrimeField> LexicographicCircuit<F> {
                 || format!("first_difference_limb{}", offset),
                 config.first_difference_limb,
                 offset,
-                || Value::known(F::from(*index as u64)),
+                || Value::known(index),
             )?;
 
             // assign the address witness
@@ -497,23 +572,29 @@ impl<F: Field + PrimeField> ProvableTraceRecord<F> {
 
 #[cfg(test)]
 mod test {
+    use core::marker::PhantomData;
+
+    use crate::constraints::lexicographic_ordering::LexicographicCircuit;
+
+    use super::ProvableTraceRecord;
     use super::*;
     use halo2_proofs::dev::MockProver;
     use halo2_proofs::halo2curves::bn256::Fr as Fp;
     #[test]
     fn unit_test() {
         let trace0 = ProvableTraceRecord {
-            address: [Fp::from(0); 32],
+            address: [Fp::from(3); 32],
             time_log: [Fp::from(0); 8],
             instruction: Fp::from(1),
             value: [Fp::from(0); 32],
         };
         let trace1 = ProvableTraceRecord {
-            address: [Fp::from(1); 32],
+            address: [Fp::from(4); 32],
             time_log: [Fp::from(1); 8],
-            instruction: Fp::from(0),
-            value: [Fp::from(0); 32],
+            instruction: Fp::from(1),
+            value: [Fp::from(21); 32],
         };
+
         let trace = vec![trace0, trace1];
         let circuit = LexicographicCircuit {
             sorted_trace_record: trace,
@@ -521,8 +602,7 @@ mod test {
         };
         // the number of rows cannot exceed 2^k
         let k = 7;
-        let res = Fp::from(0);
-        let prover = MockProver::run(k, &circuit, vec![vec![res]]).unwrap();
+        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         assert_eq!(prover.verify(), Ok(()));
     }
 }
