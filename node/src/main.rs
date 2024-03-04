@@ -290,6 +290,37 @@ async fn orand(
                         "Access denied, you do not have ability to add new receiver",
                     ))
                 }
+                JSONRPCMethod::AdminGetUser(username) => {
+                    if authorized_jwt
+                        .unwrap_or_default()
+                        .user
+                        .eq(ORAND_KEYRING_NAME)
+                    {
+                        match keyring
+                            .find_by_name(username.clone())
+                            .await
+                            .expect("Unable to query user from database")
+                        {
+                            Some(record) => {
+                                return QuickResponse::res_json(&json!({
+                                    "username": record.username,
+                                    "hmac_secret": record.hmac_secret,
+                                    "created_date": record.created_date
+                                }));
+                            }
+                            _ => {
+                                return QuickResponse::err(node::Error(
+                                    "ACCESS_DENIED",
+                                    "User may not exist or database error",
+                                ))
+                            }
+                        }
+                    }
+                    QuickResponse::err(node::Error(
+                        "ACCESS_DENIED",
+                        "Access denied, you do not have ability to add new receiver",
+                    ))
+                }
                 _ => QuickResponse::err(node::Error(
                     "NOT_IMPLEMENTED",
                     "It is not working in this way",

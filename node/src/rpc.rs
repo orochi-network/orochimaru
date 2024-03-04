@@ -20,6 +20,8 @@ pub enum JSONRPCMethod {
     OrandNewPrivateEpoch(i64, String),
     /// Get public key (username)
     OrandGetPublicKey(String),
+    // Get user (username)
+    AdminGetUser(String),
     /// Create new user (username)
     AdminAddUser(String),
     /// Create new receiver (username, receiver address, network)
@@ -82,6 +84,7 @@ impl JSONRPCMethod {
             "orand_getPublicKey" => {
                 Self::OrandGetPublicKey(decode_name(json_rpc.params[0].clone()))
             }
+            "admin_getUser" => Self::AdminGetUser(decode_name(json_rpc.params[0].clone())),
             "admin_addUser" => Self::AdminAddUser(decode_name(json_rpc.params[0].clone())),
             "admin_addReceiver" => Self::AdminAddReceiver(
                 decode_name(json_rpc.params[0].clone()),
