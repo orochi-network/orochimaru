@@ -366,12 +366,12 @@ fn main() {
             .zip(machine.trace())
             .collect();
 
-    let input_trace = trace_idx_vec;
+    let input_trace = trace_idx_vec.clone();
 
     // Sort the trace by time_log
     trace_idx_vec.sort_by(|a, b| a.1.get_tuple().0.cmp(&b.1.get_tuple().0));
 
-    let shuffled_trace = trace_idx_vec;
+    let shuffled_trace = trace_idx_vec.clone();
 
     // Form the circuit
     let circuit = PermutationCircuit::new(input_trace, shuffled_trace);
