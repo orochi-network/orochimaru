@@ -27,3 +27,4 @@ cargo-llvm-cov = { workspace = true }
 ethnum = { workspace = true }
 hex = { workspace = true }
 rbtree = { workspace = true }
+itertools = "0.12.1"
