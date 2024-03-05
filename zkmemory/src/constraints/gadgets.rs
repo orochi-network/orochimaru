@@ -17,19 +17,19 @@ use itertools::Itertools;
 
 /// Lookup table for max n bits range check
 #[derive(Clone, Copy, Debug)]
-pub struct UTable<const N: usize> {
+pub struct Table<const N: usize> {
     col: Column<Fixed>,
 }
 
-impl<const N: usize> UTable<N> {
-    /// Construct the UTable.
+impl<const N: usize> Table<N> {
+    /// Construct the Table.
     pub fn construct<F: Field + PrimeField>(meta: &mut ConstraintSystem<F>) -> Self {
         Self {
             col: meta.fixed_column(),
         }
     }
 
-    /// Load the `UTable` for range check
+    /// Load the `Table` for range check
     pub fn load<F: Field + PrimeField>(&self, region: &mut Region<'_, F>) -> Result<(), Error> {
         for i in 0..N {
             region.assign_fixed(

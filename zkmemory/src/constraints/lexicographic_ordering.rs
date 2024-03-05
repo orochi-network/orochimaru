@@ -115,7 +115,7 @@ impl<F: Field + PrimeField> GreaterThanConfigure<F> {
         });
 
         // first_difference_limb is in [0..39]
-        lookup_tables.u40_table.range_check(
+        lookup_tables.size40_table.range_check(
             meta,
             "first_difference_limb must be in 0..39",
             |meta| {
@@ -133,7 +133,7 @@ impl<F: Field + PrimeField> GreaterThanConfigure<F> {
 
         // lookup gate for difference. It must be in [0..64]
         lookup_tables
-            .u64_table
+            .size64_table
             .range_check(meta, "difference fits in 0..64", |meta| {
                 meta.query_advice(difference, Rotation::cur())
             });
@@ -149,9 +149,9 @@ impl<F: Field + PrimeField> GreaterThanConfigure<F> {
 /// The lookup tables
 #[derive(Clone, Copy, Debug)]
 pub struct LookUpTables {
-    u64_table: UTable<64>,
-    u40_table: UTable<40>,
-    u2_table: UTable<2>,
+    size64_table: Table<64>,
+    size40_table: Table<40>,
+    size2_table: Table<2>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -238,7 +238,7 @@ impl<F: Field + PrimeField> SortedMemoryConfig<F> {
 
         // instruction[i]=1 for all i
         lookup_tables
-            .u2_table
+            .size2_table
             .range_check(meta, "instruction must be in 0..1", |meta| {
                 meta.query_advice(trace_record.instruction, Rotation::cur())
             });
@@ -246,12 +246,12 @@ impl<F: Field + PrimeField> SortedMemoryConfig<F> {
         // each limb of address and value must be in [0..64]
         for (addr, val) in trace_record.address.iter().zip(&trace_record.value) {
             lookup_tables
-                .u64_table
+                .size64_table
                 .range_check(meta, "limb of address fits in 0..64", |meta| {
                     meta.query_advice(*addr, Rotation::cur())
                 });
             lookup_tables
-                .u64_table
+                .size64_table
                 .range_check(meta, "limb of value fits in 0..64", |meta| {
                     meta.query_advice(*val, Rotation::cur())
                 });
@@ -259,11 +259,11 @@ impl<F: Field + PrimeField> SortedMemoryConfig<F> {
 
         // each limb of time_log must be in [0..64]
         for i in trace_record.time_log {
-            lookup_tables
-                .u64_table
-                .range_check(meta, "limb of time log fits in 0..64", |meta| {
-                    meta.query_advice(i, Rotation::cur())
-                });
+            lookup_tables.size64_table.range_check(
+                meta,
+                "limb of time log fits in 0..64",
+                |meta| meta.query_advice(i, Rotation::cur()),
+            );
         }
 
         // return the config after assigning the gates
@@ -344,10 +344,10 @@ impl<F: Field + PrimeField> Queries<F> {
 }
 
 struct SortedTraceRecord<F: Field + PrimeField> {
-    address: [F; 32], //64 bits
-    time_log: [F; 8], //64 bits
+    address: [F; 32], //256 bits
+    time_log: [F; 8], //256 bits
     instruction: F,   // 0 or 1
-    value: [F; 32],   //64 bit
+    value: [F; 32],   //256 bit
 }
 
 impl<F: Field + PrimeField> SortedTraceRecord<F> {
@@ -379,9 +379,9 @@ impl<F: Field + PrimeField> Circuit<F> for SortedMemoryCircuit<F> {
 
         // lookup tables
         let lookup_tables = LookUpTables {
-            u64_table: UTable::<64>::construct(meta),
-            u40_table: UTable::<40>::construct(meta),
-            u2_table: UTable::<2>::construct(meta),
+            size64_table: Table::<64>::construct(meta),
+            size40_table: Table::<40>::construct(meta),
+            size2_table: Table::<2>::construct(meta),
         };
         // the random challenges
         let alpha = Expression::Constant(F::random(rng));
@@ -407,9 +407,9 @@ impl<F: Field + PrimeField> Circuit<F> for SortedMemoryCircuit<F> {
                 for i in 0..self.sorted_trace_record.len() {
                     self.assign(&mut region, config, i)?;
                 }
-                config.lookup_tables.u40_table.load(&mut region)?;
-                config.lookup_tables.u64_table.load(&mut region)?;
-                config.lookup_tables.u2_table.load(&mut region)?;
+                config.lookup_tables.size40_table.load(&mut region)?;
+                config.lookup_tables.size64_table.load(&mut region)?;
+                config.lookup_tables.size2_table.load(&mut region)?;
                 Ok(())
             },
         )?;
