@@ -56,7 +56,7 @@ impl<F: Field + PrimeField> GreaterThanConfigure<F> {
         let difference_inverse = meta.advice_column();
         let first_difference_limb = BinaryConfigure::<F, 6>::configure(meta, selector);
         let one = Expression::Constant(F::ONE);
-        let mut limb_vector = vec![0 as u8];
+        let mut limb_vector = vec![0u8];
         for i in 1..40 {
             limb_vector.push(i);
         }
@@ -90,7 +90,7 @@ impl<F: Field + PrimeField> GreaterThanConfigure<F> {
                 constraints.push(
                     selector.clone()
                         * rlc_expression
-                        * equal_value(first_difference_limb.clone(), *i as u8),
+                        * equal_value(first_difference_limb.clone(), *i),
                 );
             }
             constraints
@@ -120,7 +120,7 @@ impl<F: Field + PrimeField> GreaterThanConfigure<F> {
             {
                 constraints.push(
                     selector.clone()
-                        * equal_value(first_difference_limb.clone(), *i as u8)
+                        * equal_value(first_difference_limb.clone(), *i)
                         * (difference.clone() - cur_limb.clone() + prev_limb.clone()),
                 )
             }
@@ -134,8 +134,8 @@ impl<F: Field + PrimeField> GreaterThanConfigure<F> {
                 .map(|tmp| meta.query_advice(tmp, Rotation::cur()));
             let val = first_difference_limb
                 .iter()
-                .fold(Expression::Constant(F::from(0 as u64)), |result, bit| {
-                    bit.clone() + result * Expression::Constant(F::from(2 as u64))
+                .fold(Expression::Constant(F::from(0u64)), |result, bit| {
+                    bit.clone() + result * Expression::Constant(F::from(2u64))
                 });
             val
         });
@@ -211,7 +211,7 @@ impl<F: Field + PrimeField> SortedMemoryConfig<F> {
             selector,
         );
 
-        let mut limb_vector = vec![0 as u8];
+        let mut limb_vector = vec![0u8];
         for i in 1..40 {
             limb_vector.push(i);
         }
@@ -285,9 +285,9 @@ impl<F: Field + PrimeField> SortedMemoryConfig<F> {
         }
 
         // each limb of time_log must be in [0..64]
-        for i in 0..8 {
+        for i in time_log {
             u64_table.range_check(meta, "limb of time log fits in 0..64", |meta| {
-                meta.query_advice(time_log[i], Rotation::cur())
+                meta.query_advice(i, Rotation::cur())
             });
         }
 
@@ -311,10 +311,10 @@ impl<F: Field + PrimeField> SortedMemoryConfig<F> {
 
 fn limbs_to_expression<F: Field + PrimeField>(limb: [Expression<F>; 32]) -> Expression<F> {
     let mut sum = Expression::Constant(F::ZERO);
-    let mut tmp = Expression::Constant(F::from(256 as u64));
+    let mut tmp = Expression::Constant(F::from(256u64));
     for i in 0..32 {
         sum = sum + tmp.clone() * limb[31 - i].clone();
-        tmp = tmp * Expression::Constant(F::from(256 as u64));
+        tmp = tmp * Expression::Constant(F::from(256u64));
     }
     sum
 }
@@ -328,7 +328,7 @@ fn rlc_limb_differences<F: Field + PrimeField>(
 ) -> Vec<Expression<F>> {
     let mut result = vec![];
     let mut partial_sum = Expression::Constant(F::ZERO);
-    let alpha_power = once(Expression::Constant(F::ONE)).chain(alpha_power.into_iter());
+    let alpha_power = once(Expression::Constant(F::ONE)).chain(alpha_power);
     for ((cur_limb, prev_limb), power_of_randomness) in
         cur.be_limbs().iter().zip(&prev.be_limbs()).zip(alpha_power)
     {
@@ -514,21 +514,21 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
 
             config.selector_zero.enable(region, offset)?;
             // assign the address witness
-            for i in 0..32 {
+            for (i, &cur_addr) in cur_address.iter().enumerate() {
                 region.assign_advice(
                     || format!("address{}", offset),
                     config.address[i],
                     offset,
-                    || Value::known(cur_address[i]),
+                    || Value::known(cur_addr),
                 )?;
             }
             // assign the time_log witness
-            for i in 0..8 {
+            for (i, &cur_time) in cur_time_log.iter().enumerate() {
                 region.assign_advice(
                     || format!("time_log{}", offset),
                     config.time_log[i],
                     offset,
-                    || Value::known(cur_time_log[i]),
+                    || Value::known(cur_time),
                 )?;
             }
             // assign the instruction witness
@@ -539,12 +539,12 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
                 || Value::known(cur_instruction),
             )?;
             // assign the value witness
-            for i in 0..32 {
+            for (i, &cur_val) in cur_value.iter().enumerate() {
                 region.assign_advice(
                     || format!("value{}", offset),
                     config.value[i],
                     offset,
-                    || Value::known(cur_value[i]),
+                    || Value::known(cur_val),
                 )?;
             }
         }
@@ -557,7 +557,7 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
                 self.sorted_trace_record[offset - 1].get_tuple();
             let cur_be_limbs = self.trace_to_be_limbs(cur_time_log, cur_address);
             let prev_be_limbs = self.trace_to_be_limbs(prev_time_log, prev_address);
-            let mut limb_vector = vec![0 as u8];
+            let mut limb_vector = vec![0u8];
             for i in 1..40 {
                 limb_vector.push(i);
             }
@@ -596,22 +596,22 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
             )?;
 
             // assign the address witness
-            for i in 0..32 {
+            for (i, &cur_addr) in cur_address.iter().enumerate() {
                 region.assign_advice(
                     || format!("address{}", offset),
                     config.address[i],
                     offset,
-                    || Value::known(cur_address[i]),
+                    || Value::known(cur_addr),
                 )?;
             }
 
             // assign the time_log witness
-            for i in 0..8 {
+            for (i, &cur_time) in cur_time_log.iter().enumerate() {
                 region.assign_advice(
                     || format!("time_log{}", offset),
                     config.time_log[i],
                     offset,
-                    || Value::known(cur_time_log[i]),
+                    || Value::known(cur_time),
                 )?;
             }
 
@@ -624,12 +624,12 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
             )?;
 
             // assign the value witness
-            for i in 0..32 {
+            for (i, &cur_val) in cur_value.iter().enumerate() {
                 region.assign_advice(
                     || format!("value{}", offset),
                     config.value[i],
                     offset,
-                    || Value::known(cur_value[i]),
+                    || Value::known(cur_val),
                 )?;
             }
 
@@ -691,10 +691,10 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
 
     fn address_limb_to_field(&self, address: [F; 32]) -> F {
         let mut sum = F::ZERO;
-        let mut tmp = F::from(256 as u64);
+        let mut tmp = F::from(256u64);
         for i in 0..32 {
-            sum = sum + tmp.clone() * address[31 - i].clone();
-            tmp = tmp * F::from(256 as u64);
+            sum += tmp * address[31 - i];
+            tmp *= F::from(256u64);
         }
         sum
     }
