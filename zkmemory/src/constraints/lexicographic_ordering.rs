@@ -15,6 +15,27 @@ extern crate std;
 
 use super::gadgets::*;
 
+/// The witness table consisting of the elements of the trace records
+#[derive(Clone, Copy, Debug)]
+pub struct TraceRecordWitnessTable<F: Field + PrimeField> {
+    address: [Column<Advice>; 32],
+    time_log: [Column<Advice>; 8],
+    instruction: Column<Advice>,
+    value: [Column<Advice>; 32],
+    _marker: PhantomData<F>,
+}
+impl<F: Field + PrimeField> TraceRecordWitnessTable<F> {
+    fn new(meta: &mut ConstraintSystem<F>) -> Self {
+        TraceRecordWitnessTable {
+            address: [meta.advice_column(); 32],
+            time_log: [meta.advice_column(); 8],
+            instruction: meta.advice_column(),
+            value: [meta.advice_column(); 32],
+            _marker: PhantomData,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 /// check the lexicographic ordering of address||time
 pub struct GreaterThanConfigure<F: Field + PrimeField> {
@@ -27,10 +48,7 @@ impl<F: Field + PrimeField> GreaterThanConfigure<F> {
     /// Add the constraints for lexicographic ordering
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
-        address: [Column<Advice>; 32],
-        time_log: [Column<Advice>; 8],
-        instruction: Column<Advice>,
-        value: [Column<Advice>; 32],
+        trace_record: TraceRecordWitnessTable<F>,
         alpha_power: Vec<Expression<F>>,
         lookup_tables: LookUpTables,
         selector: Column<Fixed>,
@@ -58,15 +76,8 @@ impl<F: Field + PrimeField> GreaterThanConfigure<F> {
             let first_difference_limb = first_difference_limb
                 .bits
                 .map(|tmp| meta.query_advice(tmp, Rotation::cur()));
-            let cur = Queries::new(meta, address, time_log, instruction, value, Rotation::cur());
-            let prev = Queries::new(
-                meta,
-                address,
-                time_log,
-                instruction,
-                value,
-                Rotation::prev(),
-            );
+            let cur = Queries::new(meta, trace_record, Rotation::cur());
+            let prev = Queries::new(meta, trace_record, Rotation::prev());
             let rlc = rlc_limb_differences(cur, prev, alpha_power.clone());
             let mut constraints = vec![];
             for (i, rlc_expression) in limb_vector.iter().zip(rlc) {
@@ -82,15 +93,8 @@ impl<F: Field + PrimeField> GreaterThanConfigure<F> {
         // difference equals difference of limbs at index
         meta.create_gate("difference equals difference of limbs at index", |meta| {
             let selector = meta.query_fixed(selector, Rotation::cur());
-            let cur = Queries::new(meta, address, time_log, instruction, value, Rotation::cur());
-            let prev = Queries::new(
-                meta,
-                address,
-                time_log,
-                instruction,
-                value,
-                Rotation::prev(),
-            );
+            let cur = Queries::new(meta, trace_record, Rotation::cur());
+            let prev = Queries::new(meta, trace_record, Rotation::prev());
             let difference = meta.query_advice(difference, Rotation::cur());
             let first_difference_limb = first_difference_limb
                 .bits
@@ -154,10 +158,7 @@ pub struct LookUpTables {
 /// define the columns for the constraint
 pub struct SortedMemoryConfig<F: Field + PrimeField> {
     //  the fields of an execution trace
-    address: [Column<Advice>; 32],
-    time_log: [Column<Advice>; 8],
-    instruction: Column<Advice>,
-    value: [Column<Advice>; 32],
+    trace_record: TraceRecordWitnessTable<F>,
     // the difference between the current and the previous address
     addr_cur_prev: IsZeroConfigure<F>,
     // the config for checking the current address||time_log is bigger
@@ -178,10 +179,7 @@ pub struct SortedMemoryConfig<F: Field + PrimeField> {
 impl<F: Field + PrimeField> SortedMemoryConfig<F> {
     fn configure(
         meta: &mut ConstraintSystem<F>,
-        address: [Column<Advice>; 32],
-        time_log: [Column<Advice>; 8],
-        instruction: Column<Advice>,
-        value: [Column<Advice>; 32],
+        trace_record: TraceRecordWitnessTable<F>,
         lookup_tables: LookUpTables,
         alpha_power: Vec<Expression<F>>,
     ) -> Self {
@@ -194,10 +192,7 @@ impl<F: Field + PrimeField> SortedMemoryConfig<F> {
         // addr[i+1]>addr[i] OR addr[i+1]=addr[i] and time[i+1]>time[i]
         let greater_than = GreaterThanConfigure::<F>::configure(
             meta,
-            address,
-            time_log,
-            instruction,
-            value,
+            trace_record,
             alpha_power,
             lookup_tables,
             selector,
@@ -210,7 +205,7 @@ impl<F: Field + PrimeField> SortedMemoryConfig<F> {
 
         // instruction[0]=1
         meta.create_gate("instruction of the first access must be write", |meta| {
-            let cur = Queries::new(meta, address, time_log, instruction, value, Rotation::cur());
+            let cur = Queries::new(meta, trace_record, Rotation::cur());
             let selector_zero = meta.query_selector(selector_zero);
             vec![selector_zero * (cur.instruction - one.clone())]
         });
@@ -218,20 +213,8 @@ impl<F: Field + PrimeField> SortedMemoryConfig<F> {
         // (addr[i+1]-addr[i])*(instruction[i+1]-1)*(val[i+1]-val[i])=0
         meta.create_gate("if the current trace is read, then its value must be equal to the previous trace value", |meta| {
             let selector = meta.query_fixed(selector, Rotation::cur());
-            let cur = Queries::new(
-                meta,
-                address,
-                time_log,
-                instruction,
-                value,
-                Rotation::cur());
-            let prev = Queries::new(
-                meta,
-                address,
-                time_log,
-                instruction,
-                value,
-                Rotation::prev());
+            let cur = Queries::new(meta,trace_record,Rotation::cur());
+            let prev = Queries::new(meta,trace_record,Rotation::prev());
             let val=meta.query_advice(addr_cur_prev.val, Rotation::cur());
             let temp=meta.query_advice(addr_cur_prev.temp, Rotation::cur());
             let val_diff=limbs_to_expression(cur.value)-limbs_to_expression(prev.value);
@@ -245,16 +228,8 @@ impl<F: Field + PrimeField> SortedMemoryConfig<F> {
             "the first time an address is accessed, it instruction must be write",
             |meta| {
                 let selector = meta.query_fixed(selector, Rotation::cur());
-                let cur =
-                    Queries::new(meta, address, time_log, instruction, value, Rotation::cur());
-                let prev = Queries::new(
-                    meta,
-                    address,
-                    time_log,
-                    instruction,
-                    value,
-                    Rotation::prev(),
-                );
+                let cur = Queries::new(meta, trace_record, Rotation::cur());
+                let prev = Queries::new(meta, trace_record, Rotation::prev());
                 let addr_diff =
                     limbs_to_expression(cur.address) - limbs_to_expression(prev.address);
                 vec![selector * (cur.instruction - one.clone()) * addr_diff.clone()]
@@ -265,11 +240,11 @@ impl<F: Field + PrimeField> SortedMemoryConfig<F> {
         lookup_tables
             .u2_table
             .range_check(meta, "instruction must be in 0..1", |meta| {
-                meta.query_advice(instruction, Rotation::cur())
+                meta.query_advice(trace_record.instruction, Rotation::cur())
             });
 
         // each limb of address and value must be in [0..64]
-        for (addr, val) in address.iter().zip(&value) {
+        for (addr, val) in trace_record.address.iter().zip(&trace_record.value) {
             lookup_tables
                 .u64_table
                 .range_check(meta, "limb of address fits in 0..64", |meta| {
@@ -283,7 +258,7 @@ impl<F: Field + PrimeField> SortedMemoryConfig<F> {
         }
 
         // each limb of time_log must be in [0..64]
-        for i in time_log {
+        for i in trace_record.time_log {
             lookup_tables
                 .u64_table
                 .range_check(meta, "limb of time log fits in 0..64", |meta| {
@@ -293,10 +268,7 @@ impl<F: Field + PrimeField> SortedMemoryConfig<F> {
 
         // return the config after assigning the gates
         SortedMemoryConfig {
-            address,
-            time_log,
-            instruction,
-            value,
+            trace_record,
             addr_cur_prev,
             greater_than,
             selector,
@@ -336,7 +308,7 @@ fn rlc_limb_differences<F: Field + PrimeField>(
     result
 }
 
-// convert a trace record into a list of element having the form of Expression<F>
+// Query the element of a trace record at a specific position
 struct Queries<F: Field + PrimeField> {
     address: [Expression<F>; 32], //64 bits
     time_log: [Expression<F>; 8], //64 bits
@@ -348,18 +320,15 @@ impl<F: Field + PrimeField> Queries<F> {
     // converts the attributes of a trace record to type Expression<F>
     fn new(
         meta: &mut VirtualCells<'_, F>,
-        address: [Column<Advice>; 32],
-        time_log: [Column<Advice>; 8],
-        instruction: Column<Advice>,
-        value: [Column<Advice>; 32],
+        trace_record: TraceRecordWitnessTable<F>,
         rotation: Rotation,
     ) -> Self {
         let mut query_advice = |column| meta.query_advice(column, rotation);
         Self {
-            address: address.map(&mut query_advice),
-            time_log: time_log.map(&mut query_advice),
-            instruction: query_advice(instruction),
-            value: value.map(&mut query_advice),
+            address: trace_record.address.map(&mut query_advice),
+            time_log: trace_record.time_log.map(&mut query_advice),
+            instruction: query_advice(trace_record.instruction),
+            value: trace_record.value.map(&mut query_advice),
         }
     }
 
@@ -374,14 +343,14 @@ impl<F: Field + PrimeField> Queries<F> {
     }
 }
 
-struct ProvableTraceRecord<F: Field + PrimeField> {
+struct SortedTraceRecord<F: Field + PrimeField> {
     address: [F; 32], //64 bits
     time_log: [F; 8], //64 bits
     instruction: F,   // 0 or 1
     value: [F; 32],   //64 bit
 }
 
-impl<F: Field + PrimeField> ProvableTraceRecord<F> {
+impl<F: Field + PrimeField> SortedTraceRecord<F> {
     fn get_tuple(&self) -> ([F; 32], [F; 8], F, [F; 32]) {
         (self.address, self.time_log, self.instruction, self.value)
     }
@@ -390,7 +359,7 @@ impl<F: Field + PrimeField> ProvableTraceRecord<F> {
 /// Circuit for sorted trace record
 #[derive(Default)]
 pub struct SortedMemoryCircuit<F: PrimeField> {
-    sorted_trace_record: Vec<ProvableTraceRecord<F>>,
+    sorted_trace_record: Vec<SortedTraceRecord<F>>,
     _marker: PhantomData<F>,
 }
 
@@ -406,10 +375,8 @@ impl<F: Field + PrimeField> Circuit<F> for SortedMemoryCircuit<F> {
         let rng = thread_rng();
 
         // the elements of the trace record
-        let address = [meta.advice_column(); 32];
-        let time_log = [meta.advice_column(); 8];
-        let instruction = meta.advice_column();
-        let value = [meta.advice_column(); 32];
+        let trace_record = TraceRecordWitnessTable::<F>::new(meta);
+
         // lookup tables
         let lookup_tables = LookUpTables {
             u64_table: UTable::<64>::construct(meta),
@@ -425,15 +392,7 @@ impl<F: Field + PrimeField> Circuit<F> for SortedMemoryCircuit<F> {
             alpha_power.push(tmp.clone());
         }
 
-        SortedMemoryConfig::configure(
-            meta,
-            address,
-            time_log,
-            instruction,
-            value,
-            lookup_tables,
-            alpha_power,
-        )
+        SortedMemoryConfig::configure(meta, trace_record, lookup_tables, alpha_power)
     }
 
     // assign the witness values to the entire witness table and their constraints
@@ -473,7 +432,7 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
 
             config.selector_zero.enable(region, offset)?;
             // assign the address witness
-            for (i, j) in cur_address.iter().zip(config.address) {
+            for (i, j) in cur_address.iter().zip(config.trace_record.address) {
                 region.assign_advice(
                     || format!("address{}", offset),
                     j,
@@ -482,7 +441,7 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
                 )?;
             }
             // assign the time_log witness
-            for (i, j) in cur_time_log.iter().zip(config.time_log) {
+            for (i, j) in cur_time_log.iter().zip(config.trace_record.time_log) {
                 region.assign_advice(
                     || format!("time_log{}", offset),
                     j,
@@ -493,12 +452,12 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
             // assign the instruction witness
             region.assign_advice(
                 || format!("instruction{}", offset),
-                config.instruction,
+                config.trace_record.instruction,
                 offset,
                 || Value::known(cur_instruction),
             )?;
             // assign the value witness
-            for (i, j) in cur_value.iter().zip(config.value) {
+            for (i, j) in cur_value.iter().zip(config.trace_record.value) {
                 region.assign_advice(
                     || format!("value{}", offset),
                     j,
@@ -555,7 +514,7 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
             )?;
 
             // assign the address witness
-            for (i, j) in cur_address.iter().zip(config.address) {
+            for (i, j) in cur_address.iter().zip(config.trace_record.address) {
                 region.assign_advice(
                     || format!("address{}", offset),
                     j,
@@ -565,7 +524,7 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
             }
 
             // assign the time_log witness
-            for (i, j) in cur_time_log.iter().zip(config.time_log) {
+            for (i, j) in cur_time_log.iter().zip(config.trace_record.time_log) {
                 region.assign_advice(
                     || format!("time_log{}", offset),
                     j,
@@ -577,13 +536,13 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
             // assign the instruction witness
             region.assign_advice(
                 || format!("instruction{}", offset),
-                config.instruction,
+                config.trace_record.instruction,
                 offset,
                 || Value::known(cur_instruction),
             )?;
 
             // assign the value witness
-            for (i, j) in cur_value.iter().zip(config.value) {
+            for (i, j) in cur_value.iter().zip(config.trace_record.value) {
                 region.assign_advice(
                     || format!("value{}", offset),
                     j,
@@ -665,13 +624,13 @@ mod test {
 
     use crate::constraints::lexicographic_ordering::SortedMemoryCircuit;
 
-    use super::ProvableTraceRecord;
+    use super::SortedTraceRecord;
     use super::*;
     use halo2_proofs::dev::MockProver;
     use halo2_proofs::halo2curves::bn256::Fr as Fp;
     #[test]
     fn test_ok_one_trace() {
-        let trace0 = ProvableTraceRecord {
+        let trace0 = SortedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(0); 8],
             instruction: Fp::from(1),
@@ -691,7 +650,7 @@ mod test {
     #[test]
     fn test_error_invalid_instruction() {
         // first instruction is supposed to be write
-        let trace0 = ProvableTraceRecord {
+        let trace0 = SortedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(0); 8],
             instruction: Fp::from(0),
@@ -711,7 +670,7 @@ mod test {
     #[test]
     fn test_invalid_address() {
         // each limb of address is supposed to be in [0..63]
-        let trace0 = ProvableTraceRecord {
+        let trace0 = SortedTraceRecord {
             address: [Fp::from(64); 32],
             time_log: [Fp::from(0); 8],
             instruction: Fp::from(0),
@@ -731,7 +690,7 @@ mod test {
     #[test]
     fn test_invalid_time_log() {
         // each limb of address is supposed to be in [0..63]
-        let trace0 = ProvableTraceRecord {
+        let trace0 = SortedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(64); 8],
             instruction: Fp::from(0),
@@ -751,7 +710,7 @@ mod test {
     #[test]
     fn test_invalid_value() {
         // each limb of address is supposed to be in [0..63]
-        let trace0 = ProvableTraceRecord {
+        let trace0 = SortedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(0); 8],
             instruction: Fp::from(0),
@@ -770,14 +729,14 @@ mod test {
 
     #[test]
     fn test_ok_two_trace() {
-        let trace0 = ProvableTraceRecord {
+        let trace0 = SortedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(0); 8],
             instruction: Fp::from(1),
             value: [Fp::from(63); 32],
         };
 
-        let trace1 = ProvableTraceRecord {
+        let trace1 = SortedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(1); 8],
             instruction: Fp::from(0),
@@ -797,14 +756,14 @@ mod test {
 
     #[test]
     fn wrong_address_order() {
-        let trace0 = ProvableTraceRecord {
+        let trace0 = SortedTraceRecord {
             address: [Fp::from(1); 32],
             time_log: [Fp::from(0); 8],
             instruction: Fp::from(1),
             value: [Fp::from(63); 32],
         };
 
-        let trace1 = ProvableTraceRecord {
+        let trace1 = SortedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(1); 8],
             instruction: Fp::from(0),
@@ -824,14 +783,14 @@ mod test {
 
     #[test]
     fn wrong_time_log_order() {
-        let trace0 = ProvableTraceRecord {
+        let trace0 = SortedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(1); 8],
             instruction: Fp::from(1),
             value: [Fp::from(63); 32],
         };
 
-        let trace1 = ProvableTraceRecord {
+        let trace1 = SortedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(0); 8],
             instruction: Fp::from(0),
@@ -851,14 +810,14 @@ mod test {
 
     #[test]
     fn invalid_read() {
-        let trace0 = ProvableTraceRecord {
+        let trace0 = SortedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(1); 8],
             instruction: Fp::from(1),
             value: [Fp::from(63); 32],
         };
 
-        let trace1 = ProvableTraceRecord {
+        let trace1 = SortedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(0); 8],
             instruction: Fp::from(0),
@@ -878,14 +837,14 @@ mod test {
 
     #[test]
     fn non_first_write_access_for_two_traces() {
-        let trace0 = ProvableTraceRecord {
+        let trace0 = SortedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(1); 8],
             instruction: Fp::from(1),
             value: [Fp::from(63); 32],
         };
 
-        let trace1 = ProvableTraceRecord {
+        let trace1 = SortedTraceRecord {
             address: [Fp::from(1); 32],
             time_log: [Fp::from(1); 8],
             instruction: Fp::from(0),
@@ -905,21 +864,21 @@ mod test {
 
     #[test]
     fn test_ok_three_trace() {
-        let trace0 = ProvableTraceRecord {
+        let trace0 = SortedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(0); 8],
             instruction: Fp::from(1),
             value: [Fp::from(63); 32],
         };
 
-        let trace1 = ProvableTraceRecord {
+        let trace1 = SortedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(1); 8],
             instruction: Fp::from(0),
             value: [Fp::from(63); 32],
         };
 
-        let trace2 = ProvableTraceRecord {
+        let trace2 = SortedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(2); 8],
             instruction: Fp::from(1),
@@ -939,21 +898,21 @@ mod test {
 
     #[test]
     fn invalid_read2() {
-        let trace0 = ProvableTraceRecord {
+        let trace0 = SortedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(1); 8],
             instruction: Fp::from(1),
             value: [Fp::from(63); 32],
         };
 
-        let trace1 = ProvableTraceRecord {
+        let trace1 = SortedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(2); 8],
             instruction: Fp::from(0),
             value: [Fp::from(63); 32],
         };
 
-        let trace2 = ProvableTraceRecord {
+        let trace2 = SortedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(3); 8],
             instruction: Fp::from(0),
