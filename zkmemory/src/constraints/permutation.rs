@@ -209,8 +209,15 @@ where
 
     /// Create proof for the permutation circuit
     pub fn create_proof(&mut self) -> Vec<u8> {
-        let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
-        create_proof::<IPACommitmentScheme<C>, ProverIPA<'_, C>, _, _, _, _>(
+        let mut transcript = Blake2bWrite::<Vec<u8>, C, Challenge255<C>>::init(vec![]);
+        create_proof::<
+            IPACommitmentScheme<C>,
+            ProverIPA<'_, C>,
+            Challenge255<C>,
+            OsRng,
+            Blake2bWrite<Vec<u8>, C, Challenge255<C>>,
+            PermutationCircuit<C::Scalar>,
+        >(
             &self.params,
             &self.pk,
             &[self.circuit.clone()],
@@ -226,7 +233,7 @@ where
     pub fn verify(&mut self, proof: Vec<u8>) -> bool {
         let accepted = {
             let strategy = AccumulatorStrategy::new(&self.params);
-            let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
+            let mut transcript = Blake2bRead::<&[u8], C, Challenge255<C>>::init(&proof[..]);
             verify_proof(
                 &self.params,
                 self.pk.get_vk(),
