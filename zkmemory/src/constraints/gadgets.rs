@@ -59,7 +59,6 @@ impl<const N: usize> UTable<N> {
             vec![exp]
                 .into_iter()
                 .zip_eq(self.table_exprs(meta))
-                .map(|(exp, table_expr)| (exp, table_expr))
                 .collect()
         });
     }

@@ -620,11 +620,11 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
 
 #[cfg(test)]
 mod test {
-    use core::marker::PhantomData;
+    // use core::marker::PhantomData;
 
-    use crate::constraints::lexicographic_ordering::SortedMemoryCircuit;
+    // use crate::constraints::lexicographic_ordering::SortedMemoryCircuit;
 
-    use super::SortedTraceRecord;
+    // use super::SortedTraceRecord;
     use super::*;
     use halo2_proofs::dev::MockProver;
     use halo2_proofs::halo2curves::bn256::Fr as Fp;
