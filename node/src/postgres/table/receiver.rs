@@ -1,6 +1,9 @@
+use crate::keyring;
 use crate::receiver::{ActiveModel, Column, Entity, Model};
+use sea_orm::sea_query::Query;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait, QueryFilter,
+    ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, DbErr, DeleteResult, EntityTrait,
+    QueryFilter,
 };
 
 /// Receiver table
@@ -22,6 +25,37 @@ impl<'a> ReceiverTable<'a> {
     /// Find receiver record by its network and address
     pub async fn update(&self, record: ActiveModel) -> Result<Model, DbErr> {
         record.update(self.connection).await
+    }
+
+    /// Find receiver record by its network and address
+    pub async fn find_by_username(&self, username: String) -> Result<Vec<Model>, DbErr> {
+        Entity::find()
+            .left_join::<keyring::Entity>(keyring::Entity)
+            .filter(keyring::Column::Username.eq(username))
+            .all(self.connection)
+            .await
+    }
+
+    pub async fn delete(
+        &self,
+        username: String,
+        address_receiver: String,
+    ) -> Result<DeleteResult, DbErr> {
+        Entity::delete_many()
+            .filter(
+                Condition::all()
+                    .add(Column::Address.eq(address_receiver.to_owned()))
+                    .add(
+                        Column::KeyringId.in_subquery(
+                            Query::select()
+                                .from(keyring::Entity)
+                                .and_where(keyring::Column::Username.eq(username.to_owned()))
+                                .to_owned(),
+                        ),
+                    ),
+            )
+            .exec(self.connection)
+            .await
     }
 
     /// Find receiver record by its network and address

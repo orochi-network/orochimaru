@@ -103,6 +103,7 @@ async fn orand(
     let (header, body) = req.into_parts();
     match (&header.method, header.uri.path()) {
         // Handle all post method to JSON RPC
+        (&Method::OPTIONS, "/") => QuickResponse::option(),
         (&Method::POST, "/") => {
             let max = body.size_hint().upper().unwrap_or(u64::MAX);
             // Body is 64 KB
@@ -128,6 +129,7 @@ async fn orand(
             };
 
             let keyring = context.postgres().table_keyring();
+            let receiver = context.postgres().table_receiver();
 
             let authorized_jwt = match json_rpc_payload {
                 JSONRPCMethod::OrandNewEpoch(_, _) => {
@@ -320,6 +322,26 @@ async fn orand(
                         "ACCESS_DENIED",
                         "Access denied, you do not have ability to add new receiver",
                     ))
+                }
+                JSONRPCMethod::AdminGetReceiver(username) => {
+                    return QuickResponse::res_json(
+                        &receiver
+                            .find_by_username(username.clone())
+                            .await
+                            .expect("Unable to query user from database"),
+                    );
+                }
+                JSONRPCMethod::AdminRemoveReceiver(username, receiver_address) => {
+                    let result = receiver.delete(username, receiver_address).await;
+                    match result {
+                        Ok(_) => QuickResponse::res_json(
+                            &json!({"success": true, "message": "Receiver has been removed"}),
+                        ),
+                        Err(_) => QuickResponse::err(node::Error(
+                            "INTERNAL_SERVER_ERROR",
+                            "Unable to remove receiver",
+                        )),
+                    }
                 }
                 _ => QuickResponse::err(node::Error(
                     "NOT_IMPLEMENTED",

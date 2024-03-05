@@ -32,12 +32,21 @@ pub struct Model {
 /// Data relation
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    /// Linked to receiver table
+    #[sea_orm(has_many = "super::receiver::Entity")]
+    Receiver,
     /// Linked to randomness table
     #[sea_orm(has_many = "super::randomness::Entity")]
     Randomness,
 }
 
 impl Related<super::randomness::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Randomness.def()
+    }
+}
+
+impl Related<super::receiver::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Randomness.def()
     }

@@ -24,8 +24,12 @@ pub enum JSONRPCMethod {
     AdminGetUser(String),
     /// Create new user (username)
     AdminAddUser(String),
+    /// Get receiver (username)
+    AdminGetReceiver(String),
     /// Create new receiver (username, receiver address, network)
     AdminAddReceiver(String, String, i64),
+    /// Admin delete receiver (username, receiver address)
+    AdminRemoveReceiver(String, String),
 }
 
 /// Zero address
@@ -86,10 +90,15 @@ impl JSONRPCMethod {
             }
             "admin_getUser" => Self::AdminGetUser(decode_name(json_rpc.params[0].clone())),
             "admin_addUser" => Self::AdminAddUser(decode_name(json_rpc.params[0].clone())),
+            "admin_getReceiver" => Self::AdminGetReceiver(decode_name(json_rpc.params[0].clone())),
             "admin_addReceiver" => Self::AdminAddReceiver(
                 decode_name(json_rpc.params[0].clone()),
                 decode_address(json_rpc.params[1].clone()),
                 decode_i64(json_rpc.params[2].clone()),
+            ),
+            "admin_removeReceiver" => Self::AdminRemoveReceiver(
+                decode_name(json_rpc.params[0].clone()),
+                decode_address(json_rpc.params[0].clone()),
             ),
             _ => return Err(Error("INVALID_METHOD", "Unsupported method")),
         };

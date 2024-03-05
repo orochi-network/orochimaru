@@ -11,6 +11,8 @@ pub struct Model {
     #[serde(skip_serializing, skip_deserializing)]
     #[sea_orm(primary_key)]
     pub id: i64,
+    #[serde(skip_serializing, skip_deserializing)]
+    pub keyring_id: i64,
     /// Receiver name
     #[sea_orm(unique)]
     pub name: String,
@@ -28,9 +30,24 @@ pub struct Model {
 /// Relationship to randomness
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    /// Linked to keyring
+    #[sea_orm(
+        belongs_to = "super::keyring::Entity",
+        from = "Column::KeyringId",
+        to = "super::keyring::Column::Id",
+        on_update = "NoAction",
+        on_delete = "NoAction"
+    )]
+    Keyring,
     /// Link to randomness
     #[sea_orm(has_many = "super::randomness::Entity")]
     Randomness,
+}
+
+impl Related<super::keyring::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Keyring.def()
+    }
 }
 
 impl Related<super::randomness::Entity> for Entity {

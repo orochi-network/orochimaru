@@ -38,6 +38,10 @@ create table public.receiver (
 	constraint receiver_pkey primary key (id)
 );
 
+ALTER TABLE public.receiver ADD keyring_id bigint NULL;
+ALTER TABLE public.receiver ADD CONSTRAINT receiver_keyring_foreign FOREIGN KEY (id) REFERENCES public.keyring(id);
+CREATE INDEX receiver_keyring_id_idx ON public.receiver (keyring_id);
+
 ALTER TABLE public.receiver OWNER TO orand;
 
 -- public.randomness definition
