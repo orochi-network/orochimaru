@@ -2,18 +2,34 @@ extern crate alloc;
 use alloc::vec::Vec;
 use alloc::{format, vec};
 use core::{iter::once, marker::PhantomData};
-use ff::{Field, PrimeField};
-use halo2_proofs::circuit::Value;
-use halo2_proofs::plonk::{Fixed, Selector};
+use ff::{Field, FromUniformBytes, PrimeField};
 use halo2_proofs::{
-    circuit::{Layouter, Region, SimpleFloorPlanner},
-    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Expression, VirtualCells},
-    poly::Rotation,
+    circuit::{Layouter, Region, SimpleFloorPlanner, Value},
+    plonk::{
+        create_proof, keygen_pk, keygen_vk, verify_proof, Advice, Circuit, Column,
+        ConstraintSystem, Error, Expression, Fixed, ProvingKey, Selector, VirtualCells,
+    },
+    poly::{
+        commitment::ParamsProver,
+        ipa::{
+            commitment::{IPACommitmentScheme, ParamsIPA},
+            multiopen::ProverIPA,
+            strategy::AccumulatorStrategy,
+        },
+        Rotation, VerificationStrategy,
+    },
+    transcript::{
+        Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
+    },
 };
+use halo2curves::CurveAffine;
 use rand::thread_rng;
+use rand_core::OsRng;
 extern crate std;
 
 use super::gadgets::*;
+use crate::base::{Base, B256};
+use crate::machine::{MemoryInstruction, TraceRecord};
 
 #[derive(Clone, Copy, Debug)]
 /// check the lexicographic ordering of address||time
@@ -360,6 +376,7 @@ impl<F: Field + PrimeField> Queries<F> {
     }
 }
 
+#[derive(Clone)]
 struct ProvableTraceRecord<F: Field + PrimeField> {
     address: [F; 32], //64 bits
     time_log: [F; 8], //64 bits
@@ -373,8 +390,46 @@ impl<F: Field + PrimeField> ProvableTraceRecord<F> {
     }
 }
 
+impl<F: Field + PrimeField> From<TraceRecord<B256, B256, 32, 32>> for ProvableTraceRecord<F> {
+    fn from(value: TraceRecord<B256, B256, 32, 32>) -> Self {
+        Self {
+            address: value
+                .get_tuple()
+                .3
+                .fixed_be_bytes()
+                .into_iter()
+                .map(|b| F::from(u64::from(b)))
+                .collect::<Vec<F>>()
+                .try_into()
+                .expect("Cannot convert address to [F; 32]"),
+            time_log: value
+                .get_tuple()
+                .0
+                .to_be_bytes()
+                .into_iter()
+                .map(|b| F::from(u64::from(b)))
+                .collect::<Vec<F>>()
+                .try_into()
+                .expect("Cannot convert time_log to [F; 32]"),
+            instruction: match value.get_tuple().2 {
+                MemoryInstruction::Write => F::ONE,
+                MemoryInstruction::Read => F::ZERO,
+            },
+            value: value
+                .get_tuple()
+                .4
+                .fixed_be_bytes()
+                .into_iter()
+                .map(|b| F::from(u64::from(b)))
+                .collect::<Vec<F>>()
+                .try_into()
+                .expect("Cannot convert value to [F; 32]"),
+        }
+    }
+}
+
 /// Circuit for sorted trace record
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct SortedMemoryCircuit<F: PrimeField> {
     sorted_trace_record: Vec<ProvableTraceRecord<F>>,
     _marker: PhantomData<F>,
@@ -645,11 +700,72 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
     }
 }
 
+/// Implement a lexicographic ordering prover using Inner-Product Argument
+pub struct LexicographicOrderingProver<C: CurveAffine>
+where
+    C::Scalar: FromUniformBytes<64>,
+{
+    params: ParamsIPA<C>,
+    pk: ProvingKey<C>,
+    circuit: SortedMemoryCircuit<C::Scalar>,
+    expected: bool,
+}
+
+impl<C: CurveAffine> LexicographicOrderingProver<C>
+where
+    C::Scalar: FromUniformBytes<64>,
+{
+    /// initialize the parameters for the prover
+    pub fn new(k: u32, circuit: SortedMemoryCircuit<C::Scalar>, expected: bool) -> Self {
+        let params = ParamsIPA::<C>::new(k);
+        let vk = keygen_vk(&params, &circuit).expect("Cannot initialize verify key");
+        let pk = keygen_pk(&params, vk.clone(), &circuit).expect("Cannot initialize verify key");
+        Self {
+            params,
+            pk,
+            circuit,
+            expected,
+        }
+    }
+
+    /// Create proof for the permutation circuit
+    pub fn create_proof(&mut self) -> Vec<u8> {
+        let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
+        create_proof::<IPACommitmentScheme<C>, ProverIPA<'_, C>, _, _, _, _>(
+            &self.params,
+            &self.pk,
+            &[self.circuit.clone()],
+            &[&[]],
+            OsRng,
+            &mut transcript,
+        )
+        .expect("Fail to create proof.");
+        transcript.finalize()
+    }
+
+    /// Verify the proof (by comparing the result with expected value)
+    pub fn verify(&mut self, proof: Vec<u8>) -> bool {
+        let accepted = {
+            let strategy = AccumulatorStrategy::new(&self.params);
+            let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
+            verify_proof(
+                &self.params,
+                self.pk.get_vk(),
+                strategy,
+                &[&[]],
+                &mut transcript,
+            )
+            .map(|strategy| strategy.finalize())
+            .expect("Fail to verify proof.")
+        };
+        accepted == self.expected
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
-    use halo2_proofs::dev::MockProver;
-    use halo2_proofs::halo2curves::bn256::Fr as Fp;
+    use halo2curves::pasta::{EqAffine, Fp};
     #[test]
     fn test_ok_one_trace() {
         let trace0 = ProvableTraceRecord {
@@ -665,11 +781,13 @@ mod test {
         };
         // the number of rows cannot exceed 2^k
         let k = 7;
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        assert_eq!(prover.verify(), Ok(()));
+        let mut prover = LexicographicOrderingProver::<EqAffine>::new(k, circuit, true);
+        let proof = prover.create_proof();
+        assert!(prover.verify(proof));
     }
 
     #[test]
+    #[should_panic]
     fn test_error_invalid_instruction() {
         // first instruction is supposed to be write
         let trace0 = ProvableTraceRecord {
@@ -685,11 +803,13 @@ mod test {
         };
         // the number of rows cannot exceed 2^k
         let k = 7;
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        assert_ne!(prover.verify(), Ok(()));
+        let mut prover = LexicographicOrderingProver::<EqAffine>::new(k, circuit, true);
+        let proof = prover.create_proof();
+        assert!(prover.verify(proof));
     }
 
     #[test]
+    #[should_panic]
     fn test_invalid_address() {
         // each limb of address is supposed to be in [0..63]
         let trace0 = ProvableTraceRecord {
@@ -705,8 +825,9 @@ mod test {
         };
         // the number of rows cannot exceed 2^k
         let k = 7;
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        assert_ne!(prover.verify(), Ok(()));
+        let mut prover = LexicographicOrderingProver::<EqAffine>::new(k, circuit, true);
+        let proof = prover.create_proof();
+        assert!(prover.verify(proof));
     }
 
     #[test]
@@ -732,11 +853,13 @@ mod test {
         };
         // the number of rows cannot exceed 2^k
         let k = 7;
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        assert_eq!(prover.verify(), Ok(()));
+        let mut prover = LexicographicOrderingProver::<EqAffine>::new(k, circuit, true);
+        let proof = prover.create_proof();
+        assert!(prover.verify(proof));
     }
 
     #[test]
+    #[should_panic]
     fn wrong_address_order() {
         let trace0 = ProvableTraceRecord {
             address: [Fp::from(1); 32],
@@ -759,11 +882,13 @@ mod test {
         };
         // the number of rows cannot exceed 2^k
         let k = 7;
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        assert_ne!(prover.verify(), Ok(()));
+        let mut prover = LexicographicOrderingProver::<EqAffine>::new(k, circuit, true);
+        let proof = prover.create_proof();
+        assert!(prover.verify(proof));
     }
 
     #[test]
+    #[should_panic]
     fn wrong_time_log_order() {
         let trace0 = ProvableTraceRecord {
             address: [Fp::from(0); 32],
@@ -786,11 +911,13 @@ mod test {
         };
         // the number of rows cannot exceed 2^k
         let k = 7;
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        assert_ne!(prover.verify(), Ok(()));
+        let mut prover = LexicographicOrderingProver::<EqAffine>::new(k, circuit, true);
+        let proof = prover.create_proof();
+        assert!(prover.verify(proof));
     }
 
     #[test]
+    #[should_panic]
     fn invalid_read() {
         let trace0 = ProvableTraceRecord {
             address: [Fp::from(0); 32],
@@ -813,11 +940,13 @@ mod test {
         };
         // the number of rows cannot exceed 2^k
         let k = 7;
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        assert_ne!(prover.verify(), Ok(()));
+        let mut prover = LexicographicOrderingProver::<EqAffine>::new(k, circuit, true);
+        let proof = prover.create_proof();
+        assert!(prover.verify(proof));
     }
 
     #[test]
+    #[should_panic]
     fn non_first_write_access_for_two_traces() {
         let trace0 = ProvableTraceRecord {
             address: [Fp::from(0); 32],
@@ -840,7 +969,8 @@ mod test {
         };
         // the number of rows cannot exceed 2^k
         let k = 7;
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        assert_ne!(prover.verify(), Ok(()));
+        let mut prover = LexicographicOrderingProver::<EqAffine>::new(k, circuit, true);
+        let proof = prover.create_proof();
+        assert!(prover.verify(proof));
     }
 }
