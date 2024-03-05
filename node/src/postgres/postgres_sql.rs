@@ -3,11 +3,11 @@ use sea_orm::{Database, DatabaseConnection};
 use super::table::{KeyringTable, RandomnessTable, ReceiverTable};
 
 /// SQL Lite Database
-pub struct SQLiteDB {
+pub struct Postgres {
     connection: DatabaseConnection,
 }
 
-impl SQLiteDB {
+impl Postgres {
     /// Create a new instance of SQLite database
     pub async fn new(database_url: String) -> Self {
         Self {

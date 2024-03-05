@@ -1,31 +1,37 @@
-use crate::sqlite::SQLiteDB;
 use libecvrf::{KeyPair, ECVRF};
 use std::sync::Arc;
+use tokio::sync::Mutex;
+
+use crate::postgres_sql::Postgres;
 
 /// Node context
 pub struct NodeContext {
     ecvrf: ECVRF<'static>,
     is_testnet: bool,
-    sqlite: SQLiteDB,
-    key_id: u32,
+    postgres: Postgres,
+    key_id: i64,
     keypair: KeyPair,
+    // Single lock will be the botle neck when we have more user
+    // I'm prefer to use [HashMap] to mapping from receiver_id -> lock
+    pub sync: Mutex<bool>,
 }
 
 impl NodeContext {
     /// Create a new instance of node context
-    pub fn new(key_id: u32, keypair: KeyPair, is_testnet: bool, sqlite: SQLiteDB) -> Arc<Self> {
+    pub fn new(key_id: i64, keypair: KeyPair, is_testnet: bool, postgres: Postgres) -> Arc<Self> {
         let ecvrf = ECVRF::new(keypair.secret_key);
         Arc::new(Self {
             key_id,
             ecvrf,
             is_testnet,
-            sqlite,
+            postgres,
             keypair,
+            sync: Mutex::new(false),
         })
     }
 
     /// Get key ID
-    pub fn key_id(&self) -> u32 {
+    pub fn key_id(&self) -> i64 {
         self.key_id
     }
 
@@ -44,8 +50,8 @@ impl NodeContext {
         self.is_testnet
     }
 
-    /// Get SQLite database
-    pub fn sqlite(&self) -> &SQLiteDB {
-        &self.sqlite
+    /// Get Postgres database
+    pub fn postgres(&self) -> &Postgres {
+        &self.postgres
     }
 }

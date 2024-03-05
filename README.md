@@ -178,6 +178,28 @@ Migrate database or init database for the first time:
 sea-orm-cli migrate
 ```
 
+## Docker
+
+```
+$ cd docker/node
+$ docker compose up -d
+```
+
+Postgres will be expose in port `4321`, orand service will be exposed to port `31337`.
+
+You can add new user by trying to access into by trying:
+
+```
+$ docker exec -ti node-orandservice-1 /bin/bash
+$ orand-cli user chiro
+Add new user: chiro
+ - hmac_secret: 03ddcd77ef81141072db73f928c19db5eb1824924e0539c5
+ - public_key: 04b16ddcf3c10129a6f26a92c562bab13a2d2fcf7ff955c381e75023b5a364e69b7641bc381aeb41a4dceedc095c3027d294d533598df7c518d5db1002b897e719
+ - secret_key: f27b81c3a0a52ffe2cd06bfe960de90c5631e7ef08db3a782d9b437226b13d39
+```
+
+Copy the `hmac_secret` and `username` so we can use it in `sdk`.
+
 ## License
 
 Orochi Network's source code licensed under [Apache License 2.0](./LICENSE)

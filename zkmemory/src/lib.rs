@@ -19,9 +19,6 @@ pub mod base;
 pub mod commitment;
 /// Define all configuration of [StateMachine](crate::machine::StateMachine) and [RawMemory](crate::memory::RawMemory)
 pub mod config;
-/// Define all the constraints for checking the consistency of memory, including
-/// permutation check and lexicographic ordering check
-pub mod constraints;
 /// Define all errors of [StateMachine](crate::machine::StateMachine) and [RawMemory](crate::memory::RawMemory)
 pub mod error;
 /// Definition of abstract machine (instruction, trace and context)
@@ -36,7 +33,9 @@ mod tests {
         let chunk_zero = B256::zero();
         let bytes1 = [9u8; 32];
         let chunk1 = B256::from(bytes1);
-        let bytes_convert: [u8; 32] = chunk1.try_into().unwrap();
+        let bytes_convert: [u8; 32] = chunk1
+            .try_into()
+            .expect("Cannot convert from B256 to bytes");
         assert_eq!(bytes_convert, bytes1);
         assert!(chunk_zero.is_zero());
         assert!(!chunk1.is_zero());
@@ -60,7 +59,9 @@ mod tests {
         let chunk_zero = B128::zero();
         let bytes1 = [9u8; 16];
         let chunk1 = B128::from(bytes1);
-        let bytes_convert: [u8; 16] = chunk1.try_into().unwrap();
+        let bytes_convert: [u8; 16] = chunk1
+            .try_into()
+            .expect("Cannot convert from B128 to bytes");
         assert_eq!(bytes_convert, bytes1);
         assert!(chunk_zero.is_zero());
         assert!(!chunk1.is_zero());
@@ -84,7 +85,7 @@ mod tests {
         let chunk_zero = B64::zero();
         let bytes1 = [1u8; 8];
         let chunk1 = B64::from(bytes1);
-        let bytes_convert: [u8; 8] = chunk1.try_into().unwrap();
+        let bytes_convert: [u8; 8] = chunk1.try_into().expect("Cannot convert from B64 to bytes");
         assert_eq!(bytes_convert, bytes1);
         assert!(chunk_zero.is_zero());
         assert!(!chunk1.is_zero());
@@ -108,7 +109,7 @@ mod tests {
         let chunk_zero = B64::zero();
         let bytes1 = [59u8; 8];
         let chunk1 = B64::from(bytes1);
-        let bytes_convert: [u8; 8] = chunk1.try_into().unwrap();
+        let bytes_convert: [u8; 8] = chunk1.try_into().expect("Cannot convert from B64 to bytes");
         assert_eq!(bytes_convert, bytes1);
         assert!(chunk_zero.is_zero());
         assert!(!chunk1.is_zero());

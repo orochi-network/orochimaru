@@ -1,8 +1,10 @@
+use halo2curves::pasta::{EqAffine, Fp};
 use rbtree::RBTree;
-use std::{marker::PhantomData, println};
+use std::marker::PhantomData;
 use zkmemory::{
     base::{Base, B256},
     config::{AllocatedSection, Config, ConfigArgs, DefaultConfig},
+    constraints::permutation::{successive_powers, PermutationCircuit, PermutationProver},
     error::Error,
     impl_register_machine, impl_stack_machine, impl_state_machine,
     machine::{
@@ -355,4 +357,31 @@ fn main() {
     for x in machine.trace().into_iter() {
         println!("{:?}", x);
     }
+
+    const K: u32 = 6;
+    // Create a tuple vector of (index, trace_element)
+    let mut trace_idx_vec: Vec<(Fp, TraceRecord<B256, B256, 32, 32>)> =
+        successive_powers::<Fp>(machine.trace().len() as u64)
+            .into_iter()
+            .zip(machine.trace())
+            .collect();
+
+    let input_trace = trace_idx_vec.clone();
+
+    // Sort the trace by time_log
+    trace_idx_vec.sort_by(|a, b| a.1.get_tuple().0.cmp(&b.1.get_tuple().0));
+
+    let shuffled_trace = trace_idx_vec.clone();
+
+    // Form the circuit
+    let circuit = PermutationCircuit::new(input_trace, shuffled_trace);
+
+    // Test with IPA prover
+    let mut ipa_prover = PermutationProver::<EqAffine>::new(K, circuit, true);
+
+    // Create a proof for the circuit satisfiability
+    let proof = ipa_prover.create_proof();
+
+    // Verify the proof
+    assert!(ipa_prover.verify(proof));
 }

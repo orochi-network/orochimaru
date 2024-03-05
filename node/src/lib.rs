@@ -5,7 +5,7 @@
     future_incompatible,
     nonstandard_style,
     rust_2018_idioms,
-    missing_docs,
+    //missing_docs,
     unused_imports
 )]
 #![forbid(unsafe_code)]
@@ -13,8 +13,8 @@
 /// Handle ethereum signing
 pub mod ethereum;
 
-mod sqlite;
-pub use sqlite::*;
+mod postgres;
+pub use postgres::*;
 
 /// JSON Web Token
 pub mod jwt;
@@ -31,3 +31,5 @@ pub use quick_response::*;
 
 mod node_context;
 pub use node_context::*;
+
+pub mod evm;
