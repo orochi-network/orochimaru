@@ -4,9 +4,7 @@ use std::marker::PhantomData;
 use zkmemory::{
     base::{Base, B256},
     config::{AllocatedSection, Config, ConfigArgs, DefaultConfig},
-    constraints::permutation::{
-        sort_chronologically, successive_powers, PermutationCircuit, PermutationProver,
-    },
+    constraints::permutation::{successive_powers, PermutationCircuit, PermutationProver},
     error::Error,
     impl_register_machine, impl_stack_machine, impl_state_machine,
     machine::{
@@ -362,17 +360,21 @@ fn main() {
 
     const K: u32 = 6;
     // Create a tuple vector of (index, trace_element)
-    let input_trace: Vec<(Fp, TraceRecord<B256, B256, 32, 32>)> =
+    let mut trace_idx_vec: Vec<(Fp, TraceRecord<B256, B256, 32, 32>)> =
         successive_powers::<Fp>(machine.trace().len() as u64)
             .into_iter()
             .zip(machine.trace())
             .collect();
 
-    // Sort the trace by ascending time_log
-    let sorted_trace = sort_chronologically(input_trace.clone());
+    let input_trace = trace_idx_vec;
+
+    // Sort the trace by time_log
+    trace_idx_vec.sort_by(|a, b| a.1.get_tuple().0.cmp(&b.1.get_tuple().0));
+
+    let shuffled_trace = trace_idx_vec;
 
     // Form the circuit
-    let circuit = PermutationCircuit::new(input_trace, sorted_trace);
+    let circuit = PermutationCircuit::new(input_trace, shuffled_trace);
 
     // Test with IPA prover
     let mut ipa_prover = PermutationProver::<EqAffine>::new(K, circuit, true);

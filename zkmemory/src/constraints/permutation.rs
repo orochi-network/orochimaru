@@ -320,40 +320,6 @@ pub fn successive_powers<F: Field + PrimeField>(size: u64) -> Vec<F> {
     result
 }
 
-/// Use quicksort to sort the trace in order of ascending time_log
-pub fn sort_chronologically<K, V, const S: usize, const T: usize, F>(
-    mut trace: Vec<(F, TraceRecord<K, V, S, T>)>,
-) -> Vec<(F, TraceRecord<K, V, S, T>)>
-where
-    K: Base<S>,
-    V: Base<T>,
-    F: Field + PrimeField,
-{
-    if trace.len() <= 1 {
-        return trace;
-    }
-
-    let pivot = trace.remove(0);
-    let mut left = vec![];
-    let mut right = vec![];
-
-    for item in trace {
-        // Compare the time_log values
-        if item.1.get_tuple().0 <= pivot.1.get_tuple().0 {
-            left.push(item);
-        } else {
-            right.push(item);
-        }
-    }
-
-    let mut sorted_left = sort_chronologically(left);
-    let mut sorted_right = sort_chronologically(right);
-
-    sorted_left.push(pivot);
-    sorted_left.append(&mut sorted_right);
-
-    sorted_left
-}
 #[cfg(test)]
 mod test {
 
@@ -411,14 +377,13 @@ mod test {
     /// Use Halo2's Prover IPA
     #[test]
     fn test_functionality() {
-        const K: u32 = 8;
+        // The number of rows cannot exceed 2^k
+        const K: u32 = 6;
 
         let mut rng = rand::thread_rng();
-
         let mut arr: Vec<(Fp, Fp)> = (1..30)
             .map(|x| (Fp::from(x), Fp::from(rng.gen_range(0..u64::MAX))))
             .collect();
-
         let input_idx: Vec<Value<Fp>> = arr.iter().map(|&(x, _)| Value::known(x)).collect();
         let input: Vec<Fp> = arr.iter().map(|&(_, x)| x).collect();
 
