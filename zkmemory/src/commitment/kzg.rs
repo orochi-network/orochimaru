@@ -326,7 +326,6 @@ mod test {
     use super::*;
     use crate::{base::B256, machine::AbstractTraceRecord};
     use ff::PrimeField;
-    use halo2_proofs::arithmetic::eval_polynomial;
     use rand::{thread_rng, Rng};
 
     // Generate a trace record
