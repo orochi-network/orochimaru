@@ -23,6 +23,8 @@ pub mod config;
 pub mod error;
 /// Definition of abstract machine (instruction, trace and context)
 pub mod machine;
+/// Constraints for checking the lexicographic ordering
+pub mod constraints;
 
 #[cfg(test)]
 mod tests {
