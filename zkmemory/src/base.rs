@@ -39,9 +39,10 @@ pub trait Base<const S: usize, T = Self>:
     fn is_zero(&self) -> bool;
     /// Get the zero value
     fn zero() -> Self;
-    /// Fill to 32 bytes from any bases
-    /// that are less than 32 bytes in raw bytes representation
-    fn zfill32(&self) -> [u8; 32];
+    /// To big endian bytes
+    fn fixed_be_bytes(&self) -> [u8; 32];
+    /// To little endian bytes
+    fn fixed_le_bytes(&self) -> [u8; 32];
 }
 
 /// Convert from/to [usize](core::usize)
@@ -54,7 +55,7 @@ pub trait UIntConvertible {
 
 /// Uint256 is a wrapper of [U256](ethnum::U256) to implement [Base](crate::base::Base)
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
-pub struct Uint<T>(T);
+pub struct Uint<T>(pub(crate) T);
 
 impl<T: Display> Display for Uint<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -119,8 +120,12 @@ macro_rules! new_base {
                 Self(U256::ZERO)
             }
 
-            fn zfill32(&self) -> [u8; 32] {
+            fn fixed_be_bytes(&self) -> [u8; 32] {
                 self.0.to_be_bytes()
+            }
+
+            fn fixed_le_bytes(&self) -> [u8; 32] {
+                self.0.to_le_bytes()
             }
         }
 
@@ -188,11 +193,16 @@ macro_rules! new_base {
                 Self(0)
             }
 
-            fn zfill32(&self) -> [u8; 32] {
-                let bytes = self.0.to_be_bytes();
-                let mut buffer = [0u8; 32];
-                buffer[(32 - $byte_size)..].copy_from_slice(&bytes);
-                buffer
+            fn fixed_be_bytes(&self) -> [u8; 32] {
+                let mut buf = [0u8; 32];
+                buf[32 - $byte_size..].copy_from_slice(&self.0.to_be_bytes());
+                buf
+            }
+
+            fn fixed_le_bytes(&self) -> [u8; 32] {
+                let mut buf = [0u8; 32];
+                buf[..$byte_size].copy_from_slice(&self.0.to_le_bytes());
+                buf
             }
         }
 

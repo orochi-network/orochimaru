@@ -740,4 +740,112 @@ mod test {
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         assert_eq!(prover.verify(), Ok(()));
     }
+
+    #[test]
+    fn wrong_address_order() {
+        let trace0 = ProvableTraceRecord {
+            address: [Fp::from(1); 32],
+            time_log: [Fp::from(0); 8],
+            instruction: Fp::from(1),
+            value: [Fp::from(63); 32],
+        };
+
+        let trace1 = ProvableTraceRecord {
+            address: [Fp::from(0); 32],
+            time_log: [Fp::from(1); 8],
+            instruction: Fp::from(0),
+            value: [Fp::from(63); 32],
+        };
+
+        let trace = vec![trace0, trace1];
+        let circuit = SortedMemoryCircuit {
+            sorted_trace_record: trace,
+            _marker: PhantomData,
+        };
+        // the number of rows cannot exceed 2^k
+        let k = 7;
+        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+        assert_ne!(prover.verify(), Ok(()));
+    }
+
+    #[test]
+    fn wrong_time_log_order() {
+        let trace0 = ProvableTraceRecord {
+            address: [Fp::from(0); 32],
+            time_log: [Fp::from(1); 8],
+            instruction: Fp::from(1),
+            value: [Fp::from(63); 32],
+        };
+
+        let trace1 = ProvableTraceRecord {
+            address: [Fp::from(0); 32],
+            time_log: [Fp::from(0); 8],
+            instruction: Fp::from(0),
+            value: [Fp::from(63); 32],
+        };
+
+        let trace = vec![trace0, trace1];
+        let circuit = SortedMemoryCircuit {
+            sorted_trace_record: trace,
+            _marker: PhantomData,
+        };
+        // the number of rows cannot exceed 2^k
+        let k = 7;
+        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+        assert_ne!(prover.verify(), Ok(()));
+    }
+
+    #[test]
+    fn invalid_read() {
+        let trace0 = ProvableTraceRecord {
+            address: [Fp::from(0); 32],
+            time_log: [Fp::from(1); 8],
+            instruction: Fp::from(1),
+            value: [Fp::from(63); 32],
+        };
+
+        let trace1 = ProvableTraceRecord {
+            address: [Fp::from(0); 32],
+            time_log: [Fp::from(0); 8],
+            instruction: Fp::from(0),
+            value: [Fp::from(50); 32],
+        };
+
+        let trace = vec![trace0, trace1];
+        let circuit = SortedMemoryCircuit {
+            sorted_trace_record: trace,
+            _marker: PhantomData,
+        };
+        // the number of rows cannot exceed 2^k
+        let k = 7;
+        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+        assert_ne!(prover.verify(), Ok(()));
+    }
+
+    #[test]
+    fn non_first_write_access_for_two_traces() {
+        let trace0 = ProvableTraceRecord {
+            address: [Fp::from(0); 32],
+            time_log: [Fp::from(1); 8],
+            instruction: Fp::from(1),
+            value: [Fp::from(63); 32],
+        };
+
+        let trace1 = ProvableTraceRecord {
+            address: [Fp::from(1); 32],
+            time_log: [Fp::from(1); 8],
+            instruction: Fp::from(0),
+            value: [Fp::from(50); 32],
+        };
+
+        let trace = vec![trace0, trace1];
+        let circuit = SortedMemoryCircuit {
+            sorted_trace_record: trace,
+            _marker: PhantomData,
+        };
+        // the number of rows cannot exceed 2^k
+        let k = 7;
+        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+        assert_ne!(prover.verify(), Ok(()));
+    }
 }
