@@ -36,15 +36,11 @@ impl<'a> ReceiverTable<'a> {
             .await
     }
 
-    pub async fn delete(
-        &self,
-        username: String,
-        address_receiver: String,
-    ) -> Result<DeleteResult, DbErr> {
+    pub async fn delete(&self, username: String, receiver_id: i64) -> Result<DeleteResult, DbErr> {
         Entity::delete_many()
             .filter(
                 Condition::all()
-                    .add(Column::Address.eq(address_receiver.to_owned()))
+                    .add(Column::Id.eq(receiver_id.to_owned()))
                     .add(
                         Column::KeyringId.in_subquery(
                             Query::select()
@@ -73,8 +69,7 @@ impl<'a> ReceiverTable<'a> {
 
     /// Insert data to receiver table
     pub async fn insert(&self, json_record: serde_json::Value) -> Result<Model, DbErr> {
-        let new_record = ActiveModel::from_json(json_record)?;
-        log::debug!("Inserting new receiver record: {:?}", new_record);
+        let new_record = ActiveModel::from_json(json_record).expect("Unable to parse JSON");
         Entity::insert(new_record)
             .exec_with_returning(self.connection)
             .await

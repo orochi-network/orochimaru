@@ -29,7 +29,8 @@ pub enum JSONRPCMethod {
     /// Create new receiver (username, receiver address, network)
     AdminAddReceiver(String, String, i64),
     /// Admin delete receiver (username, receiver address)
-    AdminRemoveReceiver(String, String),
+    /// This method has been removed
+    AdminRemoveReceiver(String, i64),
 }
 
 /// Zero address
@@ -95,10 +96,6 @@ impl JSONRPCMethod {
                 decode_name(json_rpc.params[0].clone()),
                 decode_address(json_rpc.params[1].clone()),
                 decode_i64(json_rpc.params[2].clone()),
-            ),
-            "admin_removeReceiver" => Self::AdminRemoveReceiver(
-                decode_name(json_rpc.params[0].clone()),
-                decode_address(json_rpc.params[1].clone()),
             ),
             _ => return Err(Error("INVALID_METHOD", "Unsupported method")),
         };

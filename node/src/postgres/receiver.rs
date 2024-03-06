@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 #[sea_orm(table_name = "receiver")]
 pub struct Model {
     /// Receiver Id
-    #[serde(skip_serializing, skip_deserializing)]
+    #[serde(skip_deserializing)]
     #[sea_orm(primary_key)]
     pub id: i64,
     /// Keyring Id
