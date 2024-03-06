@@ -1,3 +1,5 @@
+use std::time::SystemTime;
+
 use crate::Error;
 use base64_url;
 use hex;
@@ -16,8 +18,10 @@ pub struct JWTPayload {
     pub user: String,
     /// Nonce
     pub nonce: u32,
-    /// Unix timestamp
-    pub timestamp: u64,
+    /// Unix issue at timestamp
+    pub iat: u64,
+    /// Unix expired timestamp
+    pub exp: u64,
 }
 
 /// JWT
@@ -37,6 +41,10 @@ impl JWT {
     /// Encode payload to JWT
     pub fn decode_payload(json_web_token: &str) -> Result<JWTPayload, Error> {
         let split_jwt: Vec<&str> = json_web_token.trim().split('.').collect();
+        let current_time = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .expect("Unable to get current time")
+            .as_secs();
         if split_jwt.len() == 3 {
             let decoded_payload = match base64_url::decode(&split_jwt[1]) {
                 Ok(payload) => payload,
@@ -47,6 +55,13 @@ impl JWT {
                 Ok(payload) => payload,
                 Err(_) => return Err(Error("INVALID_PAYLOAD", "Unable to deserialize payload")),
             };
+            // Check if JWT is expired, iat < current_time < exp
+            if current_time > jwt_payload.exp
+                || current_time < jwt_payload.iat
+                || jwt_payload.iat > jwt_payload.exp
+            {
+                return Err(Error("EXPIRED_JWT", "JWT is expired"));
+            }
             if regex_name.is_match(&jwt_payload.user) {
                 return Ok(jwt_payload);
             } else {

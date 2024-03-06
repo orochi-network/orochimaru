@@ -8,9 +8,12 @@ use serde::{Deserialize, Serialize};
 #[sea_orm(table_name = "receiver")]
 pub struct Model {
     /// Receiver Id
-    #[serde(skip_serializing, skip_deserializing)]
+    #[serde(skip_deserializing)]
     #[sea_orm(primary_key)]
     pub id: i64,
+    /// Keyring Id
+    #[serde(skip_serializing)]
+    pub keyring_id: i64,
     /// Receiver name
     #[sea_orm(unique)]
     pub name: String,
@@ -28,9 +31,24 @@ pub struct Model {
 /// Relationship to randomness
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    /// Link to randomness
+    /// Linked to keyring
+    #[sea_orm(
+        belongs_to = "super::keyring::Entity",
+        from = "Column::KeyringId",
+        to = "super::keyring::Column::Id",
+        on_update = "NoAction",
+        on_delete = "NoAction"
+    )]
+    Keyring,
+    /// Linked to randomness
     #[sea_orm(has_many = "super::randomness::Entity")]
     Randomness,
+}
+
+impl Related<super::keyring::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Keyring.def()
+    }
 }
 
 impl Related<super::randomness::Entity> for Entity {

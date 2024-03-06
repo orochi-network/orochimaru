@@ -29,6 +29,7 @@ ALTER TABLE public.keyring OWNER TO orand;
 
 create table public.receiver (
 	id bigserial not null,
+	keyring_id int8 not null,
 	"name" varchar not null,
 	address varchar not null,
 	network int8 not null,
@@ -36,6 +37,7 @@ create table public.receiver (
 	created_date timestamp not null default CURRENT_TIMESTAMP,
 	constraint index_name unique (name),
 	constraint receiver_pkey primary key (id)
+	constraint link_receiver_to_keyring foreign key (keyring_id) references public.keyring(id),
 );
 
 ALTER TABLE public.receiver OWNER TO orand;

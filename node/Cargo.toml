@@ -25,7 +25,7 @@ path = "src/lib.rs"
 serde = { workspace = true }
 serde_json = { workspace = true }
 hex = { workspace = true }
-revm = { git="https://github.com/bluealloy/revm.git", rev = "5e6546e" }
+revm = { git = "https://github.com/bluealloy/revm.git", rev = "5e6546e" }
 clap = "4.4.16"
 libecvrf = { version = "^1.1.2", path = "../libecvrf" }
 tiny-keccak = { version = "2.0.2", default-features = false, features = [
@@ -34,7 +34,7 @@ tiny-keccak = { version = "2.0.2", default-features = false, features = [
 log = "0.4.20"
 env_logger = "0.10.1"
 tokio = { version = "1.35.1", features = ["full"] }
-sea-orm = { version = "0.12.11", features = [
+sea-orm = { version = "0.12.14", features = [
     "sqlx-postgres",
     "runtime-tokio-rustls",
     "macros",
@@ -48,4 +48,6 @@ base64-url = "2.0.2"
 sha2 = "0.10.8"
 hyper = { version = "1.1.0", features = ["full"] }
 http-body-util = "0.1.0"
-hyper-util = { git = "https://github.com/hyperium/hyper-util.git", tag = "v0.1.2", features = ["tokio"]}
+hyper-util = { git = "https://github.com/hyperium/hyper-util.git", tag = "v0.1.2", features = [
+    "tokio",
+] }
