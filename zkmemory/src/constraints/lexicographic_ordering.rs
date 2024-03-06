@@ -177,7 +177,8 @@ pub struct SortedMemoryConfig<F: Field + PrimeField> {
 // we have the gates for checking inverse, lookup and checking that
 // all values before first_difference_limb are equal to zero
 impl<F: Field + PrimeField> SortedMemoryConfig<F> {
-    fn configure(
+    /// Configuration for the circuit
+    pub fn configure(
         meta: &mut ConstraintSystem<F>,
         trace_record: TraceRecordWitnessTable<F>,
         lookup_tables: LookUpTables,
