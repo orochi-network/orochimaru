@@ -98,7 +98,7 @@ impl JSONRPCMethod {
             ),
             "admin_removeReceiver" => Self::AdminRemoveReceiver(
                 decode_name(json_rpc.params[0].clone()),
-                decode_address(json_rpc.params[0].clone()),
+                decode_address(json_rpc.params[1].clone()),
             ),
             _ => return Err(Error("INVALID_METHOD", "Unsupported method")),
         };

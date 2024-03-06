@@ -11,7 +11,8 @@ pub struct Model {
     #[serde(skip_serializing, skip_deserializing)]
     #[sea_orm(primary_key)]
     pub id: i64,
-    #[serde(skip_serializing, skip_deserializing)]
+    /// Keyring Id
+    #[serde(skip_serializing)]
     pub keyring_id: i64,
     /// Receiver name
     #[sea_orm(unique)]
@@ -39,7 +40,7 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     Keyring,
-    /// Link to randomness
+    /// Linked to randomness
     #[sea_orm(has_many = "super::randomness::Entity")]
     Randomness,
 }

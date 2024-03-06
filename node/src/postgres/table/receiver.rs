@@ -48,6 +48,7 @@ impl<'a> ReceiverTable<'a> {
                     .add(
                         Column::KeyringId.in_subquery(
                             Query::select()
+                                .column(keyring::Column::Id)
                                 .from(keyring::Entity)
                                 .and_where(keyring::Column::Username.eq(username.to_owned()))
                                 .to_owned(),
@@ -73,6 +74,7 @@ impl<'a> ReceiverTable<'a> {
     /// Insert data to receiver table
     pub async fn insert(&self, json_record: serde_json::Value) -> Result<Model, DbErr> {
         let new_record = ActiveModel::from_json(json_record)?;
+        log::debug!("Inserting new receiver record: {:?}", new_record);
         Entity::insert(new_record)
             .exec_with_returning(self.connection)
             .await

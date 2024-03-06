@@ -40,12 +40,6 @@ impl MigrationTrait for Migration {
                     )
                     .index(
                         Index::create()
-                            .name("index_keyring_id")
-                            .unique()
-                            .col(Receiver::KeyringId),
-                    )
-                    .index(
-                        Index::create()
                             .name("index_name")
                             .unique()
                             .col(Receiver::Name),
