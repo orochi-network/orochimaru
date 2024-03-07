@@ -1,3 +1,5 @@
+/// Check the correctness of the original memory
+pub mod chronically_ordering;
 /// Common traits for permutation and lexicographic ordering
 pub mod common;
 /// The final circuit for memory consistency check

@@ -21,12 +21,12 @@ use super::gadgets::*;
 
 /// The witness table consisting of the elements of the trace records
 #[derive(Clone, Copy, Debug)]
-pub struct TraceRecordWitnessTable<F: Field + PrimeField> {
-    address: [Column<Advice>; 32],
-    time_log: [Column<Advice>; 8],
-    instruction: Column<Advice>,
-    value: [Column<Advice>; 32],
-    _marker: PhantomData<F>,
+pub(crate) struct TraceRecordWitnessTable<F: Field + PrimeField> {
+    pub(crate) address: [Column<Advice>; 32],
+    pub(crate) time_log: [Column<Advice>; 8],
+    pub(crate) instruction: Column<Advice>,
+    pub(crate) value: [Column<Advice>; 32],
+    pub(crate) _marker: PhantomData<F>,
 }
 impl<F: Field + PrimeField> TraceRecordWitnessTable<F> {
     ///
@@ -358,15 +358,16 @@ impl<F: Field + PrimeField> Queries<F> {
     }
 }
 ///
-pub struct SortedTraceRecord<F: Field + PrimeField> {
-    address: [F; 32], //256 bits
-    time_log: [F; 8], //256 bits
-    instruction: F,   // 0 or 1
-    value: [F; 32],   //256 bit
+pub(crate) struct SortedTraceRecord<F: Field + PrimeField> {
+    pub(crate) address: [F; 32], //256 bits
+    pub(crate) time_log: [F; 8], //256 bits
+    pub(crate) instruction: F,   // 0 or 1
+    pub(crate) value: [F; 32],   //256 bit
 }
 
 impl<F: Field + PrimeField> SortedTraceRecord<F> {
-    fn get_tuple(&self) -> ([F; 32], [F; 8], F, [F; 32]) {
+    ///
+    pub fn get_tuple(&self) -> ([F; 32], [F; 8], F, [F; 32]) {
         (self.address, self.time_log, self.instruction, self.value)
     }
 }
@@ -427,7 +428,7 @@ impl<F: Field + PrimeField> CircuitExtension<F> for SortedMemoryCircuit<F> {
             || "lexicographic_ordering",
             |mut region| {
                 for i in 0..self.sorted_trace_record.len() {
-                    self.assign(&mut region, config, i)?;
+                    self.sorted_memory_assign(&mut region, config, i)?;
                 }
                 config.lookup_tables.size40_table.load(&mut region)?;
                 config.lookup_tables.size64_table.load(&mut region)?;
@@ -481,7 +482,7 @@ impl<F: Field + PrimeField> Circuit<F> for SortedMemoryCircuit<F> {
             || "lexicographic_ordering",
             |mut region| {
                 for i in 0..self.sorted_trace_record.len() {
-                    self.assign(&mut region, config, i)?;
+                    self.sorted_memory_assign(&mut region, config, i)?;
                 }
                 config.lookup_tables.size40_table.load(&mut region)?;
                 config.lookup_tables.size64_table.load(&mut region)?;
@@ -495,7 +496,7 @@ impl<F: Field + PrimeField> Circuit<F> for SortedMemoryCircuit<F> {
 
 impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
     // assign the witness values to the offset-th row of the witness table
-    fn assign(
+    fn sorted_memory_assign(
         &self,
         region: &mut Region<'_, F>,
         config: SortedMemoryConfig<F>,

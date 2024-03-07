@@ -1,9 +1,9 @@
 extern crate alloc;
-use alloc::vec;
 use alloc::vec::Vec;
+use alloc::{format, vec};
 use core::{iter::once, marker::PhantomData};
 use ff::{Field, PrimeField};
-use halo2_proofs::circuit::SimpleFloorPlanner;
+use halo2_proofs::circuit::{Region, SimpleFloorPlanner, Value};
 use halo2_proofs::plonk::{Fixed, Selector};
 use halo2_proofs::{
     circuit::Layouter,
@@ -17,6 +17,7 @@ use crate::base::B256;
 use crate::constraints::lexicographic_ordering::Queries;
 use crate::machine::TraceRecord;
 
+use super::chronically_ordering::{OriginalMemoryCircuit, OriginalMemoryConfig};
 use super::common::CircuitExtension;
 use super::gadgets::{equal_value, BinaryConfigure, Table};
 use super::lexicographic_ordering::{GreaterThanConfigure, SortedTraceRecord};
@@ -30,7 +31,7 @@ use super::{
 /// Config for consistency check circuit
 #[derive(Debug, Clone)]
 pub struct ConsistencyConfig<F: Field + PrimeField> {
-    chronically_ordering_config: GreaterThanConfigure<F, 3>,
+    chronically_ordering_config: OriginalMemoryConfig<F>,
     lexicographic_ordering_config: SortedMemoryConfig<F>,
     permutation_config: ShuffleConfig,
     _marker: PhantomData<F>,
@@ -40,7 +41,7 @@ impl<F: Field + PrimeField> ConsistencyConfig<F> {
     fn construct(
         lexicographic_ordering_config: SortedMemoryConfig<F>,
         permutation_config: ShuffleConfig,
-        chronically_ordering_config: GreaterThanConfigure<F, 3>,
+        chronically_ordering_config: OriginalMemoryConfig<F>,
     ) -> Self {
         Self {
             chronically_ordering_config,
@@ -55,24 +56,22 @@ impl<F: Field + PrimeField> ConsistencyConfig<F> {
         input_1: Column<Fixed>,
         shuffle_0: Column<Advice>,
         shuffle_1: Column<Advice>,
-        trace_record: TraceRecordWitnessTable<F>,
+        original_trace_record: TraceRecordWitnessTable<F>,
+        sorted_trace_record: TraceRecordWitnessTable<F>,
         lookup_tables: LookUpTables,
         alpha_power: Vec<Expression<F>>,
-        selector: Column<Fixed>,
     ) -> Self {
         Self {
-            chronically_ordering_config: GreaterThanConfigure::<F, 3>::configure(
+            chronically_ordering_config: OriginalMemoryConfig::<F>::configure(
                 meta,
-                trace_record,
-                alpha_power.clone(),
+                original_trace_record,
                 lookup_tables,
-                selector,
-                false,
+                alpha_power.clone(),
             ),
 
             lexicographic_ordering_config: SortedMemoryConfig::<F>::configure(
                 meta,
-                trace_record,
+                sorted_trace_record,
                 lookup_tables,
                 alpha_power,
             ),
@@ -118,12 +117,22 @@ impl<F: Field + PrimeField + From<B256> + From<B256>> CircuitExtension<F>
         for (_, trace) in self.shuffle.clone() {
             sorted_trace_record.push(SortedTraceRecord::<F>::from(trace));
         }
+        let mut original_trace_record = vec![];
+        for (_, trace) in self.input.clone() {
+            original_trace_record.push(SortedTraceRecord::<F>::from(trace));
+        }
+        let original_ordering_circuit = OriginalMemoryCircuit {
+            original_trace_record,
+            _marker: PhantomData,
+        };
         let lexicographic_ordering_circuit = SortedMemoryCircuit {
             sorted_trace_record,
             _marker: PhantomData,
         };
         lexicographic_ordering_circuit
             .synthesize_with_layouter(config.lexicographic_ordering_config, layouter)?;
+        original_ordering_circuit
+            .synthesize_with_layouter(config.chronically_ordering_config, layouter)?;
         Ok(())
     }
 }
@@ -142,7 +151,8 @@ impl<F: Field + PrimeField + From<B256> + From<B256>> Circuit<F> for MemoryConsi
         let rng = thread_rng();
 
         // the elements of the trace record
-        let trace_record = TraceRecordWitnessTable::<F>::new(meta);
+        let original_trace_record = TraceRecordWitnessTable::<F>::new(meta);
+        let sorted_trace_record = TraceRecordWitnessTable::<F>::new(meta);
 
         // lookup tables
         let lookup_tables = LookUpTables {
@@ -162,17 +172,16 @@ impl<F: Field + PrimeField + From<B256> + From<B256>> Circuit<F> for MemoryConsi
         let input = meta.fixed_column();
         let shuffle_idx = meta.advice_column();
         let shuffle = meta.advice_column();
-        let selector = meta.fixed_column();
         Self::Config::configure(
             meta,
             input_idx,
             input,
             shuffle_idx,
             shuffle,
-            trace_record,
+            original_trace_record,
+            sorted_trace_record,
             lookup_tables,
             alpha_power,
-            selector,
         )
     }
 
