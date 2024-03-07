@@ -29,7 +29,8 @@ pub struct TraceRecordWitnessTable<F: Field + PrimeField> {
     _marker: PhantomData<F>,
 }
 impl<F: Field + PrimeField> TraceRecordWitnessTable<F> {
-    fn new(meta: &mut ConstraintSystem<F>) -> Self {
+    ///
+    pub fn new(meta: &mut ConstraintSystem<F>) -> Self {
         TraceRecordWitnessTable {
             address: [meta.advice_column(); 32],
             time_log: [meta.advice_column(); 8],
@@ -41,14 +42,14 @@ impl<F: Field + PrimeField> TraceRecordWitnessTable<F> {
 }
 
 #[derive(Clone, Copy, Debug)]
-/// check the lexicographic ordering of address||time
-pub(crate) struct GreaterThanConfigure<F: Field + PrimeField> {
+/// check the lexicographic ordering of time or address||time
+pub(crate) struct GreaterThanConfigure<F: Field + PrimeField, const N: usize> {
     pub(crate) difference: Column<Advice>,
     pub(crate) difference_inverse: Column<Advice>,
-    pub(crate) first_difference_limb: BinaryConfigure<F, 6>,
+    pub(crate) first_difference_limb: BinaryConfigure<F, N>,
 }
 
-impl<F: Field + PrimeField> GreaterThanConfigure<F> {
+impl<F: Field + PrimeField, const N: usize> GreaterThanConfigure<F, N> {
     /// Add the constraints for lexicographic ordering
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
@@ -56,10 +57,11 @@ impl<F: Field + PrimeField> GreaterThanConfigure<F> {
         alpha_power: Vec<Expression<F>>,
         lookup_tables: LookUpTables,
         selector: Column<Fixed>,
+        address_included: bool,
     ) -> Self {
         let difference = meta.advice_column();
         let difference_inverse = meta.advice_column();
-        let first_difference_limb = BinaryConfigure::<F, 6>::configure(meta, selector);
+        let first_difference_limb = BinaryConfigure::<F, N>::configure(meta, selector);
         let one = Expression::Constant(F::ONE);
         let mut limb_vector = vec![0_u8];
         for i in 1..40 {
@@ -82,7 +84,7 @@ impl<F: Field + PrimeField> GreaterThanConfigure<F> {
                 .map(|tmp| meta.query_advice(tmp, Rotation::cur()));
             let cur = Queries::new(meta, trace_record, Rotation::cur());
             let prev = Queries::new(meta, trace_record, Rotation::prev());
-            let rlc = rlc_limb_differences(cur, prev, alpha_power.clone());
+            let rlc = rlc_limb_differences(cur, prev, alpha_power.clone(), address_included);
             let mut constraints = vec![];
             for (i, rlc_expression) in limb_vector.iter().zip(rlc) {
                 constraints.push(
@@ -106,8 +108,8 @@ impl<F: Field + PrimeField> GreaterThanConfigure<F> {
             let mut constraints = vec![];
             for ((i, cur_limb), prev_limb) in limb_vector
                 .iter()
-                .zip(&cur.be_limbs())
-                .zip(&prev.be_limbs())
+                .zip(&cur.be_limbs(address_included))
+                .zip(&prev.be_limbs(address_included))
             {
                 constraints.push(
                     selector.clone()
@@ -119,22 +121,23 @@ impl<F: Field + PrimeField> GreaterThanConfigure<F> {
         });
 
         // first_difference_limb is in [0..39]
-        lookup_tables.size40_table.range_check(
-            meta,
-            "first_difference_limb must be in 0..39",
-            |meta| {
-                let first_difference_limb = first_difference_limb
-                    .bits
-                    .map(|tmp| meta.query_advice(tmp, Rotation::cur()));
-                let val = first_difference_limb
-                    .iter()
-                    .fold(Expression::Constant(F::from(0_u64)), |result, bit| {
-                        bit.clone() + result * Expression::Constant(F::from(2_u64))
-                    });
-                val
-            },
-        );
-
+        if address_included == true {
+            lookup_tables.size40_table.range_check(
+                meta,
+                "first_difference_limb must be in 0..39",
+                |meta| {
+                    let first_difference_limb = first_difference_limb
+                        .bits
+                        .map(|tmp| meta.query_advice(tmp, Rotation::cur()));
+                    let val = first_difference_limb
+                        .iter()
+                        .fold(Expression::Constant(F::from(0_u64)), |result, bit| {
+                            bit.clone() + result * Expression::Constant(F::from(2_u64))
+                        });
+                    val
+                },
+            );
+        }
         // lookup gate for difference. It must be in [0..64]
         lookup_tables
             .size64_table
@@ -167,7 +170,7 @@ pub(crate) struct SortedMemoryConfig<F: Field + PrimeField> {
     pub(crate) addr_cur_prev: IsZeroConfigure<F>,
     // the config for checking the current address||time_log is bigger
     // than the previous one
-    pub(crate) greater_than: GreaterThanConfigure<F>,
+    pub(crate) greater_than: GreaterThanConfigure<F, 6>,
     // the selectors
     pub(crate) selector: Column<Fixed>,
     pub(crate) selector_zero: Selector,
@@ -195,12 +198,13 @@ impl<F: Field + PrimeField> SortedMemoryConfig<F> {
         let addr_cur_prev = IsZeroConfigure::<F>::configure(meta, selector);
 
         // addr[i+1]>addr[i] OR addr[i+1]=addr[i] and time[i+1]>time[i]
-        let greater_than = GreaterThanConfigure::<F>::configure(
+        let greater_than = GreaterThanConfigure::<F, 6>::configure(
             meta,
             trace_record,
             alpha_power,
             lookup_tables,
             selector,
+            true,
         );
 
         let mut limb_vector = vec![0_u8];
@@ -300,12 +304,16 @@ fn rlc_limb_differences<F: Field + PrimeField>(
     cur: Queries<F>,
     prev: Queries<F>,
     alpha_power: Vec<Expression<F>>,
+    address_included: bool,
 ) -> Vec<Expression<F>> {
     let mut result = vec![];
     let mut partial_sum = Expression::Constant(F::ZERO);
     let alpha_power = once(Expression::Constant(F::ONE)).chain(alpha_power);
-    for ((cur_limb, prev_limb), power_of_randomness) in
-        cur.be_limbs().iter().zip(&prev.be_limbs()).zip(alpha_power)
+    for ((cur_limb, prev_limb), power_of_randomness) in cur
+        .be_limbs(address_included)
+        .iter()
+        .zip(&prev.be_limbs(address_included))
+        .zip(alpha_power)
     {
         result.push(partial_sum.clone());
         partial_sum = partial_sum + power_of_randomness * (cur_limb.clone() - prev_limb.clone());
@@ -338,11 +346,13 @@ impl<F: Field + PrimeField> Queries<F> {
     }
 
     // stack address and time_log into a single array for comparison
-    fn be_limbs(&self) -> Vec<Expression<F>> {
+    fn be_limbs(&self, address_included: bool) -> Vec<Expression<F>> {
+        if address_included == false {
+            return self.time_log.iter().cloned().collect();
+        }
         self.address
             .iter()
-            .rev()
-            .chain(self.time_log.iter().rev())
+            .chain(self.time_log.iter())
             .cloned()
             .collect()
     }

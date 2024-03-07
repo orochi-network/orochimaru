@@ -1,5 +1,3 @@
-/// Check if the original trace is sorted by time
-pub mod chronically_ordering;
 /// Common traits for permutation and lexicographic ordering
 pub mod common;
 /// The final circuit for memory consistency check

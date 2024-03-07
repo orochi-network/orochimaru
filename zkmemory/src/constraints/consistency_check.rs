@@ -10,16 +10,16 @@ use halo2_proofs::{
     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Expression},
     poly::Rotation,
 };
+use rand::thread_rng;
 extern crate std;
 
 use crate::base::B256;
 use crate::constraints::lexicographic_ordering::Queries;
 use crate::machine::TraceRecord;
 
-use super::chronically_ordering::ChronicallyOrderedConfig;
 use super::common::CircuitExtension;
-use super::gadgets::{equal_value, BinaryConfigure};
-use super::lexicographic_ordering::SortedTraceRecord;
+use super::gadgets::{equal_value, BinaryConfigure, Table};
+use super::lexicographic_ordering::{GreaterThanConfigure, SortedTraceRecord};
 use super::{
     lexicographic_ordering::{
         LookUpTables, SortedMemoryCircuit, SortedMemoryConfig, TraceRecordWitnessTable,
@@ -30,7 +30,7 @@ use super::{
 /// Config for consistency check circuit
 #[derive(Debug, Clone)]
 pub struct ConsistencyConfig<F: Field + PrimeField> {
-    chronically_ordering_config: ChronicallyOrderedConfig<F>,
+    chronically_ordering_config: GreaterThanConfigure<F, 3>,
     lexicographic_ordering_config: SortedMemoryConfig<F>,
     permutation_config: ShuffleConfig,
     _marker: PhantomData<F>,
@@ -40,7 +40,7 @@ impl<F: Field + PrimeField> ConsistencyConfig<F> {
     fn construct(
         lexicographic_ordering_config: SortedMemoryConfig<F>,
         permutation_config: ShuffleConfig,
-        chronically_ordering_config: ChronicallyOrderedConfig<F>,
+        chronically_ordering_config: GreaterThanConfigure<F, 3>,
     ) -> Self {
         Self {
             chronically_ordering_config,
@@ -58,13 +58,16 @@ impl<F: Field + PrimeField> ConsistencyConfig<F> {
         trace_record: TraceRecordWitnessTable<F>,
         lookup_tables: LookUpTables,
         alpha_power: Vec<Expression<F>>,
+        selector: Column<Fixed>,
     ) -> Self {
         Self {
-            chronically_ordering_config: ChronicallyOrderedConfig::configure(
+            chronically_ordering_config: GreaterThanConfigure::<F, 3>::configure(
                 meta,
                 trace_record,
-                alpha_power,
+                alpha_power.clone(),
                 lookup_tables,
+                selector,
+                false,
             ),
 
             lexicographic_ordering_config: SortedMemoryConfig::<F>::configure(
@@ -136,12 +139,41 @@ impl<F: Field + PrimeField + From<B256> + From<B256>> Circuit<F> for MemoryConsi
     }
     // configure the circuit
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-        Self::Config {
-            chronically_ordering_config: ChronicallyMemoryCircuit::<F>::configure(meta),
-            lexicographic_ordering_config: SortedMemoryCircuit::<F>::configure(meta),
-            permutation_config: PermutationCircuit::<F>::configure(meta),
-            _marker: PhantomData,
+        let rng = thread_rng();
+
+        // the elements of the trace record
+        let trace_record = TraceRecordWitnessTable::<F>::new(meta);
+
+        // lookup tables
+        let lookup_tables = LookUpTables {
+            size64_table: Table::<64>::construct(meta),
+            size40_table: Table::<40>::construct(meta),
+            size2_table: Table::<2>::construct(meta),
+        };
+        // the random challenges
+        let alpha = Expression::Constant(F::random(rng));
+        let mut tmp = Expression::Constant(F::ONE);
+        let mut alpha_power: Vec<Expression<F>> = vec![tmp.clone()];
+        for _ in 0..40 {
+            tmp = tmp * alpha.clone();
+            alpha_power.push(tmp.clone());
         }
+        let input_idx = meta.advice_column();
+        let input = meta.fixed_column();
+        let shuffle_idx = meta.advice_column();
+        let shuffle = meta.advice_column();
+        let selector = meta.fixed_column();
+        Self::Config::configure(
+            meta,
+            input_idx,
+            input,
+            shuffle_idx,
+            shuffle,
+            trace_record,
+            lookup_tables,
+            alpha_power,
+            selector,
+        )
     }
 
     /// Forward to the synthesize_with_layouter method
