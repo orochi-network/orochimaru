@@ -42,10 +42,10 @@ impl<F: Field + PrimeField> TraceRecordWitnessTable<F> {
 
 #[derive(Clone, Copy, Debug)]
 /// check the lexicographic ordering of address||time
-pub struct GreaterThanConfigure<F: Field + PrimeField> {
-    difference: Column<Advice>,
-    difference_inverse: Column<Advice>,
-    first_difference_limb: BinaryConfigure<F, 6>,
+pub(crate) struct GreaterThanConfigure<F: Field + PrimeField> {
+    pub(crate) difference: Column<Advice>,
+    pub(crate) difference_inverse: Column<Advice>,
+    pub(crate) first_difference_limb: BinaryConfigure<F, 6>,
 }
 
 impl<F: Field + PrimeField> GreaterThanConfigure<F> {
@@ -152,29 +152,29 @@ impl<F: Field + PrimeField> GreaterThanConfigure<F> {
 
 /// The lookup tables
 #[derive(Clone, Copy, Debug)]
-pub struct LookUpTables {
-    size64_table: Table<64>,
-    size40_table: Table<40>,
-    size2_table: Table<2>,
+pub(crate) struct LookUpTables {
+    pub(crate) size64_table: Table<64>,
+    pub(crate) size40_table: Table<40>,
+    pub(crate) size2_table: Table<2>,
 }
 
 #[derive(Clone, Copy, Debug)]
 /// define the columns for the constraint
-pub struct SortedMemoryConfig<F: Field + PrimeField> {
+pub(crate) struct SortedMemoryConfig<F: Field + PrimeField> {
     //  the fields of an execution trace
-    trace_record: TraceRecordWitnessTable<F>,
+    pub(crate) trace_record: TraceRecordWitnessTable<F>,
     // the difference between the current and the previous address
-    addr_cur_prev: IsZeroConfigure<F>,
+    pub(crate) addr_cur_prev: IsZeroConfigure<F>,
     // the config for checking the current address||time_log is bigger
     // than the previous one
-    greater_than: GreaterThanConfigure<F>,
+    pub(crate) greater_than: GreaterThanConfigure<F>,
     // the selectors
-    selector: Column<Fixed>,
-    selector_zero: Selector,
+    pub(crate) selector: Column<Fixed>,
+    pub(crate) selector_zero: Selector,
     // the lookup table
-    lookup_tables: LookUpTables,
+    pub(crate) lookup_tables: LookUpTables,
     // just the phantom data
-    _marker: PhantomData<F>,
+    pub(crate) _marker: PhantomData<F>,
 }
 
 // implement the configure method for selecting gates
@@ -313,17 +313,17 @@ fn rlc_limb_differences<F: Field + PrimeField>(
     result
 }
 
-// Query the element of a trace record at a specific position
-struct Queries<F: Field + PrimeField> {
-    address: [Expression<F>; 32], //64 bits
-    time_log: [Expression<F>; 8], //64 bits
-    instruction: Expression<F>,   // 0 or 1
-    value: [Expression<F>; 32],   //64 bit
+/// Query the element of a trace record at a specific position
+pub(crate) struct Queries<F: Field + PrimeField> {
+    pub(crate) address: [Expression<F>; 32], //64 bits
+    pub(crate) time_log: [Expression<F>; 8], //64 bits
+    pub(crate) instruction: Expression<F>,   // 0 or 1
+    pub(crate) value: [Expression<F>; 32],   //64 bit
 }
 
 impl<F: Field + PrimeField> Queries<F> {
-    // converts the attributes of a trace record to type Expression<F>
-    fn new(
+    /// converts the attributes of a trace record to type Expression<F>
+    pub fn new(
         meta: &mut VirtualCells<'_, F>,
         trace_record: TraceRecordWitnessTable<F>,
         rotation: Rotation,
@@ -401,9 +401,9 @@ impl<F: Field + PrimeField> From<TraceRecord<B256, B256, 32, 32>> for SortedTrac
 
 /// Circuit for sorted trace record
 #[derive(Default)]
-pub struct SortedMemoryCircuit<F: PrimeField> {
-    sorted_trace_record: Vec<SortedTraceRecord<F>>,
-    _marker: PhantomData<F>,
+pub(crate) struct SortedMemoryCircuit<F: PrimeField> {
+    pub(crate) sorted_trace_record: Vec<SortedTraceRecord<F>>,
+    pub(crate) _marker: PhantomData<F>,
 }
 
 /// Implement the CircuitExtension trait for the SortedMemoryCircuit

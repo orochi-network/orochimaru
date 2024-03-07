@@ -1,76 +1,36 @@
 extern crate alloc;
 use alloc::vec;
 use alloc::vec::Vec;
-use core::marker::PhantomData;
+use core::{iter::once, marker::PhantomData};
 use ff::{Field, PrimeField};
-use halo2_proofs::circuit::{SimpleFloorPlanner, Value};
+use halo2_proofs::circuit::SimpleFloorPlanner;
 use halo2_proofs::plonk::{Fixed, Selector};
 use halo2_proofs::{
     circuit::Layouter,
-    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Expression, VirtualCells},
+    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Expression},
     poly::Rotation,
 };
 extern crate std;
 
-use crate::base::{Base, B256};
-use crate::machine::{MemoryInstruction, TraceRecord};
+use crate::base::B256;
+use crate::constraints::lexicographic_ordering::Queries;
+use crate::machine::TraceRecord;
 
+use super::chronically_ordering::ChronicallyOrderedConfig;
 use super::common::CircuitExtension;
-use super::gadgets::BinaryConfigure;
+use super::gadgets::{equal_value, BinaryConfigure};
 use super::lexicographic_ordering::SortedTraceRecord;
-use super::{lexicographic_ordering, permutation};
 use super::{
     lexicographic_ordering::{
         LookUpTables, SortedMemoryCircuit, SortedMemoryConfig, TraceRecordWitnessTable,
     },
-    permutation::{PermutationCircuit, PermutationProver, ShuffleChip, ShuffleConfig},
+    permutation::{PermutationCircuit, ShuffleChip, ShuffleConfig},
 };
-
-#[derive(Debug, Clone)]
-/// Config for proving the original trace is sored in time
-pub struct ChronicallyOrderedConfig<F: Field + PrimeField> {
-    time_log_difference: Column<Advice>,
-    time_log_difference_inverse: Column<Advice>,
-    first_difference_limb: BinaryConfigure<F, 3>,
-    _marker: PhantomData<F>,
-}
-impl<F: Field + PrimeField> ChronicallyOrderedConfig<F> {
-    fn configure(
-        meta: &mut ConstraintSystem<F>,
-        time_log: [Column<Advice>; 8],
-        selector: Column<Fixed>,
-        selector_zero: Selector,
-    ) {
-        let time_log = [meta.advice_column(); 8];
-        let time_log_difference = meta.advice_column();
-        let time_log_difference_inverse = meta.advice_column();
-        let first_difference_limb = BinaryConfigure::<F, 3>::configure(meta, selector);
-        let one = Expression::Constant(F::ONE);
-
-        // time[0]=0
-        meta.create_gate("the first time log must be zero", |meta| {
-            let selector = meta.query_fixed(selector, Rotation::cur());
-            let mut time = meta.query_advice(time_log[0], Rotation::cur());
-            for i in 1..8 {
-                time = time * Expression::Constant(F::from(64_u64))
-                    + meta.query_advice(time_log[i], Rotation::cur());
-            }
-            vec![selector * time]
-        });
-        // time_log_difference must be non-zero
-        meta.create_gate("time_log_difference must be non-zero", |meta| {
-            let selector = meta.query_fixed(selector, Rotation::cur());
-            let time_log_difference = meta.query_advice(time_log_difference, Rotation::cur());
-            let time_log_difference_inverse =
-                meta.query_advice(time_log_difference_inverse, Rotation::cur());
-            vec![selector * (time_log_difference * time_log_difference_inverse - one.clone())]
-        });
-    }
-}
 
 /// Config for consistency check circuit
 #[derive(Debug, Clone)]
 pub struct ConsistencyConfig<F: Field + PrimeField> {
+    chronically_ordering_config: ChronicallyOrderedConfig<F>,
     lexicographic_ordering_config: SortedMemoryConfig<F>,
     permutation_config: ShuffleConfig,
     _marker: PhantomData<F>,
@@ -80,8 +40,10 @@ impl<F: Field + PrimeField> ConsistencyConfig<F> {
     fn construct(
         lexicographic_ordering_config: SortedMemoryConfig<F>,
         permutation_config: ShuffleConfig,
+        chronically_ordering_config: ChronicallyOrderedConfig<F>,
     ) -> Self {
         Self {
+            chronically_ordering_config,
             lexicographic_ordering_config,
             permutation_config,
             _marker: PhantomData,
@@ -98,6 +60,13 @@ impl<F: Field + PrimeField> ConsistencyConfig<F> {
         alpha_power: Vec<Expression<F>>,
     ) -> Self {
         Self {
+            chronically_ordering_config: ChronicallyOrderedConfig::configure(
+                meta,
+                trace_record,
+                alpha_power,
+                lookup_tables,
+            ),
+
             lexicographic_ordering_config: SortedMemoryConfig::<F>::configure(
                 meta,
                 trace_record,
@@ -168,36 +137,19 @@ impl<F: Field + PrimeField + From<B256> + From<B256>> Circuit<F> for MemoryConsi
     // configure the circuit
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
         Self::Config {
+            chronically_ordering_config: ChronicallyMemoryCircuit::<F>::configure(meta),
             lexicographic_ordering_config: SortedMemoryCircuit::<F>::configure(meta),
             permutation_config: PermutationCircuit::<F>::configure(meta),
             _marker: PhantomData,
         }
     }
 
-    //TODO: Method: synthesize
-    fn synthesize(&self, config: Self::Config, layouter: impl Layouter<F>) -> Result<(), Error> {
-        let permutation_tuple = PermutationCircuit::<F>::new::<B256, B256, 32, 32>(
-            self.input.clone(),
-            self.shuffle.clone(),
-        );
-        let (input_idx, input, shuffle_idx, shuffle) = permutation_tuple.get_tuple();
-        let permutation_circuit = PermutationCircuit {
-            input_idx,
-            input,
-            shuffle_idx,
-            shuffle,
-        };
-        permutation_circuit.synthesize(config.permutation_config, &layouter)?;
-        let mut sorted_trace_record = vec![];
-        for (_, trace) in self.shuffle.clone() {
-            sorted_trace_record.push(SortedTraceRecord::<F>::from(trace));
-        }
-        let lexicographic_ordering_circuit = SortedMemoryCircuit {
-            sorted_trace_record,
-            _marker: PhantomData,
-        };
-        lexicographic_ordering_circuit
-            .synthesize(config.lexicographic_ordering_config, &layouter)?;
-        Ok(())
+    /// Forward to the synthesize_with_layouter method
+    fn synthesize(
+        &self,
+        config: Self::Config,
+        mut layouter: impl Layouter<F>,
+    ) -> Result<(), Error> {
+        self.synthesize_with_layouter(config, &mut layouter)
     }
 }
