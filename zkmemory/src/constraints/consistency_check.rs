@@ -15,6 +15,7 @@ extern crate std;
 use crate::base::{Base, B256};
 use crate::machine::{MemoryInstruction, TraceRecord};
 
+use super::common::CircuitExtension;
 use super::gadgets::BinaryConfigure;
 use super::lexicographic_ordering::SortedTraceRecord;
 use super::{lexicographic_ordering, permutation};
@@ -120,6 +121,41 @@ pub struct MemoryConsistencyCircuit<F: Field + PrimeField + From<B256> + From<B2
     shuffle: Vec<(F, TraceRecord<B256, B256, 32, 32>)>,
 }
 
+/// Implement the circuit extension for memory consistency circuit
+impl<F: Field + PrimeField + From<B256> + From<B256>> CircuitExtension<F>
+    for MemoryConsistencyCircuit<F>
+{
+    fn synthesize_with_layouter(
+        &self,
+        config: Self::Config,
+        layouter: &mut impl Layouter<F>,
+    ) -> Result<(), Error> {
+        let permutation_tuple = PermutationCircuit::<F>::new::<B256, B256, 32, 32>(
+            self.input.clone(),
+            self.shuffle.clone(),
+        );
+        let (input_idx, input, shuffle_idx, shuffle) = permutation_tuple.get_tuple();
+        let permutation_circuit = PermutationCircuit {
+            input_idx,
+            input,
+            shuffle_idx,
+            shuffle,
+        };
+        permutation_circuit.synthesize_with_layouter(config.permutation_config, layouter)?;
+        let mut sorted_trace_record = vec![];
+        for (_, trace) in self.shuffle.clone() {
+            sorted_trace_record.push(SortedTraceRecord::<F>::from(trace));
+        }
+        let lexicographic_ordering_circuit = SortedMemoryCircuit {
+            sorted_trace_record,
+            _marker: PhantomData,
+        };
+        lexicographic_ordering_circuit
+            .synthesize_with_layouter(config.lexicographic_ordering_config, layouter)?;
+        Ok(())
+    }
+}
+
 impl<F: Field + PrimeField + From<B256> + From<B256>> Circuit<F> for MemoryConsistencyCircuit<F> {
     type Config = ConsistencyConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
@@ -151,7 +187,7 @@ impl<F: Field + PrimeField + From<B256> + From<B256>> Circuit<F> for MemoryConsi
             shuffle_idx,
             shuffle,
         };
-        permutation_circuit.synthesize(config.permutation_config, layouter)?;
+        permutation_circuit.synthesize(config.permutation_config, &layouter)?;
         let mut sorted_trace_record = vec![];
         for (_, trace) in self.shuffle.clone() {
             sorted_trace_record.push(SortedTraceRecord::<F>::from(trace));
@@ -161,7 +197,7 @@ impl<F: Field + PrimeField + From<B256> + From<B256>> Circuit<F> for MemoryConsi
             _marker: PhantomData,
         };
         lexicographic_ordering_circuit
-            .synthesize(config.lexicographic_ordering_config, layouter)?;
+            .synthesize(config.lexicographic_ordering_config, &layouter)?;
         Ok(())
     }
 }

@@ -16,6 +16,7 @@ extern crate std;
 
 use crate::machine::{MemoryInstruction, TraceRecord};
 
+use super::common::CircuitExtension;
 use super::gadgets::*;
 
 /// The witness table consisting of the elements of the trace records
@@ -403,6 +404,29 @@ impl<F: Field + PrimeField> From<TraceRecord<B256, B256, 32, 32>> for SortedTrac
 pub struct SortedMemoryCircuit<F: PrimeField> {
     sorted_trace_record: Vec<SortedTraceRecord<F>>,
     _marker: PhantomData<F>,
+}
+
+/// Implement the CircuitExtension trait for the SortedMemoryCircuit
+impl<F: Field + PrimeField> CircuitExtension<F> for SortedMemoryCircuit<F> {
+    fn synthesize_with_layouter(
+        &self,
+        config: Self::Config,
+        layouter: &mut impl Layouter<F>,
+    ) -> Result<(), Error> {
+        layouter.assign_region(
+            || "lexicographic_ordering",
+            |mut region| {
+                for i in 0..self.sorted_trace_record.len() {
+                    self.assign(&mut region, config, i)?;
+                }
+                config.lookup_tables.size40_table.load(&mut region)?;
+                config.lookup_tables.size64_table.load(&mut region)?;
+                config.lookup_tables.size2_table.load(&mut region)?;
+                Ok(())
+            },
+        )?;
+        Ok(())
+    }
 }
 
 impl<F: Field + PrimeField> Circuit<F> for SortedMemoryCircuit<F> {

@@ -29,6 +29,8 @@ use rand_core::OsRng;
 extern crate alloc;
 use alloc::{vec, vec::Vec};
 
+use super::common::CircuitExtension;
+
 /// Define a chip struct that implements our instructions.
 pub(crate) struct ShuffleChip<F: Field + PrimeField> {
     pub(crate) config: ShuffleConfig,
@@ -102,6 +104,65 @@ pub(crate) struct PermutationCircuit<F: Field + PrimeField> {
     pub(crate) shuffle: Vec<Value<F>>,
 }
 
+/// Implement the circuit extension trait for the permutation circuit
+impl<F: Field + PrimeField> CircuitExtension<F> for PermutationCircuit<F> {
+    fn synthesize_with_layouter(
+        &self,
+        config: Self::Config,
+        layouter: &mut impl Layouter<F>,
+    ) -> Result<(), Error> {
+        let shuffle_chip = ShuffleChip::<F>::construct(config);
+        layouter.assign_region(
+            || "load inputs",
+            |mut region| {
+                for (i, (input_idx, input)) in
+                    self.input_idx.iter().zip(self.input.iter()).enumerate()
+                {
+                    region.assign_advice(
+                        || "input_idx",
+                        shuffle_chip.config.input_0,
+                        i,
+                        || *input_idx,
+                    )?;
+                    region.assign_fixed(
+                        || "input",
+                        shuffle_chip.config.input_1,
+                        i,
+                        || Value::known(*input),
+                    )?;
+                    shuffle_chip.config.s_input.enable(&mut region, i)?;
+                }
+                Ok(())
+            },
+        )?;
+        layouter.assign_region(
+            || "load shuffles",
+            |mut region| {
+                for (i, (shuffle_idx, shuffle)) in
+                    self.shuffle_idx.iter().zip(self.shuffle.iter()).enumerate()
+                {
+                    region.assign_advice(
+                        || "shuffle_index",
+                        shuffle_chip.config.shuffle_0,
+                        i,
+                        || *shuffle_idx,
+                    )?;
+                    region.assign_advice(
+                        || "shuffle_value",
+                        shuffle_chip.config.shuffle_1,
+                        i,
+                        || *shuffle,
+                    )?;
+                    shuffle_chip.config.s_shuffle.enable(&mut region, i)?;
+                }
+                Ok(())
+            },
+        )?;
+        Ok(())
+    }
+}
+
+/// Implement the circuit trait for the permutation circuit
 impl<F: Field + PrimeField> Circuit<F> for PermutationCircuit<F> {
     // Reuse the config
     type Config = ShuffleConfig;

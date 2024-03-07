@@ -1,3 +1,5 @@
+/// Common traits for permutation and lexicographic ordering
+pub mod common;
 /// The final circuit for memory consistency check
 pub mod consistency_check;
 /// Gadgets supports lexicographic ordering and permutation
