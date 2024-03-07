@@ -1,4 +1,5 @@
 extern crate alloc;
+use crate::base::{Base, B256};
 use alloc::vec::Vec;
 use alloc::{format, vec};
 use core::{iter::once, marker::PhantomData};
@@ -12,6 +13,8 @@ use halo2_proofs::{
 };
 use rand::thread_rng;
 extern crate std;
+
+use crate::machine::{MemoryInstruction, TraceRecord};
 
 use super::gadgets::*;
 
@@ -343,8 +346,8 @@ impl<F: Field + PrimeField> Queries<F> {
             .collect()
     }
 }
-
-struct SortedTraceRecord<F: Field + PrimeField> {
+///
+pub struct SortedTraceRecord<F: Field + PrimeField> {
     address: [F; 32], //256 bits
     time_log: [F; 8], //256 bits
     instruction: F,   // 0 or 1
@@ -354,6 +357,44 @@ struct SortedTraceRecord<F: Field + PrimeField> {
 impl<F: Field + PrimeField> SortedTraceRecord<F> {
     fn get_tuple(&self) -> ([F; 32], [F; 8], F, [F; 32]) {
         (self.address, self.time_log, self.instruction, self.value)
+    }
+}
+
+impl<F: Field + PrimeField> From<TraceRecord<B256, B256, 32, 32>> for SortedTraceRecord<F> {
+    fn from(value: TraceRecord<B256, B256, 32, 32>) -> Self {
+        Self {
+            address: value
+                .get_tuple()
+                .3
+                .fixed_be_bytes()
+                .into_iter()
+                .map(|b| F::from(u64::from(b)))
+                .collect::<Vec<F>>()
+                .try_into()
+                .expect("Cannot convert address to [F; 32]"),
+            time_log: value
+                .get_tuple()
+                .0
+                .to_be_bytes()
+                .into_iter()
+                .map(|b| F::from(u64::from(b)))
+                .collect::<Vec<F>>()
+                .try_into()
+                .expect("Cannot convert time_log to [F; 8]"),
+            instruction: match value.get_tuple().2 {
+                MemoryInstruction::Write => F::ONE,
+                MemoryInstruction::Read => F::ZERO,
+            },
+            value: value
+                .get_tuple()
+                .4
+                .fixed_be_bytes()
+                .into_iter()
+                .map(|b| F::from(u64::from(b)))
+                .collect::<Vec<F>>()
+                .try_into()
+                .expect("Cannot convert value to [F; 32]"),
+        }
     }
 }
 
