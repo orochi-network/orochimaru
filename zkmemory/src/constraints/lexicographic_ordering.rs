@@ -11,8 +11,6 @@ use halo2_proofs::{
     poly::Rotation,
 };
 use rand::thread_rng;
-use std::println;
-extern crate std;
 
 use super::common::CircuitExtension;
 use super::gadgets::*;
@@ -250,12 +248,12 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
                 )?;
             }
             // assign the time_log witness
-            for i in 0..8 {
+            for (i, &cur_t) in cur_time_log.iter().enumerate() {
                 region.assign_advice(
                     || format!("address{}", offset),
                     config.trace_record.time_log[i],
                     offset,
-                    || Value::known(cur_time_log[i]),
+                    || Value::known(cur_t),
                 )?;
             }
 
@@ -334,12 +332,12 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
             }
             // assign the time_log witness
 
-            for i in 0..8 {
+            for (i, &cur_t) in cur_time_log.iter().enumerate() {
                 region.assign_advice(
                     || format!("address{}", offset),
                     config.trace_record.time_log[i],
                     offset,
-                    || Value::known(cur_time_log[i]),
+                    || Value::known(cur_t),
                 )?;
             }
 

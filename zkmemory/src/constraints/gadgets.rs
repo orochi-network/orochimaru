@@ -3,7 +3,6 @@ extern crate std;
 
 use core::iter::once;
 use core::marker::PhantomData;
-use std::println;
 
 use alloc::vec::Vec;
 use alloc::{format, vec};
@@ -287,7 +286,7 @@ impl<F: Field + PrimeField, const N: usize> GreaterThanConfigure<F, N> {
         });
 
         // first_difference_limb is in [0..39]
-        if address_included == true {
+        if address_included {
             lookup_tables.size40_table.range_check(
                 meta,
                 "first_difference_limb must be in 0..39",
@@ -377,8 +376,8 @@ impl<F: Field + PrimeField> Queries<F> {
 
     // stack address and time_log into a single array for comparison
     fn be_limbs(&self, address_included: bool) -> Vec<Expression<F>> {
-        if address_included == false {
-            return self.time_log.iter().cloned().collect();
+        if !address_included {
+            return self.time_log.to_vec();
         }
         let mut result = vec![];
         for i in self.address.iter() {

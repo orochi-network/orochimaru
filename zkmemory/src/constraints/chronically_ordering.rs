@@ -1,25 +1,22 @@
 extern crate alloc;
-use alloc::vec::Vec;
-use alloc::{format, vec};
+use super::{
+    common::CircuitExtension,
+    gadgets::{
+        ConvertedTraceRecord, GreaterThanConfigure, LookUpTables, Table, TraceRecordWitnessTable,
+    },
+};
+use crate::constraints::gadgets::Queries;
+use alloc::{format, vec, vec::Vec};
 use core::marker::PhantomData;
 use ff::{Field, PrimeField};
-use halo2_proofs::circuit::{Region, SimpleFloorPlanner, Value};
-use halo2_proofs::plonk::{Fixed, Selector};
 use halo2_proofs::{
-    circuit::Layouter,
-    plonk::{Circuit, Column, ConstraintSystem, Error, Expression},
+    circuit::{Layouter, Region, SimpleFloorPlanner, Value},
+    plonk::{Circuit, Column, ConstraintSystem, Error, Expression, Fixed, Selector},
     poly::Rotation,
 };
 use rand::thread_rng;
-
-use crate::constraints::gadgets::Queries;
-
-use super::common::CircuitExtension;
-use super::gadgets::Table;
-use super::gadgets::{ConvertedTraceRecord, GreaterThanConfigure};
-use super::gadgets::{LookUpTables, TraceRecordWitnessTable};
 #[derive(Clone, Copy, Debug)]
-/// fuck
+/// Config for trace record that is sorted by time_log
 pub(crate) struct OriginalMemoryConfig<F: Field + PrimeField> {
     pub(crate) trace_record: TraceRecordWitnessTable<F>,
     pub(crate) selector: Column<Fixed>,
@@ -48,8 +45,8 @@ impl<F: Field + PrimeField> OriginalMemoryConfig<F> {
             let selector_zero = meta.query_selector(selector_zero);
             let time_log = Queries::new(meta, trace_record, Rotation::cur()).time_log;
             let mut time = time_log[0].clone();
-            for i in 1..8 {
-                time = time * Expression::Constant(F::from(64_u64)) + time_log[i].clone();
+            for t in time_log.iter().skip(1) {
+                time = time * Expression::Constant(F::from(64_u64)) + t.clone();
             }
             vec![selector_zero * time]
         });

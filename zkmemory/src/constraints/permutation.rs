@@ -354,10 +354,6 @@ impl<F: Field + PrimeField> PermutationCircuit<F> {
                 .collect(),
         }
     }
-    ///
-    pub fn get_tuple(self) -> (Vec<Value<F>>, Vec<F>, Vec<Value<F>>, Vec<Value<F>>) {
-        (self.input_idx, self.input, self.shuffle_idx, self.shuffle)
-    }
 }
 
 // Implement methods for trace records to use for the permutation circuit.

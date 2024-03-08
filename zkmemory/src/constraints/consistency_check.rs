@@ -4,10 +4,9 @@ use alloc::vec::Vec;
 use core::marker::PhantomData;
 use ff::{Field, PrimeField};
 use halo2_proofs::circuit::SimpleFloorPlanner;
-use halo2_proofs::plonk::Fixed;
 use halo2_proofs::{
     circuit::Layouter,
-    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Expression},
+    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Expression, Fixed},
 };
 use rand::thread_rng;
 extern crate std;
@@ -47,10 +46,12 @@ impl<F: Field + PrimeField> ConsistencyConfig<F> {
     // }
     fn configure(
         meta: &mut ConstraintSystem<F>,
-        input_0: Column<Advice>,
-        input_1: Column<Fixed>,
-        shuffle_0: Column<Advice>,
-        shuffle_1: Column<Advice>,
+        shuffle_input: (
+            Column<Advice>,
+            Column<Fixed>,
+            Column<Advice>,
+            Column<Advice>,
+        ),
         original_trace_record: TraceRecordWitnessTable<F>,
         sorted_trace_record: TraceRecordWitnessTable<F>,
         lookup_tables: LookUpTables,
@@ -71,7 +72,11 @@ impl<F: Field + PrimeField> ConsistencyConfig<F> {
                 alpha_power,
             ),
             permutation_config: ShuffleChip::<F>::configure(
-                meta, input_0, input_1, shuffle_0, shuffle_1,
+                meta,
+                shuffle_input.0,
+                shuffle_input.1,
+                shuffle_input.2,
+                shuffle_input.3,
             ),
             _marker: PhantomData,
         }
@@ -96,17 +101,10 @@ impl<F: Field + PrimeField + From<B256> + From<B256>> CircuitExtension<F>
         config: Self::Config,
         layouter: &mut impl Layouter<F>,
     ) -> Result<(), Error> {
-        let permutation_tuple = PermutationCircuit::<F>::new::<B256, B256, 32, 32>(
+        let permutation_circuit = PermutationCircuit::<F>::new::<B256, B256, 32, 32>(
             self.input.clone(),
             self.shuffle.clone(),
         );
-        let (input_idx, input, shuffle_idx, shuffle) = permutation_tuple.get_tuple();
-        let permutation_circuit = PermutationCircuit {
-            input_idx,
-            input,
-            shuffle_idx,
-            shuffle,
-        };
         permutation_circuit.synthesize_with_layouter(config.permutation_config, layouter)?;
         let mut sorted_trace_record = vec![];
         for (_, trace) in self.shuffle.clone() {
@@ -169,10 +167,7 @@ impl<F: Field + PrimeField + From<B256> + From<B256>> Circuit<F> for MemoryConsi
         let shuffle = meta.advice_column();
         Self::Config::configure(
             meta,
-            input_idx,
-            input,
-            shuffle_idx,
-            shuffle,
+            (input_idx, input, shuffle_idx, shuffle),
             original_trace_record,
             sorted_trace_record,
             lookup_tables,
@@ -192,9 +187,7 @@ impl<F: Field + PrimeField + From<B256> + From<B256>> Circuit<F> for MemoryConsi
 
 #[cfg(test)]
 mod test {
-    use super::std::println;
 
-    use crate::constraints::gadgets::ConvertedTraceRecord;
     use crate::machine::{AbstractTraceRecord, MemoryInstruction, TraceRecord};
     extern crate alloc;
     use crate::base::{Base, B256};
