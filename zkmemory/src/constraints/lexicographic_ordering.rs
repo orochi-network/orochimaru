@@ -1,7 +1,7 @@
 extern crate alloc;
 use alloc::vec::Vec;
 use alloc::{format, vec};
-use core::{marker::PhantomData};
+use core::marker::PhantomData;
 use ff::{Field, PrimeField};
 use halo2_proofs::circuit::Value;
 use halo2_proofs::plonk::{Fixed, Selector};
@@ -13,11 +13,8 @@ use halo2_proofs::{
 use rand::thread_rng;
 extern crate std;
 
-
 use super::common::CircuitExtension;
 use super::gadgets::*;
-
-
 
 #[derive(Clone, Copy, Debug)]
 /// define the columns for the constraint
@@ -156,9 +153,6 @@ fn limbs_to_expression<F: Field + PrimeField>(limb: [Expression<F>; 32]) -> Expr
     sum
 }
 
-
-
-
 /// Circuit for sorted trace record
 #[derive(Default)]
 pub(crate) struct SortedMemoryCircuit<F: PrimeField> {
@@ -227,19 +221,7 @@ impl<F: Field + PrimeField> Circuit<F> for SortedMemoryCircuit<F> {
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        layouter.assign_region(
-            || "lexicographic_ordering",
-            |mut region| {
-                for i in 0..self.sorted_trace_record.len() {
-                    self.sorted_memory_assign(&mut region, config, i)?;
-                }
-                config.lookup_tables.size40_table.load(&mut region)?;
-                config.lookup_tables.size64_table.load(&mut region)?;
-                config.lookup_tables.size2_table.load(&mut region)?;
-                Ok(())
-            },
-        )?;
-        Ok(())
+        self.synthesize_with_layouter(config, &mut layouter)
     }
 }
 

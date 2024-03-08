@@ -11,6 +11,7 @@ use halo2_proofs::{
     poly::Rotation,
 };
 use rand::thread_rng;
+use std::println;
 extern crate std;
 
 use crate::constraints::gadgets::Queries;
@@ -54,7 +55,6 @@ impl<F: Field + PrimeField> OriginalMemoryConfig<F> {
             }
             vec![selector_zero * time]
         });
-        let selector_zero = meta.selector();
         OriginalMemoryConfig {
             trace_record,
             selector,
@@ -133,19 +133,7 @@ impl<F: Field + PrimeField> Circuit<F> for OriginalMemoryCircuit<F> {
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        layouter.assign_region(
-            || "lexicographic_ordering",
-            |mut region| {
-                for i in 0..self.original_trace_record.len() {
-                    self.original_memory_assign(&mut region, config, i)?;
-                }
-                config.lookup_tables.size40_table.load(&mut region)?;
-                config.lookup_tables.size64_table.load(&mut region)?;
-                config.lookup_tables.size2_table.load(&mut region)?;
-                Ok(())
-            },
-        )?;
-        Ok(())
+        self.synthesize_with_layouter(config, &mut layouter)
     }
 }
 
@@ -299,5 +287,48 @@ impl<F: Field + PrimeField> OriginalMemoryCircuit<F> {
         let mut be_bytes = vec![];
         be_bytes.extend_from_slice(&time_log);
         be_bytes
+    }
+}
+
+mod test {
+    use super::*;
+    use halo2_proofs::dev::MockProver;
+    use halo2_proofs::halo2curves::bn256::Fr as Fp;
+    #[test]
+    fn test_ok_one_trace() {
+        let trace0 = CovertedTraceRecord {
+            address: [Fp::from(0); 32],
+            time_log: [Fp::from(0); 8],
+            instruction: Fp::from(1),
+            value: [Fp::from(63); 32],
+        };
+        let trace = vec![trace0];
+        let circuit = OriginalMemoryCircuit {
+            original_trace_record: trace,
+            _marker: PhantomData,
+        };
+        // the number of rows cannot exceed 2^k
+        let k = 7;
+        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+        assert_eq!(prover.verify(), Ok(()));
+    }
+
+    #[test]
+    fn test_wrong_starting_time() {
+        let trace0 = CovertedTraceRecord {
+            address: [Fp::from(0); 32],
+            time_log: [Fp::from(1); 8],
+            instruction: Fp::from(1),
+            value: [Fp::from(63); 32],
+        };
+        let trace = vec![trace0];
+        let circuit = OriginalMemoryCircuit {
+            original_trace_record: trace,
+            _marker: PhantomData,
+        };
+        // the number of rows cannot exceed 2^k
+        let k = 7;
+        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+        assert_ne!(prover.verify(), Ok(()));
     }
 }
