@@ -18,7 +18,7 @@ use crate::machine::TraceRecord;
 use super::chronically_ordering::{OriginalMemoryCircuit, OriginalMemoryConfig};
 use super::common::CircuitExtension;
 use super::gadgets::Table;
-use super::gadgets::{CovertedTraceRecord, LookUpTables, TraceRecordWitnessTable};
+use super::gadgets::{ConvertedTraceRecord, LookUpTables, TraceRecordWitnessTable};
 use super::{
     lexicographic_ordering::{SortedMemoryCircuit, SortedMemoryConfig},
     permutation::{PermutationCircuit, ShuffleChip, ShuffleConfig},
@@ -111,11 +111,11 @@ impl<F: Field + PrimeField + From<B256> + From<B256>> CircuitExtension<F>
         permutation_circuit.synthesize_with_layouter(config.permutation_config, layouter)?;
         let mut sorted_trace_record = vec![];
         for (_, trace) in self.shuffle.clone() {
-            sorted_trace_record.push(CovertedTraceRecord::<F>::from(trace));
+            sorted_trace_record.push(ConvertedTraceRecord::<F>::from(trace));
         }
         let mut original_trace_record = vec![];
         for (_, trace) in self.input.clone() {
-            original_trace_record.push(CovertedTraceRecord::<F>::from(trace));
+            original_trace_record.push(ConvertedTraceRecord::<F>::from(trace));
         }
         let original_ordering_circuit = OriginalMemoryCircuit {
             original_trace_record,
@@ -193,14 +193,19 @@ impl<F: Field + PrimeField + From<B256> + From<B256>> Circuit<F> for MemoryConsi
 
 #[cfg(test)]
 mod test {
-    use crate::constraints::lexicographic_ordering::SortedTraceRecord;
+    extern crate std;
+    use std::println;
+
     use crate::machine::{AbstractTraceRecord, MemoryInstruction, TraceRecord};
     extern crate alloc;
     use crate::base::{Base, B256};
-    use crate::constraints::permutation::successive_powers;
+    use crate::constraints::gadgets::ConvertedTraceRecord;
+    use crate::constraints::permutation::{successive_powers, PermutationCircuit};
     use alloc::{vec, vec::Vec};
     use ff::{Field, PrimeField};
-    use halo2curves::bn256::Fr as Fp;
+    use halo2_proofs::dev::MockProver;
+    use halo2curves::pasta::Fp;
+    use itertools::sorted;
 
     use super::MemoryConsistencyCircuit;
 
@@ -242,7 +247,7 @@ mod test {
             0,
             MemoryInstruction::Write,
             B256::from(0),
-            B256::from(0x1234567f),
+            B256::from(1),
         );
 
         let trace_1 = TraceRecord::<B256, B256, 32, 32>::new(
@@ -250,7 +255,7 @@ mod test {
             0,
             MemoryInstruction::Read,
             B256::from(0),
-            B256::from(0x1234567f),
+            B256::from(1),
         );
 
         let trace_2 = TraceRecord::<B256, B256, 32, 32>::new(
@@ -258,7 +263,7 @@ mod test {
             0,
             MemoryInstruction::Write,
             B256::from(0x20),
-            B256::from(0xffffaabbu64),
+            B256::from(2),
         );
 
         let trace_3 = TraceRecord::<B256, B256, 32, 32>::new(
@@ -266,7 +271,7 @@ mod test {
             0,
             MemoryInstruction::Read,
             B256::from(0x20),
-            B256::from(0xabcd1010u64),
+            B256::from(0x2),
         );
 
         let trace_4 = TraceRecord::<B256, B256, 32, 32>::new(
@@ -274,13 +279,33 @@ mod test {
             0,
             MemoryInstruction::Write,
             B256::from(0x6f),
-            B256::from(0x10101010),
+            B256::from(3),
         );
 
         let trace = trace_with_index::<B256, B256, 32, 32, Fp>(vec![
             trace_0, trace_1, trace_2, trace_3, trace_4,
         ]);
-        let sorted_trace = sort_chronologically::<B256, B256, 32, 32, Fp>(trace);
-        let circuit = MemoryConsistencyCircuit::<Fp>::new(trace, sorted_trace);
+        let sorted_trace = sort_chronologically::<B256, B256, 32, 32, Fp>(trace.clone());
+
+        let temp: Vec<TraceRecord<B256, B256, 32, 32>> =
+            sorted_trace.clone().into_iter().map(|(a, b)| b).collect();
+
+        let temp: Vec<ConvertedTraceRecord<Fp>> = temp
+            .into_iter()
+            .map(|a| ConvertedTraceRecord::<Fp>::from(a))
+            .collect();
+
+        println!("{:#?}", temp);
+
+        let circuit = MemoryConsistencyCircuit::<Fp> {
+            input: sorted_trace.clone(),
+            shuffle: trace.clone(),
+        };
+
+        // Mock prover
+        // the number of rows cannot exceed 2^k
+        let k = 8;
+        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+        assert_eq!(prover.verify(), Ok(()));
     }
 }

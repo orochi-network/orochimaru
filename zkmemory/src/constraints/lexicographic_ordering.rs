@@ -1,7 +1,7 @@
 extern crate alloc;
 use alloc::vec::Vec;
 use alloc::{format, vec};
-use core::{marker::PhantomData};
+use core::marker::PhantomData;
 use ff::{Field, PrimeField};
 use halo2_proofs::circuit::Value;
 use halo2_proofs::plonk::{Fixed, Selector};
@@ -13,11 +13,8 @@ use halo2_proofs::{
 use rand::thread_rng;
 extern crate std;
 
-
 use super::common::CircuitExtension;
 use super::gadgets::*;
-
-
 
 #[derive(Clone, Copy, Debug)]
 /// define the columns for the constraint
@@ -156,13 +153,10 @@ fn limbs_to_expression<F: Field + PrimeField>(limb: [Expression<F>; 32]) -> Expr
     sum
 }
 
-
-
-
 /// Circuit for sorted trace record
 #[derive(Default)]
 pub(crate) struct SortedMemoryCircuit<F: PrimeField> {
-    pub(crate) sorted_trace_record: Vec<CovertedTraceRecord<F>>,
+    pub(crate) sorted_trace_record: Vec<ConvertedTraceRecord<F>>,
     pub(crate) _marker: PhantomData<F>,
 }
 
@@ -450,13 +444,13 @@ mod test {
 
     // use crate::constraints::lexicographic_ordering::SortedMemoryCircuit;
 
-    // use super::CovertedTraceRecord;
+    // use super::ConvertedTraceRecord;
     use super::*;
     use halo2_proofs::dev::MockProver;
     use halo2_proofs::halo2curves::bn256::Fr as Fp;
     #[test]
     fn test_ok_one_trace() {
-        let trace0 = CovertedTraceRecord {
+        let trace0 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(0); 8],
             instruction: Fp::from(1),
@@ -476,7 +470,7 @@ mod test {
     #[test]
     fn test_error_invalid_instruction() {
         // first instruction is supposed to be write
-        let trace0 = CovertedTraceRecord {
+        let trace0 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(0); 8],
             instruction: Fp::from(0),
@@ -496,7 +490,7 @@ mod test {
     #[test]
     fn test_invalid_address() {
         // each limb of address is supposed to be in [0..63]
-        let trace0 = CovertedTraceRecord {
+        let trace0 = ConvertedTraceRecord {
             address: [Fp::from(64); 32],
             time_log: [Fp::from(0); 8],
             instruction: Fp::from(0),
@@ -516,7 +510,7 @@ mod test {
     #[test]
     fn test_invalid_time_log() {
         // each limb of address is supposed to be in [0..63]
-        let trace0 = CovertedTraceRecord {
+        let trace0 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(64); 8],
             instruction: Fp::from(0),
@@ -536,7 +530,7 @@ mod test {
     #[test]
     fn test_invalid_value() {
         // each limb of address is supposed to be in [0..63]
-        let trace0 = CovertedTraceRecord {
+        let trace0 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(0); 8],
             instruction: Fp::from(0),
@@ -555,14 +549,14 @@ mod test {
 
     #[test]
     fn test_ok_two_trace() {
-        let trace0 = CovertedTraceRecord {
+        let trace0 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(0); 8],
             instruction: Fp::from(1),
             value: [Fp::from(63); 32],
         };
 
-        let trace1 = CovertedTraceRecord {
+        let trace1 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(1); 8],
             instruction: Fp::from(0),
@@ -582,14 +576,14 @@ mod test {
 
     #[test]
     fn wrong_address_order() {
-        let trace0 = CovertedTraceRecord {
+        let trace0 = ConvertedTraceRecord {
             address: [Fp::from(1); 32],
             time_log: [Fp::from(0); 8],
             instruction: Fp::from(1),
             value: [Fp::from(63); 32],
         };
 
-        let trace1 = CovertedTraceRecord {
+        let trace1 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(1); 8],
             instruction: Fp::from(0),
@@ -609,14 +603,14 @@ mod test {
 
     #[test]
     fn wrong_time_log_order() {
-        let trace0 = CovertedTraceRecord {
+        let trace0 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(1); 8],
             instruction: Fp::from(1),
             value: [Fp::from(63); 32],
         };
 
-        let trace1 = CovertedTraceRecord {
+        let trace1 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(0); 8],
             instruction: Fp::from(0),
@@ -636,14 +630,14 @@ mod test {
 
     #[test]
     fn invalid_read() {
-        let trace0 = CovertedTraceRecord {
+        let trace0 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(1); 8],
             instruction: Fp::from(1),
             value: [Fp::from(63); 32],
         };
 
-        let trace1 = CovertedTraceRecord {
+        let trace1 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(0); 8],
             instruction: Fp::from(0),
@@ -663,14 +657,14 @@ mod test {
 
     #[test]
     fn non_first_write_access_for_two_traces() {
-        let trace0 = CovertedTraceRecord {
+        let trace0 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(1); 8],
             instruction: Fp::from(1),
             value: [Fp::from(63); 32],
         };
 
-        let trace1 = CovertedTraceRecord {
+        let trace1 = ConvertedTraceRecord {
             address: [Fp::from(1); 32],
             time_log: [Fp::from(1); 8],
             instruction: Fp::from(0),
@@ -690,21 +684,21 @@ mod test {
 
     #[test]
     fn test_ok_three_trace() {
-        let trace0 = CovertedTraceRecord {
+        let trace0 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(0); 8],
             instruction: Fp::from(1),
             value: [Fp::from(63); 32],
         };
 
-        let trace1 = CovertedTraceRecord {
+        let trace1 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(1); 8],
             instruction: Fp::from(0),
             value: [Fp::from(63); 32],
         };
 
-        let trace2 = CovertedTraceRecord {
+        let trace2 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(2); 8],
             instruction: Fp::from(1),
@@ -724,21 +718,21 @@ mod test {
 
     #[test]
     fn invalid_read2() {
-        let trace0 = CovertedTraceRecord {
+        let trace0 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(1); 8],
             instruction: Fp::from(1),
             value: [Fp::from(63); 32],
         };
 
-        let trace1 = CovertedTraceRecord {
+        let trace1 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(2); 8],
             instruction: Fp::from(0),
             value: [Fp::from(63); 32],
         };
 
-        let trace2 = CovertedTraceRecord {
+        let trace2 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(3); 8],
             instruction: Fp::from(0),

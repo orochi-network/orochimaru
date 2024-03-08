@@ -16,8 +16,8 @@ use halo2_proofs::{
 };
 use itertools::Itertools;
 
-use crate::base::{B256, Base};
-use crate::machine::{TraceRecord, MemoryInstruction};
+use crate::base::{Base, B256};
+use crate::machine::{MemoryInstruction, TraceRecord};
 
 /// Lookup table for max n bits range check
 #[derive(Clone, Copy, Debug)]
@@ -385,21 +385,22 @@ impl<F: Field + PrimeField> Queries<F> {
     }
 }
 ///
-pub(crate) struct CovertedTraceRecord<F: Field + PrimeField> {
+#[derive(Debug, Clone)]
+pub(crate) struct ConvertedTraceRecord<F: Field + PrimeField> {
     pub(crate) address: [F; 32], //256 bits
     pub(crate) time_log: [F; 8], //256 bits
     pub(crate) instruction: F,   // 0 or 1
     pub(crate) value: [F; 32],   //256 bit
 }
 
-impl<F: Field + PrimeField> CovertedTraceRecord<F> {
+impl<F: Field + PrimeField> ConvertedTraceRecord<F> {
     ///
     pub fn get_tuple(&self) -> ([F; 32], [F; 8], F, [F; 32]) {
         (self.address, self.time_log, self.instruction, self.value)
     }
 }
 
-impl<F: Field + PrimeField> From<TraceRecord<B256, B256, 32, 32>> for CovertedTraceRecord<F> {
+impl<F: Field + PrimeField> From<TraceRecord<B256, B256, 32, 32>> for ConvertedTraceRecord<F> {
     fn from(value: TraceRecord<B256, B256, 32, 32>) -> Self {
         Self {
             address: value

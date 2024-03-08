@@ -17,7 +17,7 @@ use crate::constraints::gadgets::Queries;
 
 use super::common::CircuitExtension;
 use super::gadgets::Table;
-use super::gadgets::{CovertedTraceRecord, GreaterThanConfigure};
+use super::gadgets::{ConvertedTraceRecord, GreaterThanConfigure};
 use super::gadgets::{LookUpTables, TraceRecordWitnessTable};
 #[derive(Clone, Copy, Debug)]
 /// fuck
@@ -68,7 +68,7 @@ impl<F: Field + PrimeField> OriginalMemoryConfig<F> {
 /// Circuit for sorted trace record
 #[derive(Default)]
 pub(crate) struct OriginalMemoryCircuit<F: PrimeField> {
-    pub(crate) original_trace_record: Vec<CovertedTraceRecord<F>>,
+    pub(crate) original_trace_record: Vec<ConvertedTraceRecord<F>>,
     pub(crate) _marker: PhantomData<F>,
 }
 
