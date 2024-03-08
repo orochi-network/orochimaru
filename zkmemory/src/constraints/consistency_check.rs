@@ -10,7 +10,6 @@ use halo2_proofs::{
     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Expression},
 };
 use rand::thread_rng;
-extern crate std;
 
 use crate::base::B256;
 use crate::machine::TraceRecord;
@@ -193,19 +192,14 @@ impl<F: Field + PrimeField + From<B256> + From<B256>> Circuit<F> for MemoryConsi
 
 #[cfg(test)]
 mod test {
-    extern crate std;
-    use std::println;
-
     use crate::machine::{AbstractTraceRecord, MemoryInstruction, TraceRecord};
     extern crate alloc;
     use crate::base::{Base, B256};
-    use crate::constraints::gadgets::ConvertedTraceRecord;
-    use crate::constraints::permutation::{successive_powers, PermutationCircuit};
+    use crate::constraints::permutation::successive_powers;
     use alloc::{vec, vec::Vec};
     use ff::{Field, PrimeField};
     use halo2_proofs::dev::MockProver;
     use halo2curves::pasta::Fp;
-    use itertools::sorted;
 
     use super::MemoryConsistencyCircuit;
 
@@ -238,6 +232,182 @@ mod test {
             .into_iter()
             .zip(trace.into_iter())
             .collect::<Vec<(F, TraceRecord<K, V, S, T>)>>()
+    }
+
+    // Common test function to build and check the consistency circuit
+    fn build_and_test_circuit(trace: Vec<TraceRecord<B256, B256, 32, 32>>, k: u32) {
+        // Initially, the trace is sorted by address-time
+        let trace = trace_with_index::<B256, B256, 32, 32, Fp>(trace);
+
+        // Sort this trace in timelog
+        let sorted_trace = sort_chronologically::<B256, B256, 32, 32, Fp>(trace.clone());
+
+        let circuit = MemoryConsistencyCircuit::<Fp> {
+            input: sorted_trace.clone(),
+            shuffle: trace.clone(),
+        };
+
+        let prover = MockProver::run(k, &circuit, vec![]).expect("What");
+        assert_eq!(prover.verify(), Ok(()));
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_read_in_time_0() {
+        let trace_0 = TraceRecord::<B256, B256, 32, 32>::new(
+            0,
+            0,
+            MemoryInstruction::Read,
+            B256::from(0),
+            B256::from(1),
+        );
+
+        build_and_test_circuit(vec![trace_0], 5);
+    }
+
+    #[test]
+    fn test_one_trace() {
+        let trace_0 = TraceRecord::<B256, B256, 32, 32>::new(
+            0,
+            0,
+            MemoryInstruction::Write,
+            B256::from(0),
+            B256::from(1),
+        );
+
+        build_and_test_circuit(vec![trace_0], 8);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_read_unwritten_address() {
+        let trace_0 = TraceRecord::<B256, B256, 32, 32>::new(
+            0,
+            0,
+            MemoryInstruction::Write,
+            B256::from(0),
+            B256::from(1),
+        );
+
+        let trace_1 = TraceRecord::<B256, B256, 32, 32>::new(
+            1,
+            0,
+            MemoryInstruction::Read,
+            B256::from(0x20),
+            B256::from(0),
+        );
+
+        build_and_test_circuit(vec![trace_0, trace_1], 8);
+    }
+
+    #[test]
+    #[should_panic]
+    fn wrong_read() {
+        let trace_0 = TraceRecord::<B256, B256, 32, 32>::new(
+            0,
+            0,
+            MemoryInstruction::Write,
+            B256::from(0),
+            B256::from(1),
+        );
+
+        let trace_1 = TraceRecord::<B256, B256, 32, 32>::new(
+            0,
+            0,
+            MemoryInstruction::Read,
+            B256::from(0),
+            B256::from(9),
+        );
+
+        build_and_test_circuit(vec![trace_0, trace_1], 8);
+    }
+
+    #[test]
+    #[should_panic]
+    fn wrong_starting_time() {
+        let trace_0 = TraceRecord::<B256, B256, 32, 32>::new(
+            6,
+            0,
+            MemoryInstruction::Write,
+            B256::from(0),
+            B256::from(1),
+        );
+
+        build_and_test_circuit(vec![trace_0], 8);
+    }
+
+    #[test]
+    #[should_panic]
+    fn wrong_initial_ordering() {
+        let trace_0 = TraceRecord::<B256, B256, 32, 32>::new(
+            0,
+            0,
+            MemoryInstruction::Write,
+            B256::from(0),
+            B256::from(1),
+        );
+
+        let trace_1 = TraceRecord::<B256, B256, 32, 32>::new(
+            1,
+            0,
+            MemoryInstruction::Write,
+            B256::from(0),
+            B256::from(1),
+        );
+
+        let trace_2 = TraceRecord::<B256, B256, 32, 32>::new(
+            2,
+            0,
+            MemoryInstruction::Write,
+            B256::from(0x20),
+            B256::from(5),
+        );
+
+        build_and_test_circuit(vec![trace_2, trace_0, trace_1], 8);
+    }
+
+    #[test]
+    #[should_panic]
+    fn wrong_permutation() {
+        let trace_0 = TraceRecord::<B256, B256, 32, 32>::new(
+            0,
+            0,
+            MemoryInstruction::Write,
+            B256::from(0),
+            B256::from(1),
+        );
+
+        let trace_1 = TraceRecord::<B256, B256, 32, 32>::new(
+            1,
+            0,
+            MemoryInstruction::Write,
+            B256::from(0),
+            B256::from(1),
+        );
+
+        let trace_2 = TraceRecord::<B256, B256, 32, 32>::new(
+            2,
+            0,
+            MemoryInstruction::Write,
+            B256::from(0x20),
+            B256::from(5),
+        );
+
+        // Initially, the trace is sorted by address-time
+        let trace = trace_with_index::<B256, B256, 32, 32, Fp>(vec![trace_0, trace_1, trace_2]);
+
+        // Sort this trace in timelog
+        let mut sorted_trace = sort_chronologically::<B256, B256, 32, 32, Fp>(trace.clone());
+        // Tamper the permutation
+        sorted_trace.swap(0, 1);
+
+        let circuit = MemoryConsistencyCircuit::<Fp> {
+            input: sorted_trace.clone(),
+            shuffle: trace.clone(),
+        };
+
+        let prover = MockProver::run(9, &circuit, vec![]).unwrap();
+        assert_eq!(prover.verify(), Ok(()));
     }
 
     #[test]
@@ -282,30 +452,6 @@ mod test {
             B256::from(3),
         );
 
-        let trace = trace_with_index::<B256, B256, 32, 32, Fp>(vec![
-            trace_0, trace_1, trace_2, trace_3, trace_4,
-        ]);
-        let sorted_trace = sort_chronologically::<B256, B256, 32, 32, Fp>(trace.clone());
-
-        let temp: Vec<TraceRecord<B256, B256, 32, 32>> =
-            sorted_trace.clone().into_iter().map(|(a, b)| b).collect();
-
-        let temp: Vec<ConvertedTraceRecord<Fp>> = temp
-            .into_iter()
-            .map(|a| ConvertedTraceRecord::<Fp>::from(a))
-            .collect();
-
-        println!("{:#?}", temp);
-
-        let circuit = MemoryConsistencyCircuit::<Fp> {
-            input: sorted_trace.clone(),
-            shuffle: trace.clone(),
-        };
-
-        // Mock prover
-        // the number of rows cannot exceed 2^k
-        let k = 8;
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        assert_eq!(prover.verify(), Ok(()));
+        build_and_test_circuit(vec![trace_0, trace_1, trace_2, trace_3, trace_4], 10);
     }
 }

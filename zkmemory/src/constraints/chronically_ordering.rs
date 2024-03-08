@@ -296,7 +296,7 @@ mod test {
     use halo2_proofs::halo2curves::bn256::Fr as Fp;
     #[test]
     fn test_ok_one_trace() {
-        let trace0 = CovertedTraceRecord {
+        let trace0 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(0); 8],
             instruction: Fp::from(1),
@@ -315,7 +315,7 @@ mod test {
 
     #[test]
     fn test_wrong_starting_time() {
-        let trace0 = CovertedTraceRecord {
+        let trace0 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(1); 8],
             instruction: Fp::from(1),
