@@ -1,31 +1,24 @@
 extern crate alloc;
 use alloc::vec::Vec;
 use alloc::{format, vec};
-use core::{iter::once, marker::PhantomData};
+use core::marker::PhantomData;
 use ff::{Field, PrimeField};
 use halo2_proofs::circuit::{Region, SimpleFloorPlanner, Value};
 use halo2_proofs::plonk::{Fixed, Selector};
 use halo2_proofs::{
     circuit::Layouter,
-    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Expression},
+    plonk::{Circuit, Column, ConstraintSystem, Error, Expression},
     poly::Rotation,
 };
 use rand::thread_rng;
 extern crate std;
 
-use crate::base::B256;
-use crate::constraints::lexicographic_ordering::Queries;
-use crate::machine::TraceRecord;
+use crate::constraints::gadgets::Queries;
 
 use super::common::CircuitExtension;
-use super::gadgets::{equal_value, BinaryConfigure, Table};
-use super::lexicographic_ordering::{GreaterThanConfigure, SortedTraceRecord};
-use super::{
-    lexicographic_ordering::{
-        LookUpTables, SortedMemoryCircuit, SortedMemoryConfig, TraceRecordWitnessTable,
-    },
-    permutation::{PermutationCircuit, ShuffleChip, ShuffleConfig},
-};
+use super::gadgets::Table;
+use super::gadgets::{CovertedTraceRecord, GreaterThanConfigure};
+use super::gadgets::{LookUpTables, TraceRecordWitnessTable};
 #[derive(Clone, Copy, Debug)]
 /// fuck
 pub(crate) struct OriginalMemoryConfig<F: Field + PrimeField> {
@@ -75,7 +68,7 @@ impl<F: Field + PrimeField> OriginalMemoryConfig<F> {
 /// Circuit for sorted trace record
 #[derive(Default)]
 pub(crate) struct OriginalMemoryCircuit<F: PrimeField> {
-    pub(crate) original_trace_record: Vec<SortedTraceRecord<F>>,
+    pub(crate) original_trace_record: Vec<CovertedTraceRecord<F>>,
     pub(crate) _marker: PhantomData<F>,
 }
 
@@ -225,7 +218,7 @@ impl<F: Field + PrimeField> OriginalMemoryCircuit<F> {
                 .find(|((_, a), b)| a != b);
             let zero = F::ZERO;
             let ((index, cur_limb), prev_limb) = if cfg!(test) {
-                find_result.unwrap_or(((&40, &zero), &zero))
+                find_result.unwrap_or(((&8, &zero), &zero))
             } else {
                 find_result.expect("two trace records cannot be the same")
             };
@@ -277,17 +270,17 @@ impl<F: Field + PrimeField> OriginalMemoryCircuit<F> {
                 )?;
             }
 
-            // assign the difference of address||time witness
+            // assign the difference of time witness
             region.assign_advice(
-                || format!("difference of address||time_log{}", offset),
+                || format!("difference of time_log{}", offset),
                 config.greater_than.difference,
                 offset,
                 || Value::known(difference),
             )?;
 
-            // assign the inverse of the address||time difference witness
+            // assign the inverse of the time difference witness
             region.assign_advice(
-                || format!("address||time_log difference_inverse{}", offset),
+                || format!("time_log difference_inverse{}", offset),
                 config.greater_than.difference_inverse,
                 offset,
                 || Value::known(difference.invert().expect("cannot find inverse")),
