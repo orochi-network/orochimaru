@@ -52,7 +52,7 @@ TOTAL                             224                43    80.80%          99   
 
 ## Overview
 
-The idea is to create an independent module that can be used by any zkVM. You might aware that the memory can be constructed as a simple state machine with $2$ instructions `READ` and `WRITE`, and configurable `WORD_SIZE`. Our memory state machine is only able access the exactly `WORD_SIZE` for every executed instruction. That is, if you want to access arbitrary data size, it must be translated to multiple accesses.
+The idea is to create an independent module that can be used by any zkVM. You might aware that the memory can be constructed as a simple state machine with `2` instructions `READ` and `WRITE`, and configurable `WORD_SIZE`. Our memory state machine is only able access the exactly `WORD_SIZE` for every executed instruction. That is, if you want to access arbitrary data size, it must be translated to multiple accesses.
 
 These instructions need to be satisfied following conditions:
 
@@ -60,7 +60,7 @@ These instructions need to be satisfied following conditions:
   - `READ` on a memory was not wrote should return `0`
   - Every`READ` access for the same location, must have the value to be equal to the previous `WRITE`.
 - **`WRITE` instruction**
-  - Every `WRITE` access must write on writable memory chunks _(some areas of the memmory might be read only)_.
+  - Every `WRITE` access must write on writable memory chunks _(some areas of the memory might be read only)_.
 
 ## Features
 
@@ -137,36 +137,12 @@ where
 cargo llvm-cov --html --open
 ```
 
-## For more detail check `64bits-machine` example
+## For more detail check `256bits-machine` example
 
-In this example we tried to simulate a 64bits machine with 64bits word size with 4 registers (`r0`, `r1`, `r2`, `r3`).
-
-```text
-cargo run --example 64bits-machine
-```
-
-Execution trace:
+In this example we tried to simulate a 256bits machine with 256bits word size.
 
 ```text
-Pop value: 0x0000000000000506
-Read value: 0x0a0c0e1012141618
-Execution record format is: Instruction(address, time_log, stack_depth, value)
-        Write (0000000000000008, 0000000000000001, 0000000000000000, 0102030405060708)
-        Read  (0000000000000008, 0000000000000002, 0000000000000000, 0102030405060708)
-        Write (fffffffffffffef0, 0000000000000003, 0000000000000000, 0102030405060708)
-        Write (0000000000000000, 0000000000000004, 0000000000000000, 090a0b0c0d0e0f10)
-        Read  (0000000000000000, 0000000000000005, 0000000000000000, 090a0b0c0d0e0f10)
-        Write (fffffffffffffef8, 0000000000000006, 0000000000000000, 090a0b0c0d0e0f10)
-        Read  (fffffffffffffef0, 0000000000000007, 0000000000000000, 0102030405060708)
-        Read  (fffffffffffffef8, 0000000000000008, 0000000000000000, 090a0b0c0d0e0f10)
-        Write (fffffffffffffef0, 0000000000000009, 0000000000000000, 0a0c0e1012141618)
-        Read  (fffffffffffffef0, 000000000000000a, 0000000000000000, 0a0c0e1012141618)
-        Write (0000000000000010, 000000000000000b, 0000000000000000, 0a0c0e1012141618)
-        Push  (ffffffffffffdee8, 000000000000000c, 0000000000000001, 0000000000000102)
-        Push  (ffffffffffffdef0, 000000000000000d, 0000000000000002, 0000000000000304)
-        Push  (ffffffffffffdef8, 000000000000000e, 0000000000000003, 0000000000000506)
-        Pop   (ffffffffffffdef8, 000000000000000f, 0000000000000002, 0000000000000506)
-        Read  (0000000000000010, 0000000000000010, 0000000000000002, 0a0c0e1012141618)
+cargo run --example 256bits-machine.rs
 ```
 
 ## License
