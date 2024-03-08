@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::{
     ethereum::{compose_operator_proof, ecvrf_proof_digest, sign_ethereum_message},
     evm::evm_verify,
+    keyring,
     randomness::{ActiveModel, Column, Entity, Model},
     receiver, NodeContext,
 };
@@ -11,8 +12,8 @@ use libecvrf::{
     secp256k1::curve::Scalar,
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait,
-    Order, QueryFilter, QueryOrder, QuerySelect, TransactionTrait,
+    sea_query::Query, ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection,
+    DbErr, EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect, TransactionTrait,
 };
 use serde_json::json;
 use uuid::Uuid;
@@ -138,6 +139,7 @@ impl<'a> RandomnessTable<'a> {
     pub async fn safe_insert(
         &self,
         context: Arc<NodeContext>,
+        username: String,
         network: i64,
         address: String,
     ) -> Result<Model, DbErr> {
@@ -150,7 +152,16 @@ impl<'a> RandomnessTable<'a> {
             .filter(
                 Condition::all()
                     .add(receiver::Column::Address.eq(address.to_owned()))
-                    .add(receiver::Column::Network.eq(network)),
+                    .add(receiver::Column::Network.eq(network))
+                    .add(
+                        receiver::Column::KeyringId.in_subquery(
+                            Query::select()
+                                .column(keyring::Column::Id)
+                                .from(keyring::Entity)
+                                .and_where(keyring::Column::Username.eq(username.to_owned()))
+                                .to_owned(),
+                        ),
+                    ),
             )
             .one(&txn)
             .await
@@ -160,7 +171,14 @@ impl<'a> RandomnessTable<'a> {
                 None => {
                     // Insert new receiver record if we're on testnet
                     if context.is_testnet() {
+                        let model_keyring = context
+                            .postgres()
+                            .table_keyring()
+                            .find_by_name(username)
+                            .await?
+                            .expect("Unable to query keyring from database");
                         match receiver::ActiveModel::from_json(json!({
+                            "keyring_id": model_keyring.id,
                             "name": Uuid::new_v4(),
                             "network": network,
                             "address": address.clone(),
@@ -282,7 +300,7 @@ impl<'a> RandomnessTable<'a> {
         match txn.commit().await {
             Ok(_) => result,
             Err(e) => {
-                log::error!("Can not finalize transction");
+                log::error!("Can not finalize transaction");
                 Err(e)
             }
         }

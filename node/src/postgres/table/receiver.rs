@@ -1,6 +1,9 @@
+use crate::keyring;
 use crate::receiver::{ActiveModel, Column, Entity, Model};
+use sea_orm::sea_query::Query;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait, QueryFilter,
+    ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, DbErr, DeleteResult, EntityTrait,
+    QueryFilter,
 };
 
 /// Receiver table
@@ -25,6 +28,34 @@ impl<'a> ReceiverTable<'a> {
     }
 
     /// Find receiver record by its network and address
+    pub async fn find_by_username(&self, username: String) -> Result<Vec<Model>, DbErr> {
+        Entity::find()
+            .left_join::<keyring::Entity>(keyring::Entity)
+            .filter(keyring::Column::Username.eq(username))
+            .all(self.connection)
+            .await
+    }
+
+    pub async fn delete(&self, username: String, receiver_id: i64) -> Result<DeleteResult, DbErr> {
+        Entity::delete_many()
+            .filter(
+                Condition::all()
+                    .add(Column::Id.eq(receiver_id.to_owned()))
+                    .add(
+                        Column::KeyringId.in_subquery(
+                            Query::select()
+                                .column(keyring::Column::Id)
+                                .from(keyring::Entity)
+                                .and_where(keyring::Column::Username.eq(username.to_owned()))
+                                .to_owned(),
+                        ),
+                    ),
+            )
+            .exec(self.connection)
+            .await
+    }
+
+    /// Find receiver record by its network and address
     pub async fn find_one(&self, network: i64, address: &str) -> Result<Option<Model>, DbErr> {
         Entity::find()
             .filter(
@@ -38,7 +69,7 @@ impl<'a> ReceiverTable<'a> {
 
     /// Insert data to receiver table
     pub async fn insert(&self, json_record: serde_json::Value) -> Result<Model, DbErr> {
-        let new_record = ActiveModel::from_json(json_record)?;
+        let new_record = ActiveModel::from_json(json_record).expect("Unable to parse JSON");
         Entity::insert(new_record)
             .exec_with_returning(self.connection)
             .await

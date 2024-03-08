@@ -2452,7 +2452,7 @@ dependencies = [
  "log",
  "regex",
  "revm",
- "sea-orm 0.12.11",
+ "sea-orm 0.12.14",
  "serde",
  "serde_json",
  "sha2 0.10.8",
@@ -3614,9 +3614,9 @@ dependencies = [
 
 [[package]]
 name = "sea-orm"
-version = "0.12.11"
+version = "0.12.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59f66e2129991acd51fcad7b59da1edd862edca69773cc9a19cb17b967fae2fb"
+checksum = "6632f499b80cc6aaa781b302e4c9fae663e0e3dcf2640e9d80034d5b10731efe"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -3626,7 +3626,7 @@ dependencies = [
  "log",
  "ouroboros 0.17.2",
  "rust_decimal",
- "sea-orm-macros 0.12.11",
+ "sea-orm-macros 0.12.14",
  "sea-query 0.30.7",
  "sea-query-binder 0.5.0",
  "serde",
@@ -3671,9 +3671,9 @@ dependencies = [
 
 [[package]]
 name = "sea-orm-macros"
-version = "0.12.11"
+version = "0.12.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b03da1864306242678ac3b6567e69f70dd1252a72742baa23a4d92d2d45da3fc"
+checksum = "ec13bfb4c4aef208f68dbea970dd40d13830c868aa8dcb4e106b956e6bb4f2fa"
 dependencies = [
  "heck 0.4.1",
  "proc-macro2",

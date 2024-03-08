@@ -20,10 +20,17 @@ pub enum JSONRPCMethod {
     OrandNewPrivateEpoch(i64, String),
     /// Get public key (username)
     OrandGetPublicKey(String),
+    // Get user (username)
+    AdminGetUser(String),
     /// Create new user (username)
     AdminAddUser(String),
+    /// Get receiver (username)
+    AdminGetReceiver(String),
     /// Create new receiver (username, receiver address, network)
     AdminAddReceiver(String, String, i64),
+    /// Admin delete receiver (username, receiver address)
+    /// This method has been removed
+    AdminRemoveReceiver(String, i64),
 }
 
 /// Zero address
@@ -82,7 +89,9 @@ impl JSONRPCMethod {
             "orand_getPublicKey" => {
                 Self::OrandGetPublicKey(decode_name(json_rpc.params[0].clone()))
             }
+            "admin_getUser" => Self::AdminGetUser(decode_name(json_rpc.params[0].clone())),
             "admin_addUser" => Self::AdminAddUser(decode_name(json_rpc.params[0].clone())),
+            "admin_getReceiver" => Self::AdminGetReceiver(decode_name(json_rpc.params[0].clone())),
             "admin_addReceiver" => Self::AdminAddReceiver(
                 decode_name(json_rpc.params[0].clone()),
                 decode_address(json_rpc.params[1].clone()),

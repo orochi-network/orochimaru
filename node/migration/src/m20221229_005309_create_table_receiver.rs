@@ -1,5 +1,7 @@
 use sea_orm_migration::prelude::*;
 
+use crate::m20220101_000001_create_table_keyring::Keyring;
+
 #[derive(DeriveMigrationName)]
 pub struct Migration;
 
@@ -17,6 +19,7 @@ impl MigrationTrait for Migration {
                             .auto_increment()
                             .primary_key(),
                     )
+                    .col(ColumnDef::new(Receiver::KeyringId).big_integer().not_null())
                     .col(ColumnDef::new(Receiver::Name).string().not_null())
                     .col(ColumnDef::new(Receiver::Address).string().not_null())
                     .col(ColumnDef::new(Receiver::Network).big_unsigned().not_null())
@@ -26,6 +29,14 @@ impl MigrationTrait for Migration {
                             .timestamp()
                             .extra("DEFAULT CURRENT_TIMESTAMP".to_string())
                             .not_null(),
+                    )
+                    .foreign_key(
+                        ForeignKeyCreateStatement::new()
+                            .name("link_receiver_to_keyring")
+                            .from_tbl(Receiver::Table)
+                            .from_col(Receiver::KeyringId)
+                            .to_tbl(Keyring::Table)
+                            .to_col(Keyring::Id),
                     )
                     .index(
                         Index::create()
@@ -50,6 +61,7 @@ impl MigrationTrait for Migration {
 pub enum Receiver {
     Table,
     Id,
+    KeyringId,
     Name,
     Address,
     Network,

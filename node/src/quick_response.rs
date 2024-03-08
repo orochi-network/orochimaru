@@ -32,6 +32,17 @@ where
 pub struct QuickResponse;
 
 impl QuickResponse {
+    pub fn option() -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
+        Ok(Response::builder()
+            .header("Access-Control-Allow-Credentials", "true")
+            .header("Access-Control-Allow-Headers", "x-session-id")
+            .header("Access-Control-Allow-Method", "POST")
+            .header("Access-Control-Allow-Origin", "*")
+            .header("Access-Control-Max-Age", "86400")
+            .body(empty())
+            .expect("Unable to construct response"))
+    }
+
     /// Invoke quick response with status 400
     pub fn err(err: Error) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
         Ok(Response::builder()

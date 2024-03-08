@@ -35,6 +35,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{borrow::Borrow, env, net::SocketAddr, str::from_utf8, sync::Arc};
 use tokio::net::TcpListener;
+use uuid::Uuid;
 
 const ORAND_KEYRING_NAME: &str = "orand";
 const ORAND_HMAC_KEY_SIZE: usize = 32;
@@ -44,7 +45,7 @@ const ORAND_HMAC_KEY_SIZE: usize = 32;
 pub struct UserResponse {
     /// Username
     pub username: String,
-    /// Hmac secret
+    /// HMAC secret
     pub hmac_secret: String,
     /// Public key
     pub public_key: String,
@@ -79,6 +80,7 @@ async fn orand_get_epoch(
 
 async fn orand_new_epoch(
     context: Arc<NodeContext>,
+    username: String,
     network: i64,
     address: String,
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
@@ -86,11 +88,11 @@ async fn orand_new_epoch(
     let randomness = postgres.table_randomness();
 
     match randomness
-        .safe_insert(Arc::clone(&context), network, address)
+        .safe_insert(Arc::clone(&context), username, network, address)
         .await
     {
         Ok(randomness_returning_record) => QuickResponse::res_json(&randomness_returning_record),
-        Err(_) => QuickResponse::err(node::Error("INTERNAL_SERVER_ERROR", "Unkow error")),
+        Err(_) => QuickResponse::err(node::Error("INTERNAL_SERVER_ERROR", "Unknown error")),
     }
 }
 
@@ -103,6 +105,7 @@ async fn orand(
     let (header, body) = req.into_parts();
     match (&header.method, header.uri.path()) {
         // Handle all post method to JSON RPC
+        //(&Method::OPTIONS, "/") => QuickResponse::option(),
         (&Method::POST, "/") => {
             let max = body.size_hint().upper().unwrap_or(u64::MAX);
             // Body is 64 KB
@@ -128,56 +131,64 @@ async fn orand(
             };
 
             let keyring = context.postgres().table_keyring();
+            let receiver = context.postgres().table_receiver();
 
-            let authorized_jwt = match json_rpc_payload {
-                JSONRPCMethod::OrandNewEpoch(_, _) => {
-                    let (jwt_payload, json_web_token) = match header.headers.get("authorization") {
-                        Some(e) => match e.to_str() {
-                            Ok(s) => match JWT::decode_payload(s) {
-                                Ok(p) => (p, s),
-                                Err(e) => {
-                                    return QuickResponse::err(e);
-                                }
-                            },
-                            Err(_) => {
-                                return QuickResponse::err(node::Error(
-                                    "INVALID_JWT",
-                                    "Unable to decode authorization header",
-                                ));
+            let authorized_jwt = {
+                let (jwt_payload, json_web_token) = match header.headers.get("authorization") {
+                    Some(e) => match e.to_str() {
+                        Ok(s) => match JWT::decode_payload(s) {
+                            Ok(p) => (p, s),
+                            Err(e) => {
+                                return QuickResponse::err(e);
                             }
                         },
-                        None => {
+                        Err(_) => {
                             return QuickResponse::err(node::Error(
                                 "INVALID_JWT",
-                                "Access denied, this method required authorization",
+                                "Unable to decode authorization header",
                             ));
                         }
-                    };
-
-                    let user_record = match keyring
-                        .find_by_name(jwt_payload.user.clone())
-                        .await
-                        .expect("Can not query our database")
-                    {
-                        Some(record) => record,
-                        None => {
-                            return QuickResponse::err(node::Error(
-                                "INVALID_JWT",
-                                "Access denied, this method required authorization",
-                            ));
-                        }
-                    };
-
-                    let jwt = JWT::new(&user_record.hmac_secret);
-                    if !jwt.verify(json_web_token) {
+                    },
+                    None => {
                         return QuickResponse::err(node::Error(
-                            "ACCESS_DENIED",
-                            "Access denied, incorrect key",
+                            "INVALID_JWT",
+                            "Access denied, this method required authorization",
                         ));
                     }
-                    Some(jwt_payload)
+                };
+
+                let user_record = match keyring
+                    .find_by_name(jwt_payload.user.clone())
+                    .await
+                    .expect("Can not query our database")
+                {
+                    Some(record) => record,
+                    None => {
+                        return QuickResponse::err(node::Error(
+                            "INVALID_JWT",
+                            "Access denied, this method required authorization",
+                        ));
+                    }
+                };
+
+                let jwt = JWT::new(&user_record.hmac_secret);
+                if !jwt.verify(json_web_token) {
+                    return QuickResponse::err(node::Error(
+                        "ACCESS_DENIED",
+                        "Access denied, incorrect key",
+                    ));
                 }
-                _ => None,
+                Some(jwt_payload)
+            };
+
+            let jwt_payload = match authorized_jwt {
+                Some(p) => p,
+                None => {
+                    return QuickResponse::err(node::Error(
+                        "INVALID_JWT",
+                        "Access denied, this method required authorization",
+                    ));
+                }
             };
 
             match json_rpc_payload {
@@ -186,23 +197,23 @@ async fn orand(
                     orand_get_epoch(network, address, epoch, context).await
                 }
                 // Get epoch, it's alias of orand_newPublicEpoch() and orand_newPrivateEpoch()
-                JSONRPCMethod::OrandNewEpoch(network, address) => match authorized_jwt {
-                    Some(jwt_payload) => {
-                        // Only orand could able pair with ZERO_ADDRESS
-                        if address.eq(ZERO_ADDRESS) && !jwt_payload.user.eq(ORAND_KEYRING_NAME) {
-                            return QuickResponse::err(node::Error(
-                                "ACCESS_DENIED",
-                                "Access denied, you do not have ability to create public epoch",
-                            ));
-                        }
-                        // Create new epoch
-                        orand_new_epoch(Arc::clone(&context), network, address).await
+                JSONRPCMethod::OrandNewEpoch(network, address) => {
+                    // Only orand could able pair with ZERO_ADDRESS
+                    if address.eq(ZERO_ADDRESS) && !jwt_payload.user.eq(ORAND_KEYRING_NAME) {
+                        return QuickResponse::err(node::Error(
+                            "ACCESS_DENIED",
+                            "Access denied, you do not have ability to create public epoch",
+                        ));
                     }
-                    None => QuickResponse::err(node::Error(
-                        "INVALID_JWT",
-                        "Access denied, this method required authorization",
-                    )),
-                },
+                    // Create new epoch
+                    orand_new_epoch(
+                        Arc::clone(&context),
+                        jwt_payload.user.clone(),
+                        network,
+                        address,
+                    )
+                    .await
+                }
                 JSONRPCMethod::OrandGetPublicKey(key_name) => {
                     let keyring = context.postgres().table_keyring();
                     let key_record = keyring
@@ -214,11 +225,7 @@ async fn orand(
                 }
                 JSONRPCMethod::AdminAddUser(username) => {
                     // Only orand could able pair with ZERO_ADDRESS
-                    if authorized_jwt
-                        .unwrap_or_default()
-                        .user
-                        .eq(ORAND_KEYRING_NAME)
-                    {
+                    if jwt_payload.user.eq(ORAND_KEYRING_NAME) {
                         match keyring
                             .find_by_name(username.clone())
                             .await
@@ -259,29 +266,55 @@ async fn orand(
                         "Access denied, you do not have ability add new user",
                     ))
                 }
-                JSONRPCMethod::AdminAddReceiver(receiver_name, receiver_address, network) => {
+                JSONRPCMethod::AdminAddReceiver(username, receiver_address, network) => {
                     // Only orand could able pair with ZERO_ADDRESS
-                    if authorized_jwt
-                        .unwrap_or_default()
-                        .user
-                        .eq(ORAND_KEYRING_NAME)
-                    {
-                        let table_receiver = context.postgres().table_receiver();
-                        match table_receiver
-                            .insert(json!({
-                                "name": receiver_name,
-                                "address": receiver_address,
-                                "network": network,
-                                "nonce": 0,
-                            }))
+                    if jwt_payload.user.eq(ORAND_KEYRING_NAME) {
+                        let result = context
+                            .postgres()
+                            .table_keyring()
+                            .find_by_name(username.clone())
                             .await
-                        {
-                            Ok(model_receiver) => return QuickResponse::res_json(&model_receiver),
-                            Err(_) => {
+                            .expect("User must existed in the database");
+                        let receiver_check = receiver
+                            .find_one(network, &receiver_address)
+                            .await
+                            .expect("Unable to query receiver from database");
+                        // Dummy patch to check if receiver existed
+                        if receiver_check.is_some() {
+                            return QuickResponse::err(node::Error(
+                                "RECEIVER_EXISTED",
+                                "Receiver has been existed",
+                            ));
+                        }
+                        match result {
+                            Some(model_keyring) => {
+                                match receiver
+                                    .insert(json!({
+                                        "keyring_id": model_keyring.id,
+                                        "name": Uuid::new_v4().to_string(),
+                                        "address": receiver_address,
+                                        "network": network,
+                                        "nonce": 0,
+                                    }))
+                                    .await
+                                {
+                                    Ok(model_receiver) => {
+                                        return QuickResponse::res_json(&model_receiver)
+                                    }
+                                    Err(err) => {
+                                        log::error!("Unable to add new receiver {}", err);
+                                        return QuickResponse::err(node::Error(
+                                            "INTERNAL_SERVER_ERROR",
+                                            "Unable to add new receiver",
+                                        ));
+                                    }
+                                }
+                            }
+                            _ => {
                                 return QuickResponse::err(node::Error(
-                                    "INTERNAL_SERVER_ERROR",
-                                    "Unable to add new receiver",
-                                ));
+                                    "ACCESS_DENIED",
+                                    "User may not exist or database error",
+                                ))
                             }
                         }
                     }
@@ -289,6 +322,51 @@ async fn orand(
                         "ACCESS_DENIED",
                         "Access denied, you do not have ability to add new receiver",
                     ))
+                }
+                JSONRPCMethod::AdminGetUser(username) => {
+                    if jwt_payload.user.eq(ORAND_KEYRING_NAME) {
+                        match keyring
+                            .find_by_name(username.clone())
+                            .await
+                            .expect("Unable to query user from database")
+                        {
+                            Some(record) => {
+                                return QuickResponse::res_json(&json!({
+                                    "username": record.username,
+                                    "hmac_secret": record.hmac_secret,
+                                    "created_date": record.created_date
+                                }));
+                            }
+                            _ => {
+                                return QuickResponse::err(node::Error(
+                                    "ACCESS_DENIED",
+                                    "User may not exist or database error",
+                                ))
+                            }
+                        }
+                    }
+                    QuickResponse::err(node::Error(
+                        "ACCESS_DENIED",
+                        "Access denied, you do not have ability to add new receiver",
+                    ))
+                }
+                JSONRPCMethod::AdminGetReceiver(username) => QuickResponse::res_json(
+                    &receiver
+                        .find_by_username(username.clone())
+                        .await
+                        .expect("Unable to query user from database"),
+                ),
+                JSONRPCMethod::AdminRemoveReceiver(username, receiver_id) => {
+                    let result = receiver.delete(username, receiver_id).await;
+                    match result {
+                        Ok(_) => QuickResponse::res_json(
+                            &json!({"success": true, "message": "Receiver has been removed"}),
+                        ),
+                        Err(_) => QuickResponse::err(node::Error(
+                            "INTERNAL_SERVER_ERROR",
+                            "Unable to remove receiver",
+                        )),
+                    }
                 }
                 _ => QuickResponse::err(node::Error(
                     "NOT_IMPLEMENTED",
