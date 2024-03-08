@@ -1,30 +1,26 @@
 extern crate alloc;
+use alloc::vec;
 use alloc::vec::Vec;
-use alloc::{format, vec};
-use core::{iter::once, marker::PhantomData};
+use core::marker::PhantomData;
 use ff::{Field, PrimeField};
-use halo2_proofs::circuit::{Region, SimpleFloorPlanner, Value};
-use halo2_proofs::plonk::{Fixed, Selector};
+use halo2_proofs::circuit::SimpleFloorPlanner;
+use halo2_proofs::plonk::Fixed;
 use halo2_proofs::{
     circuit::Layouter,
     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Expression},
-    poly::Rotation,
 };
 use rand::thread_rng;
 extern crate std;
 
 use crate::base::B256;
-use crate::constraints::lexicographic_ordering::Queries;
 use crate::machine::TraceRecord;
 
 use super::chronically_ordering::{OriginalMemoryCircuit, OriginalMemoryConfig};
 use super::common::CircuitExtension;
-use super::gadgets::{equal_value, BinaryConfigure, Table};
-use super::lexicographic_ordering::{GreaterThanConfigure, SortedTraceRecord};
+use super::gadgets::Table;
+use super::gadgets::{CovertedTraceRecord, LookUpTables, TraceRecordWitnessTable};
 use super::{
-    lexicographic_ordering::{
-        LookUpTables, SortedMemoryCircuit, SortedMemoryConfig, TraceRecordWitnessTable,
-    },
+    lexicographic_ordering::{SortedMemoryCircuit, SortedMemoryConfig},
     permutation::{PermutationCircuit, ShuffleChip, ShuffleConfig},
 };
 
@@ -115,11 +111,11 @@ impl<F: Field + PrimeField + From<B256> + From<B256>> CircuitExtension<F>
         permutation_circuit.synthesize_with_layouter(config.permutation_config, layouter)?;
         let mut sorted_trace_record = vec![];
         for (_, trace) in self.shuffle.clone() {
-            sorted_trace_record.push(SortedTraceRecord::<F>::from(trace));
+            sorted_trace_record.push(CovertedTraceRecord::<F>::from(trace));
         }
         let mut original_trace_record = vec![];
         for (_, trace) in self.input.clone() {
-            original_trace_record.push(SortedTraceRecord::<F>::from(trace));
+            original_trace_record.push(CovertedTraceRecord::<F>::from(trace));
         }
         let original_ordering_circuit = OriginalMemoryCircuit {
             original_trace_record,
