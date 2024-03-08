@@ -221,19 +221,7 @@ impl<F: Field + PrimeField> Circuit<F> for SortedMemoryCircuit<F> {
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        layouter.assign_region(
-            || "lexicographic_ordering",
-            |mut region| {
-                for i in 0..self.sorted_trace_record.len() {
-                    self.sorted_memory_assign(&mut region, config, i)?;
-                }
-                config.lookup_tables.size40_table.load(&mut region)?;
-                config.lookup_tables.size64_table.load(&mut region)?;
-                config.lookup_tables.size2_table.load(&mut region)?;
-                Ok(())
-            },
-        )?;
-        Ok(())
+        self.synthesize_with_layouter(config, &mut layouter)
     }
 }
 
