@@ -32,20 +32,20 @@ use alloc::{vec, vec::Vec};
 use super::common::CircuitExtension;
 
 /// Define a chip struct that implements our instructions.
-pub(crate) struct ShuffleChip<F: Field + PrimeField> {
-    pub(crate) config: ShuffleConfig,
+pub struct ShuffleChip<F: Field + PrimeField> {
+    config: ShuffleConfig,
     _marker: PhantomData<F>,
 }
 
 /// Define that chip config struct
 #[derive(Debug, Clone)]
-pub(crate) struct ShuffleConfig {
-    pub(crate) input_0: Column<Advice>,
-    pub(crate) input_1: Column<Fixed>,
-    pub(crate) shuffle_0: Column<Advice>,
-    pub(crate) shuffle_1: Column<Advice>,
-    pub(crate) s_input: Selector,
-    pub(crate) s_shuffle: Selector,
+pub struct ShuffleConfig {
+    input_0: Column<Advice>,
+    input_1: Column<Fixed>,
+    shuffle_0: Column<Advice>,
+    shuffle_1: Column<Advice>,
+    s_input: Selector,
+    s_shuffle: Selector,
 }
 
 impl<F: Field + PrimeField> ShuffleChip<F> {
@@ -93,7 +93,7 @@ impl<F: Field + PrimeField> ShuffleChip<F> {
 
 /// Define the permutatioin circuit for the project
 #[derive(Default, Clone, Debug)]
-pub(crate) struct PermutationCircuit<F: Field + PrimeField> {
+pub struct PermutationCircuit<F: Field + PrimeField> {
     // input_idx: an array of indexes of the unpermuted array
     pub(crate) input_idx: Vec<Value<F>>,
     // input: an unpermuted array
@@ -242,7 +242,7 @@ impl<F: Field + PrimeField> Circuit<F> for PermutationCircuit<F> {
 }
 
 /// Implement a prover proving the permutation circuit using the Inner-Product Argument.
-pub(crate) struct PermutationProver<C: CurveAffine>
+pub struct PermutationProver<C: CurveAffine>
 where
     C::Scalar: FromUniformBytes<64>,
 {

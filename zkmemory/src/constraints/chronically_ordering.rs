@@ -11,8 +11,6 @@ use halo2_proofs::{
     poly::Rotation,
 };
 use rand::thread_rng;
-use std::println;
-extern crate std;
 
 use crate::constraints::gadgets::Queries;
 
@@ -290,6 +288,7 @@ impl<F: Field + PrimeField> OriginalMemoryCircuit<F> {
     }
 }
 
+#[cfg(test)]
 mod test {
     use super::*;
     use halo2_proofs::dev::MockProver;

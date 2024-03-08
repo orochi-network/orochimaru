@@ -33,18 +33,18 @@ pub struct ConsistencyConfig<F: Field + PrimeField> {
 }
 
 impl<F: Field + PrimeField> ConsistencyConfig<F> {
-    fn construct(
-        lexicographic_ordering_config: SortedMemoryConfig<F>,
-        permutation_config: ShuffleConfig,
-        chronically_ordering_config: OriginalMemoryConfig<F>,
-    ) -> Self {
-        Self {
-            chronically_ordering_config,
-            lexicographic_ordering_config,
-            permutation_config,
-            _marker: PhantomData,
-        }
-    }
+    // fn construct(
+    //     lexicographic_ordering_config: SortedMemoryConfig<F>,
+    //     permutation_config: ShuffleConfig,
+    //     chronically_ordering_config: OriginalMemoryConfig<F>,
+    // ) -> Self {
+    //     Self {
+    //         chronically_ordering_config,
+    //         lexicographic_ordering_config,
+    //         permutation_config,
+    //         _marker: PhantomData,
+    //     }
+    // }
     fn configure(
         meta: &mut ConstraintSystem<F>,
         input_0: Column<Advice>,
