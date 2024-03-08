@@ -30,7 +30,7 @@ At [Orochi Network](https://orochi.network), we believe that Verifiable Computat
 │ └───────────┘ └───────────┘ │
 │                             │
 │ ┌─────────────────────────┐ │
-│ │          zkWasm         │ │
+│ │          zkRISC         │ │
 │ └─────────────────────────┘ │
 │                             │
 └─────────────────────────────┘
@@ -40,7 +40,7 @@ At [Orochi Network](https://orochi.network), we believe that Verifiable Computat
 └─────────────────────────────┘
 ```
 
-Our solution is to build a universal run-time environment (zkWasm) that provides Verifiable Computation. We can build up the verifiable data pipeline on top of our zkWasm to solve the correctness and availability challenges of the data.
+Our solution is to build a universal run-time environment (zkRISC) that provides Verifiable Computation. We can build up the verifiable data pipeline on top of our zkRISC to solve the correctness and availability challenges of the data.
 
 ## Components
 
