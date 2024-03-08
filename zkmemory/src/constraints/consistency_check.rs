@@ -10,7 +10,7 @@ use halo2_proofs::{
     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Expression},
 };
 use rand::thread_rng;
-
+extern crate std;
 use crate::base::B256;
 use crate::machine::TraceRecord;
 
@@ -151,7 +151,7 @@ impl<F: Field + PrimeField + From<B256> + From<B256>> Circuit<F> for MemoryConsi
 
         // lookup tables
         let lookup_tables = LookUpTables {
-            size64_table: Table::<64>::construct(meta),
+            size256_table: Table::<256>::construct(meta),
             size40_table: Table::<40>::construct(meta),
             size2_table: Table::<2>::construct(meta),
         };
@@ -192,6 +192,9 @@ impl<F: Field + PrimeField + From<B256> + From<B256>> Circuit<F> for MemoryConsi
 
 #[cfg(test)]
 mod test {
+    use super::std::println;
+
+    use crate::constraints::gadgets::ConvertedTraceRecord;
     use crate::machine::{AbstractTraceRecord, MemoryInstruction, TraceRecord};
     extern crate alloc;
     use crate::base::{Base, B256};
@@ -262,7 +265,7 @@ mod test {
             B256::from(1),
         );
 
-        build_and_test_circuit(vec![trace_0], 5);
+        build_and_test_circuit(vec![trace_0], 10);
     }
 
     #[test]
@@ -275,7 +278,7 @@ mod test {
             B256::from(1),
         );
 
-        build_and_test_circuit(vec![trace_0], 8);
+        build_and_test_circuit(vec![trace_0], 10);
     }
 
     #[test]
@@ -297,7 +300,7 @@ mod test {
             B256::from(0),
         );
 
-        build_and_test_circuit(vec![trace_0, trace_1], 8);
+        build_and_test_circuit(vec![trace_0, trace_1], 10);
     }
 
     #[test]
@@ -319,7 +322,7 @@ mod test {
             B256::from(9),
         );
 
-        build_and_test_circuit(vec![trace_0, trace_1], 8);
+        build_and_test_circuit(vec![trace_0, trace_1], 10);
     }
 
     #[test]
@@ -333,7 +336,7 @@ mod test {
             B256::from(1),
         );
 
-        build_and_test_circuit(vec![trace_0], 8);
+        build_and_test_circuit(vec![trace_0], 10);
     }
 
     #[test]
@@ -363,7 +366,7 @@ mod test {
             B256::from(5),
         );
 
-        build_and_test_circuit(vec![trace_2, trace_0, trace_1], 8);
+        build_and_test_circuit(vec![trace_2, trace_0, trace_1], 10);
     }
 
     #[test]
@@ -413,7 +416,7 @@ mod test {
     #[test]
     fn test_basic_read_write() {
         let trace_0 = TraceRecord::<B256, B256, 32, 32>::new(
-            3,
+            0,
             0,
             MemoryInstruction::Write,
             B256::from(0),
@@ -429,7 +432,7 @@ mod test {
         );
 
         let trace_2 = TraceRecord::<B256, B256, 32, 32>::new(
-            0,
+            1,
             0,
             MemoryInstruction::Write,
             B256::from(0x20),
@@ -445,7 +448,7 @@ mod test {
         );
 
         let trace_4 = TraceRecord::<B256, B256, 32, 32>::new(
-            1,
+            7,
             0,
             MemoryInstruction::Write,
             B256::from(0x6f),

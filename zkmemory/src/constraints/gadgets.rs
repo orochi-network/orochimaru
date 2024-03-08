@@ -3,6 +3,7 @@ extern crate std;
 
 use core::iter::once;
 use core::marker::PhantomData;
+use std::println;
 
 use alloc::vec::Vec;
 use alloc::{format, vec};
@@ -196,10 +197,10 @@ impl<F: Field + PrimeField> TraceRecordWitnessTable<F> {
     ///
     pub fn new(meta: &mut ConstraintSystem<F>) -> Self {
         TraceRecordWitnessTable {
-            address: [meta.advice_column(); 32],
-            time_log: [meta.advice_column(); 8],
+            address: [0; 32].map(|_| meta.advice_column()),
+            time_log: [0; 8].map(|_| meta.advice_column()),
             instruction: meta.advice_column(),
-            value: [meta.advice_column(); 32],
+            value: [0; 32].map(|_| meta.advice_column()),
             _marker: PhantomData,
         }
     }
@@ -250,6 +251,7 @@ impl<F: Field + PrimeField, const N: usize> GreaterThanConfigure<F, N> {
             let prev = Queries::new(meta, trace_record, Rotation::prev());
             let rlc = rlc_limb_differences(cur, prev, alpha_power.clone(), address_included);
             let mut constraints = vec![];
+
             for (i, rlc_expression) in limb_vector.iter().zip(rlc) {
                 constraints.push(
                     selector.clone()
@@ -304,7 +306,7 @@ impl<F: Field + PrimeField, const N: usize> GreaterThanConfigure<F, N> {
         }
         // lookup gate for difference. It must be in [0..64]
         lookup_tables
-            .size64_table
+            .size256_table
             .range_check(meta, "difference fits in 0..64", |meta| {
                 meta.query_advice(difference, Rotation::cur())
             });
@@ -343,12 +345,13 @@ fn rlc_limb_differences<F: Field + PrimeField>(
 /// The lookup tables
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct LookUpTables {
-    pub(crate) size64_table: Table<64>,
+    pub(crate) size256_table: Table<256>,
     pub(crate) size40_table: Table<40>,
     pub(crate) size2_table: Table<2>,
 }
 
 /// Query the element of a trace record at a specific position
+#[derive(Clone, Debug)]
 pub(crate) struct Queries<F: Field + PrimeField> {
     pub(crate) address: [Expression<F>; 32], //64 bits
     pub(crate) time_log: [Expression<F>; 8], //64 bits
@@ -377,11 +380,14 @@ impl<F: Field + PrimeField> Queries<F> {
         if address_included == false {
             return self.time_log.iter().cloned().collect();
         }
-        self.address
-            .iter()
-            .chain(self.time_log.iter())
-            .cloned()
-            .collect()
+        let mut result = vec![];
+        for i in self.address.iter() {
+            result.push(i.clone())
+        }
+        for i in self.time_log.iter() {
+            result.push(i.clone())
+        }
+        result
     }
 }
 ///

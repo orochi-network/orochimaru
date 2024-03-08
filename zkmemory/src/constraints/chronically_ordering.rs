@@ -78,13 +78,13 @@ impl<F: Field + PrimeField> CircuitExtension<F> for OriginalMemoryCircuit<F> {
         layouter: &mut impl Layouter<F>,
     ) -> Result<(), Error> {
         layouter.assign_region(
-            || "lexicographic_ordering",
+            || "chronically_ordering",
             |mut region| {
                 for i in 0..self.original_trace_record.len() {
                     self.original_memory_assign(&mut region, config, i)?;
                 }
                 config.lookup_tables.size40_table.load(&mut region)?;
-                config.lookup_tables.size64_table.load(&mut region)?;
+                config.lookup_tables.size256_table.load(&mut region)?;
                 config.lookup_tables.size2_table.load(&mut region)?;
                 Ok(())
             },
@@ -109,7 +109,7 @@ impl<F: Field + PrimeField> Circuit<F> for OriginalMemoryCircuit<F> {
 
         // lookup tables
         let lookup_tables = LookUpTables {
-            size64_table: Table::<64>::construct(meta),
+            size256_table: Table::<256>::construct(meta),
             size40_table: Table::<40>::construct(meta),
             size2_table: Table::<2>::construct(meta),
         };
@@ -307,7 +307,7 @@ mod test {
             _marker: PhantomData,
         };
         // the number of rows cannot exceed 2^k
-        let k = 7;
+        let k = 10;
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         assert_eq!(prover.verify(), Ok(()));
     }
@@ -326,7 +326,7 @@ mod test {
             _marker: PhantomData,
         };
         // the number of rows cannot exceed 2^k
-        let k = 7;
+        let k = 10;
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         assert_ne!(prover.verify(), Ok(()));
     }

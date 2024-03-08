@@ -11,6 +11,7 @@ use halo2_proofs::{
     poly::Rotation,
 };
 use rand::thread_rng;
+use std::println;
 extern crate std;
 
 use super::common::CircuitExtension;
@@ -109,13 +110,13 @@ impl<F: Field + PrimeField> SortedMemoryConfig<F> {
 
         // each limb of address and value must be in [0..64]
         for (addr, val) in trace_record.address.iter().zip(&trace_record.value) {
+            lookup_tables.size256_table.range_check(
+                meta,
+                "limb of address fits in 0..64",
+                |meta| meta.query_advice(*addr, Rotation::cur()),
+            );
             lookup_tables
-                .size64_table
-                .range_check(meta, "limb of address fits in 0..64", |meta| {
-                    meta.query_advice(*addr, Rotation::cur())
-                });
-            lookup_tables
-                .size64_table
+                .size256_table
                 .range_check(meta, "limb of value fits in 0..64", |meta| {
                     meta.query_advice(*val, Rotation::cur())
                 });
@@ -123,7 +124,7 @@ impl<F: Field + PrimeField> SortedMemoryConfig<F> {
 
         // each limb of time_log must be in [0..64]
         for i in trace_record.time_log {
-            lookup_tables.size64_table.range_check(
+            lookup_tables.size256_table.range_check(
                 meta,
                 "limb of time log fits in 0..64",
                 |meta| meta.query_advice(i, Rotation::cur()),
@@ -174,7 +175,7 @@ impl<F: Field + PrimeField> CircuitExtension<F> for SortedMemoryCircuit<F> {
                     self.sorted_memory_assign(&mut region, config, i)?;
                 }
                 config.lookup_tables.size40_table.load(&mut region)?;
-                config.lookup_tables.size64_table.load(&mut region)?;
+                config.lookup_tables.size256_table.load(&mut region)?;
                 config.lookup_tables.size2_table.load(&mut region)?;
                 Ok(())
             },
@@ -199,7 +200,7 @@ impl<F: Field + PrimeField> Circuit<F> for SortedMemoryCircuit<F> {
 
         // lookup tables
         let lookup_tables = LookUpTables {
-            size64_table: Table::<64>::construct(meta),
+            size256_table: Table::<256>::construct(meta),
             size40_table: Table::<40>::construct(meta),
             size2_table: Table::<2>::construct(meta),
         };
@@ -249,14 +250,15 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
                 )?;
             }
             // assign the time_log witness
-            for (i, j) in cur_time_log.iter().zip(config.trace_record.time_log) {
+            for i in 0..8 {
                 region.assign_advice(
-                    || format!("time_log{}", offset),
-                    j,
+                    || format!("address{}", offset),
+                    config.trace_record.time_log[i],
                     offset,
-                    || Value::known(*i),
+                    || Value::known(cur_time_log[i]),
                 )?;
             }
+
             // assign the instruction witness
             region.assign_advice(
                 || format!("instruction{}", offset),
@@ -330,14 +332,14 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
                     || Value::known(*i),
                 )?;
             }
-
             // assign the time_log witness
-            for (i, j) in cur_time_log.iter().zip(config.trace_record.time_log) {
+
+            for i in 0..8 {
                 region.assign_advice(
-                    || format!("time_log{}", offset),
-                    j,
+                    || format!("address{}", offset),
+                    config.trace_record.time_log[i],
                     offset,
-                    || Value::known(*i),
+                    || Value::known(cur_time_log[i]),
                 )?;
             }
 
@@ -450,7 +452,7 @@ mod test {
             _marker: PhantomData,
         };
         // the number of rows cannot exceed 2^k
-        let k = 7;
+        let k = 10;
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         assert_eq!(prover.verify(), Ok(()));
     }
@@ -470,7 +472,7 @@ mod test {
             _marker: PhantomData,
         };
         // the number of rows cannot exceed 2^k
-        let k = 7;
+        let k = 10;
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         assert_ne!(prover.verify(), Ok(()));
     }
@@ -490,7 +492,7 @@ mod test {
             _marker: PhantomData,
         };
         // the number of rows cannot exceed 2^k
-        let k = 7;
+        let k = 10;
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         assert_ne!(prover.verify(), Ok(()));
     }
@@ -510,7 +512,7 @@ mod test {
             _marker: PhantomData,
         };
         // the number of rows cannot exceed 2^k
-        let k = 7;
+        let k = 10;
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         assert_ne!(prover.verify(), Ok(()));
     }
@@ -530,7 +532,7 @@ mod test {
             _marker: PhantomData,
         };
         // the number of rows cannot exceed 2^k
-        let k = 7;
+        let k = 10;
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         assert_ne!(prover.verify(), Ok(()));
     }
@@ -546,8 +548,17 @@ mod test {
 
         let trace1 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
-            time_log: [Fp::from(1); 8],
-            instruction: Fp::from(0),
+            time_log: [
+                Fp::from(0),
+                Fp::from(56),
+                Fp::from(0),
+                Fp::from(1),
+                Fp::from(43),
+                Fp::from(32),
+                Fp::from(28),
+                Fp::from(1),
+            ],
+            instruction: Fp::from(1),
             value: [Fp::from(63); 32],
         };
 
@@ -557,7 +568,7 @@ mod test {
             _marker: PhantomData,
         };
         // the number of rows cannot exceed 2^k
-        let k = 7;
+        let k = 10;
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         assert_eq!(prover.verify(), Ok(()));
     }
@@ -584,7 +595,7 @@ mod test {
             _marker: PhantomData,
         };
         // the number of rows cannot exceed 2^k
-        let k = 7;
+        let k = 10;
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         assert_ne!(prover.verify(), Ok(()));
     }
@@ -611,7 +622,7 @@ mod test {
             _marker: PhantomData,
         };
         // the number of rows cannot exceed 2^k
-        let k = 7;
+        let k = 10;
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         assert_ne!(prover.verify(), Ok(()));
     }
@@ -638,7 +649,7 @@ mod test {
             _marker: PhantomData,
         };
         // the number of rows cannot exceed 2^k
-        let k = 7;
+        let k = 10;
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         assert_ne!(prover.verify(), Ok(()));
     }
@@ -665,7 +676,7 @@ mod test {
             _marker: PhantomData,
         };
         // the number of rows cannot exceed 2^k
-        let k = 7;
+        let k = 10;
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         assert_ne!(prover.verify(), Ok(()));
     }
@@ -699,7 +710,7 @@ mod test {
             _marker: PhantomData,
         };
         // the number of rows cannot exceed 2^k
-        let k = 8;
+        let k = 10;
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         assert_eq!(prover.verify(), Ok(()));
     }
@@ -733,7 +744,7 @@ mod test {
             _marker: PhantomData,
         };
         // the number of rows cannot exceed 2^k
-        let k = 8;
+        let k = 10;
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         assert_ne!(prover.verify(), Ok(()));
     }
