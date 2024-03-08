@@ -194,3 +194,97 @@ impl<F: Field + PrimeField + From<B256> + From<B256>> Circuit<F> for MemoryConsi
         self.synthesize_with_layouter(config, &mut layouter)
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::constraints::lexicographic_ordering::SortedTraceRecord;
+    use crate::machine::{AbstractTraceRecord, MemoryInstruction, TraceRecord};
+    extern crate alloc;
+    use crate::base::{Base, B256};
+    use crate::constraints::permutation::successive_powers;
+    use alloc::{vec, vec::Vec};
+    use ff::{Field, PrimeField};
+    use halo2curves::bn256::Fr as Fp;
+
+    use super::MemoryConsistencyCircuit;
+
+    // Sort the trace by time_log as key
+    fn sort_chronologically<K, V, const S: usize, const T: usize, F>(
+        trace: Vec<(F, TraceRecord<K, V, S, T>)>,
+    ) -> Vec<(F, TraceRecord<K, V, S, T>)>
+    where
+        K: Base<S>,
+        V: Base<T>,
+        F: Field + PrimeField,
+    {
+        let mut buffer = trace;
+        buffer.sort_by(|a, b| a.1.get_tuple().0.cmp(&b.1.get_tuple().0));
+        buffer
+    }
+
+    // Outputs the trace with their respective indexes
+    fn trace_with_index<
+        K: Base<S>,
+        V: Base<T>,
+        const S: usize,
+        const T: usize,
+        F: Field + PrimeField,
+    >(
+        trace: Vec<TraceRecord<K, V, S, T>>,
+    ) -> Vec<(F, TraceRecord<K, V, S, T>)> {
+        let indexes = successive_powers::<F>(trace.len() as u64);
+        indexes
+            .into_iter()
+            .zip(trace.into_iter())
+            .collect::<Vec<(F, TraceRecord<K, V, S, T>)>>()
+    }
+
+    #[test]
+    fn test_basic_read_write() {
+        let trace_0 = TraceRecord::<B256, B256, 32, 32>::new(
+            3,
+            0,
+            MemoryInstruction::Write,
+            B256::from(0),
+            B256::from(0x1234567f),
+        );
+
+        let trace_1 = TraceRecord::<B256, B256, 32, 32>::new(
+            4,
+            0,
+            MemoryInstruction::Read,
+            B256::from(0),
+            B256::from(0x1234567f),
+        );
+
+        let trace_2 = TraceRecord::<B256, B256, 32, 32>::new(
+            0,
+            0,
+            MemoryInstruction::Write,
+            B256::from(0x20),
+            B256::from(0xffffaabbu64),
+        );
+
+        let trace_3 = TraceRecord::<B256, B256, 32, 32>::new(
+            2,
+            0,
+            MemoryInstruction::Read,
+            B256::from(0x20),
+            B256::from(0xabcd1010u64),
+        );
+
+        let trace_4 = TraceRecord::<B256, B256, 32, 32>::new(
+            1,
+            0,
+            MemoryInstruction::Write,
+            B256::from(0x6f),
+            B256::from(0x10101010),
+        );
+
+        let trace = trace_with_index::<B256, B256, 32, 32, Fp>(vec![
+            trace_0, trace_1, trace_2, trace_3, trace_4,
+        ]);
+        let sorted_trace = sort_chronologically::<B256, B256, 32, 32, Fp>(trace);
+        let circuit = MemoryConsistencyCircuit::<Fp>::new(trace, sorted_trace);
+    }
+}
