@@ -60,12 +60,6 @@ impl<F: Field + PrimeField> SortedMemoryConfig<F> {
             selector,
             true,
         );
-
-        let mut limb_vector = vec![0_u8];
-        for i in 1..40 {
-            limb_vector.push(i);
-        }
-
         // instruction[0]=1
         meta.create_gate("instruction of the first access must be write", |meta| {
             let cur = Queries::new(meta, trace_record, Rotation::cur());
@@ -78,12 +72,12 @@ impl<F: Field + PrimeField> SortedMemoryConfig<F> {
             let selector = meta.query_fixed(selector, Rotation::cur());
             let cur = Queries::new(meta,trace_record,Rotation::cur());
             let prev = Queries::new(meta,trace_record,Rotation::prev());
-            let val=meta.query_advice(addr_cur_prev.val, Rotation::cur());
+            let addr_diff=meta.query_advice(addr_cur_prev.val, Rotation::cur());
             let temp=meta.query_advice(addr_cur_prev.temp, Rotation::cur());
             let val_diff=limbs_to_expression(cur.value)-limbs_to_expression(prev.value);
-          let tmp=one.clone()-val.clone()*temp;
-          let tmp2=limbs_to_expression(cur.address)-limbs_to_expression(prev.address)-val.clone();
-            vec![selector.clone() * (cur.instruction - one.clone()) * val_diff*tmp, selector.clone()*tmp2]
+          let should_be_zero=one.clone()-addr_diff.clone()*temp;
+          let should_be_zero_2=limbs_to_expression(cur.address)-limbs_to_expression(prev.address)-addr_diff.clone();
+            vec![selector.clone() * (cur.instruction - one.clone()) * val_diff*should_be_zero, selector.clone()*should_be_zero_2]
         });
 
         // (addr[i+1]-addr[i])*(instruction[i+1]-1)=0
@@ -106,25 +100,25 @@ impl<F: Field + PrimeField> SortedMemoryConfig<F> {
                 meta.query_advice(trace_record.instruction, Rotation::cur())
             });
 
-        // each limb of address and value must be in [0..64]
+        // each limb of address and value must be in [0..256]
         for (addr, val) in trace_record.address.iter().zip(&trace_record.value) {
             lookup_tables.size256_table.range_check(
                 meta,
-                "limb of address fits in 0..64",
+                "limb of address fits in 0.256",
                 |meta| meta.query_advice(*addr, Rotation::cur()),
             );
             lookup_tables
                 .size256_table
-                .range_check(meta, "limb of value fits in 0..64", |meta| {
+                .range_check(meta, "limb of value fits in 0..256", |meta| {
                     meta.query_advice(*val, Rotation::cur())
                 });
         }
 
-        // each limb of time_log must be in [0..64]
+        // each limb of time_log must be in [0..256]
         for i in trace_record.time_log {
             lookup_tables.size256_table.range_check(
                 meta,
-                "limb of time log fits in 0..64",
+                "limb of time log fits in 0..256",
                 |meta| meta.query_advice(i, Rotation::cur()),
             );
         }
@@ -143,13 +137,16 @@ impl<F: Field + PrimeField> SortedMemoryConfig<F> {
 }
 
 fn limbs_to_expression<F: Field + PrimeField>(limb: [Expression<F>; 32]) -> Expression<F> {
-    let mut sum = Expression::Constant(F::ZERO);
-    let mut tmp = Expression::Constant(F::from(256_u64));
-    for i in 0..32 {
-        sum = sum + tmp.clone() * limb[31 - i].clone();
-        tmp = tmp * Expression::Constant(F::from(256_u64));
-    }
-    sum
+    let initial_sum = Expression::Constant(F::ZERO);
+    let initial_tmp = Expression::Constant(F::from(256_u64));
+    (0..32)
+        .fold((initial_sum, initial_tmp), |(sum, tmp), i| {
+            (
+                sum + tmp.clone() * limb[31 - i].clone(),
+                tmp * Expression::Constant(F::from(256_u64)),
+            )
+        })
+        .0
 }
 
 /// Circuit for sorted trace record
@@ -236,8 +233,8 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
         if offset == 0 {
             let (cur_address, cur_time_log, cur_instruction, cur_value) =
                 self.sorted_trace_record[offset].get_tuple();
-
             config.selector_zero.enable(region, offset)?;
+
             // assign the address witness
             for (i, j) in cur_address.iter().zip(config.trace_record.address) {
                 region.assign_advice(
@@ -277,16 +274,15 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
         // handle the case offset >= 1
         else {
             let rng = thread_rng();
+            // get the current and the previous trace record
             let (cur_address, cur_time_log, cur_instruction, cur_value) =
                 self.sorted_trace_record[offset].get_tuple();
             let (prev_address, prev_time_log, _prev_instruction, _prev_value) =
                 self.sorted_trace_record[offset - 1].get_tuple();
+            // stack the address and time log together
             let cur_be_limbs = self.trace_to_be_limbs(cur_time_log, cur_address);
             let prev_be_limbs = self.trace_to_be_limbs(prev_time_log, prev_address);
-            let mut limb_vector = vec![0_u8];
-            for i in 1..40 {
-                limb_vector.push(i);
-            }
+            let limb_vector: Vec<u8> = (0..40).collect();
             // find the minimal index such that cur is not equal to prev
             let find_result = limb_vector
                 .iter()
@@ -299,19 +295,22 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
             } else {
                 find_result.expect("two trace records cannot be the same")
             };
+            // difference of address||time_log
             let difference = *cur_limb - *prev_limb;
 
             let address_diff =
                 self.address_limb_to_field(cur_address) - self.address_limb_to_field(prev_address);
-            let temp;
-            let temp_inv;
-            if address_diff == F::ZERO {
-                temp = F::random(rng);
-                temp_inv = temp.invert().expect("cannot find inverse");
+
+            // compute the inverse of address_diff
+            let (temp, temp_inv) = if address_diff == F::ZERO {
+                let temp = F::random(rng);
+                let temp_inv = temp.invert().expect("cannot find inverse");
+                (temp, temp_inv)
             } else {
-                temp = address_diff.invert().expect("cannot find inverse");
-                temp_inv = address_diff;
-            }
+                let temp = address_diff.invert().expect("cannot find inverse");
+                let temp_inv = address_diff;
+                (temp, temp_inv)
+            };
 
             // assign the selector to be one at the current row
             region.assign_fixed(
@@ -409,20 +408,13 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
     }
 
     fn trace_to_be_limbs(&self, time_log: [F; 8], address: [F; 32]) -> Vec<F> {
-        let mut be_bytes = vec![];
-        be_bytes.extend_from_slice(&address);
-        be_bytes.extend_from_slice(&time_log);
-        be_bytes
+        address.iter().chain(time_log.iter()).cloned().collect()
     }
 
     fn address_limb_to_field(&self, address: [F; 32]) -> F {
-        let mut sum = F::ZERO;
-        let mut tmp = F::from(256_u64);
-        for i in 0..32 {
-            sum += tmp * address[31 - i];
-            tmp *= F::from(256_u64);
-        }
-        sum
+        let initial_sum = F::ZERO;
+        let initial_tmp = F::from(256_u64);
+        (0..32).fold(initial_sum, |acc, i| acc + initial_tmp * address[31 - i])
     }
 }
 
