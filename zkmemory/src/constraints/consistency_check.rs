@@ -199,8 +199,8 @@ mod test {
 
     use super::MemoryConsistencyCircuit;
 
-    // Sort the trace by time_log as key
-    fn sort_chronologically<K, V, const S: usize, const T: usize, F>(
+    // Sort the trace by address -> time_log as keys
+    fn sort_trace<K, V, const S: usize, const T: usize, F>(
         trace: Vec<(F, TraceRecord<K, V, S, T>)>,
     ) -> Vec<(F, TraceRecord<K, V, S, T>)>
     where
@@ -209,7 +209,13 @@ mod test {
         F: Field + PrimeField,
     {
         let mut buffer = trace;
-        buffer.sort_by(|a, b| a.1.get_tuple().0.cmp(&b.1.get_tuple().0));
+        buffer.sort_by(|a, b| {
+            if a.1.address() == b.1.address() {
+                a.1.time_log().cmp(&b.1.time_log())
+            } else {
+                a.1.address().cmp(&b.1.address())
+            }
+        });
         buffer
     }
 
@@ -235,12 +241,12 @@ mod test {
         // Initially, the trace is sorted by address-time
         let trace = trace_with_index::<B256, B256, 32, 32, Fp>(trace);
 
-        // Sort this trace in timelog
-        let sorted_trace = sort_chronologically::<B256, B256, 32, 32, Fp>(trace.clone());
+        // Sort this trace in address and time_log
+        let sorted_trace = sort_trace::<B256, B256, 32, 32, Fp>(trace.clone());
 
         let circuit = MemoryConsistencyCircuit::<Fp> {
-            input: sorted_trace.clone(),
-            shuffle: trace.clone(),
+            input: trace.clone(),
+            shuffle: sorted_trace.clone(),
         };
 
         let prover = MockProver::run(k, &circuit, vec![]).expect("What");
@@ -393,7 +399,7 @@ mod test {
         let trace = trace_with_index::<B256, B256, 32, 32, Fp>(vec![trace_0, trace_1, trace_2]);
 
         // Sort this trace in timelog
-        let mut sorted_trace = sort_chronologically::<B256, B256, 32, 32, Fp>(trace.clone());
+        let mut sorted_trace = sort_trace::<B256, B256, 32, 32, Fp>(trace.clone());
         // Tamper the permutation
         sorted_trace.swap(0, 1);
 
@@ -441,13 +447,13 @@ mod test {
         );
 
         let trace_4 = TraceRecord::<B256, B256, 32, 32>::new(
-            7,
+            3,
             0,
             MemoryInstruction::Write,
             B256::from(0x6f),
             B256::from(3),
         );
 
-        build_and_test_circuit(vec![trace_0, trace_1, trace_2, trace_3, trace_4], 10);
+        build_and_test_circuit(vec![trace_0, trace_2, trace_3, trace_4, trace_1], 10);
     }
 }

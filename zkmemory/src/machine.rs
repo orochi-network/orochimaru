@@ -502,11 +502,6 @@ where
     V: Base<T>,
 {
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
-        match self.address.cmp(&other.address) {
-            core::cmp::Ordering::Equal => {}
-            ord => return ord,
-        }
-
         match self.time_log.cmp(&other.time_log) {
             core::cmp::Ordering::Equal => {
                 panic!("Time log never been equal")

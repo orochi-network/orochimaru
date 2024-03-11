@@ -193,7 +193,7 @@ pub(crate) struct TraceRecordWitnessTable<F: Field + PrimeField> {
     pub(crate) _marker: PhantomData<F>,
 }
 impl<F: Field + PrimeField> TraceRecordWitnessTable<F> {
-    ///
+    /// New Witness table
     pub fn new(meta: &mut ConstraintSystem<F>) -> Self {
         TraceRecordWitnessTable {
             address: [0; 32].map(|_| meta.advice_column()),
@@ -389,7 +389,7 @@ impl<F: Field + PrimeField> Queries<F> {
         result
     }
 }
-///
+/// Trace record struct for Lexicographic ordering circuit
 #[derive(Debug, Clone)]
 pub(crate) struct ConvertedTraceRecord<F: Field + PrimeField> {
     pub(crate) address: [F; 32], //256 bits
@@ -399,7 +399,7 @@ pub(crate) struct ConvertedTraceRecord<F: Field + PrimeField> {
 }
 
 impl<F: Field + PrimeField> ConvertedTraceRecord<F> {
-    ///
+    /// Get the trace record fields in tuple
     pub fn get_tuple(&self) -> ([F; 32], [F; 8], F, [F; 32]) {
         (self.address, self.time_log, self.instruction, self.value)
     }
