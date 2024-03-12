@@ -164,7 +164,7 @@ impl<F: Field + PrimeField> CircuitExtension<F> for SortedMemoryCircuit<F> {
         layouter: &mut impl Layouter<F>,
     ) -> Result<(), Error> {
         layouter.assign_region(
-            || "lexicographic_ordering",
+            || "sorted memory trace region",
             |mut region| {
                 for i in 0..self.sorted_trace_record.len() {
                     self.sorted_memory_assign(&mut region, config, i)?;

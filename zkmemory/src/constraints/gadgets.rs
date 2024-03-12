@@ -1,7 +1,5 @@
 extern crate alloc;
-extern crate std;
 
-use core::iter::once;
 use core::marker::PhantomData;
 
 use alloc::vec::Vec;
@@ -227,10 +225,7 @@ impl<F: Field + PrimeField, const N: usize> GreaterThanConfigure<F, N> {
         let difference_inverse = meta.advice_column();
         let first_difference_limb = BinaryConfigure::<F, N>::configure(meta, selector);
         let one = Expression::Constant(F::ONE);
-        let mut limb_vector = vec![0_u8];
-        for i in 1..40 {
-            limb_vector.push(i);
-        }
+        let limb_vector: Vec<u8> = (0..40).collect();
 
         // inversion gate for difference
         meta.create_gate("difference is non-zero", |meta| {
@@ -245,7 +240,7 @@ impl<F: Field + PrimeField, const N: usize> GreaterThanConfigure<F, N> {
             let selector = meta.query_fixed(selector, Rotation::cur());
             let first_difference_limb = first_difference_limb
                 .bits
-                .map(|tmp| meta.query_advice(tmp, Rotation::cur()));
+                .map(|temp| meta.query_advice(temp, Rotation::cur()));
             let cur = Queries::new(meta, trace_record, Rotation::cur());
             let prev = Queries::new(meta, trace_record, Rotation::prev());
             let rlc = rlc_limb_differences(cur, prev, alpha_power.clone(), address_included);
@@ -285,28 +280,29 @@ impl<F: Field + PrimeField, const N: usize> GreaterThanConfigure<F, N> {
             constraints
         });
 
-        // first_difference_limb is in [0..39]
+        // first_difference_limb is in [0..40]. we only consider this when
+        // including address||time_log, since it has 40 bits.
         if address_included {
             lookup_tables.size40_table.range_check(
                 meta,
-                "first_difference_limb must be in 0..39",
+                "first_difference_limb must be in 0..40",
                 |meta| {
                     let first_difference_limb = first_difference_limb
                         .bits
-                        .map(|tmp| meta.query_advice(tmp, Rotation::cur()));
-                    let val = first_difference_limb
+                        .map(|temp| meta.query_advice(temp, Rotation::cur()));
+                    let lookup_value = first_difference_limb
                         .iter()
                         .fold(Expression::Constant(F::from(0_u64)), |result, bit| {
                             bit.clone() + result * Expression::Constant(F::from(2_u64))
                         });
-                    val
+                    lookup_value
                 },
             );
         }
-        // lookup gate for difference. It must be in [0..64]
+        // lookup gate for difference. It must be in [0..256]
         lookup_tables
             .size256_table
-            .range_check(meta, "difference fits in 0..64", |meta| {
+            .range_check(meta, "difference fits in 0..256", |meta| {
                 meta.query_advice(difference, Rotation::cur())
             });
 
@@ -327,16 +323,15 @@ fn rlc_limb_differences<F: Field + PrimeField>(
     address_included: bool,
 ) -> Vec<Expression<F>> {
     let mut result = vec![];
-    let mut partial_sum = Expression::Constant(F::ZERO);
-    let alpha_power = once(Expression::Constant(F::ONE)).chain(alpha_power);
-    for ((cur_limb, prev_limb), power_of_randomness) in cur
+    let mut sum = Expression::Constant(F::ZERO);
+    for ((cur_limb, prev_limb), alpha) in cur
         .be_limbs(address_included)
         .iter()
         .zip(&prev.be_limbs(address_included))
         .zip(alpha_power)
     {
-        result.push(partial_sum.clone());
-        partial_sum = partial_sum + power_of_randomness * (cur_limb.clone() - prev_limb.clone());
+        result.push(sum.clone());
+        sum = sum + alpha * (cur_limb.clone() - prev_limb.clone());
     }
     result
 }
@@ -379,14 +374,12 @@ impl<F: Field + PrimeField> Queries<F> {
         if !address_included {
             return self.time_log.to_vec();
         }
-        let mut result = vec![];
-        for i in self.address.iter() {
-            result.push(i.clone())
-        }
-        for i in self.time_log.iter() {
-            result.push(i.clone())
-        }
-        result
+
+        self.address
+            .iter()
+            .chain(self.time_log.iter())
+            .cloned()
+            .collect()
     }
 }
 /// Trace record struct for Lexicographic ordering circuit
