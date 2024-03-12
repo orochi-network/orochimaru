@@ -555,7 +555,10 @@ mod test {
         let input_trace = trace_buffer.clone();
         trace_buffer.shuffle(&mut rng);
         let mut shuffle_trace = trace_buffer.clone();
+
+        // Remove one trace element
         shuffle_trace.pop();
+
         let circuit = PermutationCircuit::<Fp>::new(input_trace, shuffle_trace);
         // Test with IPA prover
         let mut ipa_prover = PermutationProver::<EqAffine>::new(K, circuit, true);

@@ -32,18 +32,6 @@ pub struct ConsistencyConfig<F: Field + PrimeField> {
 }
 
 impl<F: Field + PrimeField> ConsistencyConfig<F> {
-    // fn construct(
-    //     lexicographic_ordering_config: SortedMemoryConfig<F>,
-    //     permutation_config: ShuffleConfig,
-    //     chronically_ordering_config: OriginalMemoryConfig<F>,
-    // ) -> Self {
-    //     Self {
-    //         chronically_ordering_config,
-    //         lexicographic_ordering_config,
-    //         permutation_config,
-    //         _marker: PhantomData,
-    //     }
-    // }
     fn configure(
         meta: &mut ConstraintSystem<F>,
         shuffle_input: (
@@ -86,9 +74,9 @@ impl<F: Field + PrimeField> ConsistencyConfig<F> {
 /// Define the memory consistency circuit
 #[derive(Default, Clone, Debug)]
 pub struct MemoryConsistencyCircuit<F: Field + PrimeField + From<B256> + From<B256>> {
-    /// input_trace: Array of trace records before sorting along with its indexes
+    /// input_trace: Array of trace records before sorting (sorted by time_log) along with its indexes
     input: Vec<(F, TraceRecord<B256, B256, 32, 32>)>,
-    /// shuffle_trace: Array after permutations
+    /// shuffle_trace: Array after permutations (sorted by address and time_log)
     shuffle: Vec<(F, TraceRecord<B256, B256, 32, 32>)>,
 }
 
@@ -238,7 +226,7 @@ mod test {
 
     // Common test function to build and check the consistency circuit
     fn build_and_test_circuit(trace: Vec<TraceRecord<B256, B256, 32, 32>>, k: u32) {
-        // Initially, the trace is sorted by address-time
+        // Initially, the trace is sorted by time_log
         let trace = trace_with_index::<B256, B256, 32, 32, Fp>(trace);
 
         // Sort this trace in address and time_log
@@ -264,6 +252,7 @@ mod test {
             B256::from(1),
         );
 
+        // First instruction is read
         build_and_test_circuit(vec![trace_0], 10);
     }
 
@@ -299,6 +288,7 @@ mod test {
             B256::from(0),
         );
 
+        // Read instruction in the unwritten address
         build_and_test_circuit(vec![trace_0, trace_1], 10);
     }
 
@@ -321,6 +311,7 @@ mod test {
             B256::from(9),
         );
 
+        // The trace read does not match the previous write in the same address
         build_and_test_circuit(vec![trace_0, trace_1], 10);
     }
 
@@ -335,6 +326,7 @@ mod test {
             B256::from(1),
         );
 
+        // The trace does not start at time 0
         build_and_test_circuit(vec![trace_0], 10);
     }
 
@@ -365,6 +357,7 @@ mod test {
             B256::from(5),
         );
 
+        // Initial trace is not sorted by time_log
         build_and_test_circuit(vec![trace_2, trace_0, trace_1], 10);
     }
 
@@ -395,17 +388,17 @@ mod test {
             B256::from(5),
         );
 
-        // Initially, the trace is sorted by address-time
+        // Initially, the trace is sorted by time_log
         let trace = trace_with_index::<B256, B256, 32, 32, Fp>(vec![trace_0, trace_1, trace_2]);
 
-        // Sort this trace in timelog
+        // Sort this trace in address and time_log
         let mut sorted_trace = sort_trace::<B256, B256, 32, 32, Fp>(trace.clone());
         // Tamper the permutation
         sorted_trace.swap(0, 1);
 
         let circuit = MemoryConsistencyCircuit::<Fp> {
-            input: sorted_trace.clone(),
-            shuffle: trace.clone(),
+            input: trace.clone(),
+            shuffle: sorted_trace.clone(),
         };
 
         let prover = MockProver::run(9, &circuit, vec![]).unwrap();
@@ -423,14 +416,6 @@ mod test {
         );
 
         let trace_1 = TraceRecord::<B256, B256, 32, 32>::new(
-            4,
-            0,
-            MemoryInstruction::Read,
-            B256::from(0),
-            B256::from(1),
-        );
-
-        let trace_2 = TraceRecord::<B256, B256, 32, 32>::new(
             1,
             0,
             MemoryInstruction::Write,
@@ -438,7 +423,7 @@ mod test {
             B256::from(2),
         );
 
-        let trace_3 = TraceRecord::<B256, B256, 32, 32>::new(
+        let trace_2 = TraceRecord::<B256, B256, 32, 32>::new(
             2,
             0,
             MemoryInstruction::Read,
@@ -446,7 +431,7 @@ mod test {
             B256::from(0x2),
         );
 
-        let trace_4 = TraceRecord::<B256, B256, 32, 32>::new(
+        let trace_3 = TraceRecord::<B256, B256, 32, 32>::new(
             3,
             0,
             MemoryInstruction::Write,
@@ -454,6 +439,13 @@ mod test {
             B256::from(3),
         );
 
-        build_and_test_circuit(vec![trace_0, trace_2, trace_3, trace_4, trace_1], 10);
+        let trace_4 = TraceRecord::<B256, B256, 32, 32>::new(
+            4,
+            0,
+            MemoryInstruction::Read,
+            B256::from(0),
+            B256::from(1),
+        );
+        build_and_test_circuit(vec![trace_0, trace_1, trace_2, trace_3, trace_4], 10);
     }
 }
