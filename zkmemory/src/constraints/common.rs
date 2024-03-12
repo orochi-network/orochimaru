@@ -3,13 +3,13 @@ use halo2_proofs::{
     circuit::Layouter,
     plonk::{Circuit, Error},
 };
-/// extension of circuit
+/// A common trait for synthesizing the circuit
 pub trait CircuitExtension<F>
 where
     F: Field + PrimeField,
     Self: Circuit<F>,
 {
-    /// synthesize with layouter
+    /// Synthesize with layouter
     fn synthesize_with_layouter(
         &self,
         config: Self::Config,

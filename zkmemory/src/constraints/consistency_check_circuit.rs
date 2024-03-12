@@ -1,26 +1,24 @@
 extern crate alloc;
+use crate::{
+    base::B256,
+    constraints::{
+        common::CircuitExtension,
+        gadgets::{ConvertedTraceRecord, LookUpTables, Table, TraceRecordWitnessTable},
+        original_memory_circuit::{OriginalMemoryCircuit, OriginalMemoryConfig},
+        permutation_circuit::{PermutationCircuit, ShuffleChip, ShuffleConfig},
+        sorted_memory_circuit::{SortedMemoryCircuit, SortedMemoryConfig},
+    },
+    machine::TraceRecord,
+};
 use alloc::vec;
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 use ff::{Field, PrimeField};
-use halo2_proofs::circuit::SimpleFloorPlanner;
 use halo2_proofs::{
-    circuit::Layouter,
+    circuit::{Layouter, SimpleFloorPlanner},
     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Expression, Fixed},
 };
 use rand::thread_rng;
-extern crate std;
-use crate::base::B256;
-use crate::machine::TraceRecord;
-
-use super::common::CircuitExtension;
-use super::gadgets::Table;
-use super::gadgets::{ConvertedTraceRecord, LookUpTables, TraceRecordWitnessTable};
-use super::original_memory_circuit::{OriginalMemoryCircuit, OriginalMemoryConfig};
-use super::{
-    permutation_circuit::{PermutationCircuit, ShuffleChip, ShuffleConfig},
-    sorted_memory_circuit::{SortedMemoryCircuit, SortedMemoryConfig},
-};
 
 /// Config for consistency check circuit
 #[derive(Debug, Clone)]
@@ -175,18 +173,21 @@ impl<F: Field + PrimeField + From<B256> + From<B256>> Circuit<F> for MemoryConsi
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
 
-    use crate::machine::{AbstractTraceRecord, MemoryInstruction, TraceRecord};
+    use crate::{
+        base::{Base, B256},
+        constraints::{
+            consistency_check_circuit::MemoryConsistencyCircuit,
+            permutation_circuit::successive_powers,
+        },
+        machine::{AbstractTraceRecord, MemoryInstruction, TraceRecord},
+    };
     extern crate alloc;
-    use crate::base::{Base, B256};
-    use crate::constraints::permutation_circuit::successive_powers;
     use alloc::{vec, vec::Vec};
     use ff::{Field, PrimeField};
     use halo2_proofs::dev::MockProver;
     use halo2curves::pasta::Fp;
-
-    use super::MemoryConsistencyCircuit;
 
     // Sort the trace by address -> time_log as keys
     fn sort_trace<K, V, const S: usize, const T: usize, F>(
