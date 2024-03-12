@@ -1,26 +1,24 @@
 extern crate alloc;
+use crate::{
+    base::B256,
+    constraints::{
+        common::CircuitExtension,
+        gadgets::{ConvertedTraceRecord, LookUpTables, Table, TraceRecordWitnessTable},
+        original_memory_circuit::{OriginalMemoryCircuit, OriginalMemoryConfig},
+        permutation_circuit::{PermutationCircuit, ShuffleChip, ShuffleConfig},
+        sorted_memory_circuit::{SortedMemoryCircuit, SortedMemoryConfig},
+    },
+    machine::TraceRecord,
+};
 use alloc::vec;
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 use ff::{Field, PrimeField};
-use halo2_proofs::circuit::SimpleFloorPlanner;
 use halo2_proofs::{
-    circuit::Layouter,
+    circuit::{Layouter, SimpleFloorPlanner},
     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Expression, Fixed},
 };
 use rand::thread_rng;
-extern crate std;
-use crate::base::B256;
-use crate::machine::TraceRecord;
-
-use super::common::CircuitExtension;
-use super::gadgets::Table;
-use super::gadgets::{ConvertedTraceRecord, LookUpTables, TraceRecordWitnessTable};
-use super::original_memory_circuit::{OriginalMemoryCircuit, OriginalMemoryConfig};
-use super::{
-    permutation_circuit::{PermutationCircuit, ShuffleChip, ShuffleConfig},
-    sorted_memory_circuit::{SortedMemoryCircuit, SortedMemoryConfig},
-};
 
 /// Config for consistency check circuit
 #[derive(Debug, Clone)]

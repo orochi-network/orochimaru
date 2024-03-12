@@ -1,5 +1,6 @@
 use crate::{
     base::Base,
+    constraints::common::CircuitExtension,
     machine::{MemoryInstruction, TraceRecord},
 };
 use core::marker::PhantomData;
@@ -28,8 +29,6 @@ use rand::Rng;
 use rand_core::OsRng;
 extern crate alloc;
 use alloc::{vec, vec::Vec};
-
-use super::common::CircuitExtension;
 
 /// Define a chip struct that implements our instructions.
 pub struct ShuffleChip<F: Field + PrimeField> {
@@ -394,7 +393,9 @@ mod test {
 
     use crate::{
         base::{Base, B256},
-        constraints::permutation_circuit::{PermutationCircuit, PermutationProver},
+        constraints::permutation_circuit::{
+            successive_powers, PermutationCircuit, PermutationProver,
+        },
         machine::{AbstractTraceRecord, MemoryInstruction, TraceRecord},
     };
     use ff::Field;
@@ -404,8 +405,6 @@ mod test {
     use rand::{seq::SliceRandom, Rng};
     extern crate alloc;
     use alloc::vec::Vec;
-
-    use super::successive_powers;
 
     // Randomly create a vector of 2-tuple of trace elements and an index value (for testing)
     fn random_trace<

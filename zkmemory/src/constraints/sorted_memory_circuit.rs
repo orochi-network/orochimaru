@@ -1,44 +1,39 @@
 extern crate alloc;
-use alloc::vec::Vec;
-use alloc::{format, vec};
+use crate::constraints::{common::CircuitExtension, gadgets::*};
+use alloc::{format, vec, vec::Vec};
 use core::marker::PhantomData;
 use ff::{Field, PrimeField};
-use halo2_proofs::circuit::Value;
-use halo2_proofs::plonk::{Fixed, Selector};
 use halo2_proofs::{
-    circuit::{Layouter, Region, SimpleFloorPlanner},
-    plonk::{Circuit, Column, ConstraintSystem, Error, Expression},
+    circuit::{Layouter, Region, SimpleFloorPlanner, Value},
+    plonk::{Circuit, Column, ConstraintSystem, Error, Expression, Fixed, Selector},
     poly::Rotation,
 };
 use rand::thread_rng;
 
-use super::common::CircuitExtension;
-use super::gadgets::*;
-
 #[derive(Clone, Copy, Debug)]
-/// define the columns for the constraint
+/// Define the columns for the constraint
 pub(crate) struct SortedMemoryConfig<F: Field + PrimeField> {
-    //  the fields of an execution trace
+    // The fields of an execution trace
     pub(crate) trace_record: TraceRecordWitnessTable<F>,
-    // the difference between the current and the previous address
+    // The difference between the current and the previous address
     pub(crate) addr_cur_prev: IsZeroConfig<F>,
-    // the config for checking the current address||time_log is bigger
+    // The config for checking the current address||time_log is bigger
     // than the previous one
     pub(crate) greater_than: GreaterThanConfig<F, 6>,
-    // the selectors
+    // The selectors
     pub(crate) selector: Column<Fixed>,
     pub(crate) selector_zero: Selector,
-    // the lookup table
+    // The lookup table
     pub(crate) lookup_tables: LookUpTables,
-    // just the phantom data
+    // Just the phantom data
     pub(crate) _marker: PhantomData<F>,
 }
-// current constraints in this configure:
+// Current constraints in this configure:
 // 1) instruction[0]=1
 // 2) address[i+1]||time[i+1]>address[i]||time[i]
 // 3) (addr[i+1]-addr[i])*(instruction[i+1]-1)*(val[i+1]-val[i])=0
 // 4) (addr[i+1]-addr[i])*(instruction[i+1]-1)=0
-// there will be more constraints in the config when we support push and pop
+// There will be more constraints in the config when we support push and pop
 impl<F: Field + PrimeField> SortedMemoryConfig<F> {
     /// Configuration for the circuit
     pub fn configure(
@@ -102,7 +97,7 @@ impl<F: Field + PrimeField> SortedMemoryConfig<F> {
                 meta.query_advice(trace_record.instruction, Rotation::cur())
             });
 
-        // each limb of address and value must be in [0..256]
+        // Each limb of address and value must be in [0..256]
         for (addr, val) in trace_record.address.iter().zip(&trace_record.value) {
             lookup_tables.size256_table.range_check(
                 meta,
@@ -116,7 +111,7 @@ impl<F: Field + PrimeField> SortedMemoryConfig<F> {
                 });
         }
 
-        // each limb of time_log must be in [0..256]
+        // Each limb of time_log must be in [0..256]
         for i in trace_record.time_log {
             lookup_tables.size256_table.range_check(
                 meta,
@@ -125,7 +120,7 @@ impl<F: Field + PrimeField> SortedMemoryConfig<F> {
             );
         }
 
-        // return the config after assigning the gates
+        // Return the config after assigning the gates
         SortedMemoryConfig {
             trace_record,
             addr_cur_prev,
@@ -154,7 +149,7 @@ fn limbs_to_expression<F: Field + PrimeField>(limb: [Expression<F>; 32]) -> Expr
 /// Circuit for sorted trace record
 #[derive(Default)]
 pub(crate) struct SortedMemoryCircuit<F: PrimeField> {
-    // the sorted memory trace record
+    // The sorted memory trace record
     pub(crate) sorted_trace_record: Vec<ConvertedTraceRecord<F>>,
     pub(crate) _marker: PhantomData<F>,
 }
@@ -189,22 +184,22 @@ impl<F: Field + PrimeField> Circuit<F> for SortedMemoryCircuit<F> {
     fn without_witnesses(&self) -> Self {
         Self::default()
     }
-    // configure the circuit
+    // Configure the circuit
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
         let rng = thread_rng();
 
-        // the elements of the trace record
+        // The elements of the trace record
         let trace_record = TraceRecordWitnessTable::<F>::new(meta);
 
-        // lookup tables
+        // Lookup tables
         let lookup_tables = LookUpTables {
             size256_table: Table::<256>::construct(meta),
             size40_table: Table::<40>::construct(meta),
             size2_table: Table::<2>::construct(meta),
         };
-        // the random challenges
-        // for the purpose of testing, we let alpha to be uniformly distributed
-        // later, one can force the prover to commit the memory traces first, then
+        // The random challenges
+        // For debugging of testing, we let alpha to be uniformly distributed
+        // Later, one can force the prover to commit the memory traces first, then
         // let alpha to be the hash of the commitment
         let alpha = Expression::Constant(F::random(rng));
         let mut temp = Expression::Constant(F::ONE);
@@ -217,7 +212,7 @@ impl<F: Field + PrimeField> Circuit<F> for SortedMemoryCircuit<F> {
         SortedMemoryConfig::configure(meta, trace_record, lookup_tables, alpha_power)
     }
 
-    // assign the witness values to the entire witness table and their constraints
+    // Assign the witness values to the entire witness table and their constraints
     fn synthesize(
         &self,
         config: Self::Config,
@@ -228,20 +223,20 @@ impl<F: Field + PrimeField> Circuit<F> for SortedMemoryCircuit<F> {
 }
 
 impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
-    // assign the witness values to the offset-th row of the witness table
+    // Assign the witness values to the offset-th row of the witness table
     fn sorted_memory_assign(
         &self,
         region: &mut Region<'_, F>,
         config: SortedMemoryConfig<F>,
         offset: usize,
     ) -> Result<(), Error> {
-        // handle the case offset=0
+        // Handle the case offset=0
         if offset == 0 {
             let (cur_address, cur_time_log, cur_instruction, cur_value) =
                 self.sorted_trace_record[offset].get_tuple();
             config.selector_zero.enable(region, offset)?;
 
-            // assign the address witness
+            // Assign the address witness
             for (i, j) in cur_address.iter().zip(config.trace_record.address) {
                 region.assign_advice(
                     || format!("address{}", offset),
@@ -250,7 +245,7 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
                     || Value::known(*i),
                 )?;
             }
-            // assign the time_log witness
+            // Assign the time_log witness
             for (i, &cur_t) in cur_time_log.iter().enumerate() {
                 region.assign_advice(
                     || format!("address{}", offset),
@@ -260,14 +255,14 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
                 )?;
             }
 
-            // assign the instruction witness
+            // Assign the instruction witness
             region.assign_advice(
                 || format!("instruction{}", offset),
                 config.trace_record.instruction,
                 offset,
                 || Value::known(cur_instruction),
             )?;
-            // assign the value witness
+            // Assign the value witness
             for (i, j) in cur_value.iter().zip(config.trace_record.value) {
                 region.assign_advice(
                     || format!("value{}", offset),
@@ -277,19 +272,19 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
                 )?;
             }
         }
-        // handle the case offset >= 1
+        // Handle the case offset >= 1
         else {
             let rng = thread_rng();
-            // get the current and the previous trace record
+            // Get the current and the previous trace record
             let (cur_address, cur_time_log, cur_instruction, cur_value) =
                 self.sorted_trace_record[offset].get_tuple();
             let (prev_address, prev_time_log, _prev_instruction, _prev_value) =
                 self.sorted_trace_record[offset - 1].get_tuple();
-            // stack the address and time log together
+            // Stack the address and time log together
             let cur_be_limbs = self.trace_to_be_limbs(cur_time_log, cur_address);
             let prev_be_limbs = self.trace_to_be_limbs(prev_time_log, prev_address);
             let limb_vector: Vec<u8> = (0..40).collect();
-            // find the minimal index such that cur is not equal to prev
+            // Find the minimal index such that cur is not equal to prev
             let find_result = limb_vector
                 .iter()
                 .zip(&cur_be_limbs)
@@ -301,13 +296,13 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
             } else {
                 find_result.expect("two trace records cannot be the same")
             };
-            // difference of address||time_log
+            // Difference of address||time_log
             let difference = *cur_limb - *prev_limb;
 
             let address_diff =
                 self.address_limb_to_field(cur_address) - self.address_limb_to_field(prev_address);
 
-            // compute the inverse of address_diff
+            // Compute the inverse of address_diff
             let (temp, temp_inv) = if address_diff == F::ZERO {
                 let temp = F::random(rng);
                 let temp_inv = temp.invert().expect("cannot find inverse");
@@ -318,7 +313,7 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
                 (temp, temp_inv)
             };
 
-            // assign the selector to be one at the current row
+            // Assign the selector to be one at the current row
             region.assign_fixed(
                 || "selector",
                 config.selector,
@@ -326,7 +321,7 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
                 || Value::known(F::ONE),
             )?;
 
-            // assign the address witness
+            // Assign the address witness
             for (i, j) in cur_address.iter().zip(config.trace_record.address) {
                 region.assign_advice(
                     || format!("address{}", offset),
@@ -335,8 +330,8 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
                     || Value::known(*i),
                 )?;
             }
-            // assign the time_log witness
 
+            // Assign the time_log witness
             for (i, &cur_t) in cur_time_log.iter().enumerate() {
                 region.assign_advice(
                     || format!("address{}", offset),
@@ -346,7 +341,7 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
                 )?;
             }
 
-            // assign the instruction witness
+            // Assign the instruction witness
             region.assign_advice(
                 || format!("instruction{}", offset),
                 config.trace_record.instruction,
@@ -354,7 +349,7 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
                 || Value::known(cur_instruction),
             )?;
 
-            // assign the value witness
+            // Assign the value witness
             for (i, j) in cur_value.iter().zip(config.trace_record.value) {
                 region.assign_advice(
                     || format!("value{}", offset),
@@ -364,7 +359,7 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
                 )?;
             }
 
-            // assign the address difference witness
+            // Assign the address difference witness
             region.assign_advice(
                 || format!("difference of address{}", offset),
                 config.addr_cur_prev.val,
@@ -372,7 +367,7 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
                 || Value::known(address_diff),
             )?;
 
-            // assign the inverse of address difference witness
+            // Assign the inverse of address difference witness
             region.assign_advice(
                 || format!("inverse difference of address{}", offset),
                 config.addr_cur_prev.temp,
@@ -380,7 +375,7 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
                 || Value::known(temp),
             )?;
 
-            // assign the inverse of inverse of address difference witness
+            // Assign the inverse of inverse of address difference witness
             region.assign_advice(
                 || format!("inverse of inverse of address{}", offset),
                 config.addr_cur_prev.temp_inv,
@@ -388,7 +383,7 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
                 || Value::known(temp_inv),
             )?;
 
-            // assign the difference of address||time witness
+            // Assign the difference of address||time witness
             region.assign_advice(
                 || format!("difference of address||time_log{}", offset),
                 config.greater_than.difference,
@@ -396,7 +391,7 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
                 || Value::known(difference),
             )?;
 
-            // assign the inverse of the address||time difference witness
+            // Assign the inverse of the address||time difference witness
             region.assign_advice(
                 || format!("address||time_log difference_inverse{}", offset),
                 config.greater_than.difference_inverse,
@@ -404,7 +399,7 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
                 || Value::known(difference.invert().expect("cannot find inverse")),
             )?;
 
-            // assign the first_difference_limb witness
+            // Assign the first_difference_limb witness
             config
                 .greater_than
                 .first_difference_limb
@@ -413,12 +408,12 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
         Ok(())
     }
 
-    // stack address and time into a single array of type F
+    // Stack address and time into a single array of type F
     fn trace_to_be_limbs(&self, time_log: [F; 8], address: [F; 32]) -> Vec<F> {
         address.iter().chain(time_log.iter()).cloned().collect()
     }
 
-    // converts the limbs of time_log into a single value of type F
+    // Converts the limbs of time_log into a single value of type F
     fn address_limb_to_field(&self, address: [F; 32]) -> F {
         let initial_sum = F::ZERO;
         let initial_tmp = F::from(256_u64);
@@ -430,7 +425,7 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
 mod test {
     use super::*;
     use halo2_proofs::dev::MockProver;
-    use halo2_proofs::halo2curves::bn256::Fr as Fp;
+    use halo2curves::bn256::Fr as Fp;
     #[test]
     fn test_ok_one_trace() {
         let trace0 = ConvertedTraceRecord {
@@ -444,7 +439,7 @@ mod test {
             sorted_trace_record: trace,
             _marker: PhantomData,
         };
-        // the number of rows cannot exceed 2^k
+        // The number of rows cannot exceed 2^k
         let k = 10;
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         assert_eq!(prover.verify(), Ok(()));
@@ -452,7 +447,7 @@ mod test {
 
     #[test]
     fn test_error_invalid_instruction() {
-        // first instruction is supposed to be write
+        // First instruction is supposed to be write
         let trace0 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(0); 8],
@@ -464,7 +459,7 @@ mod test {
             sorted_trace_record: trace,
             _marker: PhantomData,
         };
-        // the number of rows cannot exceed 2^k
+        // The number of rows cannot exceed 2^k
         let k = 10;
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         assert_ne!(prover.verify(), Ok(()));
@@ -472,7 +467,7 @@ mod test {
 
     #[test]
     fn test_invalid_address() {
-        // each limb of address is supposed to be in [0..256]
+        // Each limb of address is supposed to be in [0..256]
         let trace0 = ConvertedTraceRecord {
             address: [Fp::from(256); 32],
             time_log: [Fp::from(0); 8],
@@ -484,7 +479,7 @@ mod test {
             sorted_trace_record: trace,
             _marker: PhantomData,
         };
-        // the number of rows cannot exceed 2^k
+        // The number of rows cannot exceed 2^k
         let k = 10;
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         assert_ne!(prover.verify(), Ok(()));
@@ -492,7 +487,7 @@ mod test {
 
     #[test]
     fn test_invalid_time_log() {
-        // each limb of address is supposed to be in [0..256]
+        // Each limb of address is supposed to be in [0..256]
         let trace0 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(256); 8],
@@ -504,7 +499,7 @@ mod test {
             sorted_trace_record: trace,
             _marker: PhantomData,
         };
-        // the number of rows cannot exceed 2^k
+        // The number of rows cannot exceed 2^k
         let k = 10;
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         assert_ne!(prover.verify(), Ok(()));
@@ -512,7 +507,7 @@ mod test {
 
     #[test]
     fn test_invalid_value() {
-        // each limb of address is supposed to be in [0..255]
+        // Each limb of address is supposed to be in [0..255]
         let trace0 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(0); 8],
@@ -524,7 +519,7 @@ mod test {
             sorted_trace_record: trace,
             _marker: PhantomData,
         };
-        // the number of rows cannot exceed 2^k
+        // The number of rows cannot exceed 2^k
         let k = 10;
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         assert_ne!(prover.verify(), Ok(()));
@@ -551,7 +546,7 @@ mod test {
             sorted_trace_record: trace,
             _marker: PhantomData,
         };
-        // the number of rows cannot exceed 2^k
+        // The number of rows cannot exceed 2^k
         let k = 10;
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         assert_eq!(prover.verify(), Ok(()));
@@ -578,7 +573,7 @@ mod test {
             sorted_trace_record: trace,
             _marker: PhantomData,
         };
-        // the number of rows cannot exceed 2^k
+        // The number of rows cannot exceed 2^k
         let k = 10;
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         assert_ne!(prover.verify(), Ok(()));
@@ -605,7 +600,7 @@ mod test {
             sorted_trace_record: trace,
             _marker: PhantomData,
         };
-        // the number of rows cannot exceed 2^k
+        // The number of rows cannot exceed 2^k
         let k = 10;
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         assert_ne!(prover.verify(), Ok(()));
@@ -632,7 +627,7 @@ mod test {
             sorted_trace_record: trace,
             _marker: PhantomData,
         };
-        // the number of rows cannot exceed 2^k
+        // The number of rows cannot exceed 2^k
         let k = 10;
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         assert_ne!(prover.verify(), Ok(()));
@@ -659,7 +654,7 @@ mod test {
             sorted_trace_record: trace,
             _marker: PhantomData,
         };
-        // the number of rows cannot exceed 2^k
+        // The number of rows cannot exceed 2^k
         let k = 10;
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         assert_ne!(prover.verify(), Ok(()));
@@ -693,7 +688,7 @@ mod test {
             sorted_trace_record: trace,
             _marker: PhantomData,
         };
-        // the number of rows cannot exceed 2^k
+        // The number of rows cannot exceed 2^k
         let k = 10;
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         assert_eq!(prover.verify(), Ok(()));
@@ -727,7 +722,7 @@ mod test {
             sorted_trace_record: trace,
             _marker: PhantomData,
         };
-        // the number of rows cannot exceed 2^k
+        // The number of rows cannot exceed 2^k
         let k = 10;
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         assert_ne!(prover.verify(), Ok(()));
@@ -761,7 +756,7 @@ mod test {
             sorted_trace_record: trace,
             _marker: PhantomData,
         };
-        // the number of rows cannot exceed 2^k
+        // The number of rows cannot exceed 2^k
         let k = 10;
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         assert_ne!(prover.verify(), Ok(()));
