@@ -35,7 +35,7 @@ impl core::fmt::Display for Error {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use crate::error::Error;
     extern crate alloc;
 

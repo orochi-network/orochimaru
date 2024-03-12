@@ -130,9 +130,19 @@ mod tests {
 
     #[test]
     fn base_conversion_test() {
-        // Test From<> traits
+        // Test From<u256> traits
         let left = 5;
-        let chunk1 = B256::from(5 as usize);
+        let chunk1 = B256::from(5_usize);
+        let right1 = i32::from(chunk1);
+        let right2 = usize::from(chunk1);
+        let right3 = u64::from(chunk1);
+        assert_eq!(left, right1 as u64);
+        assert_eq!(left, right2 as u64);
+        assert_eq!(left, right3);
+
+        // Test From<u256> traits
+        let left = 5;
+        let chunk1 = B128::from(5_usize);
         let right1 = i32::from(chunk1);
         let right2 = usize::from(chunk1);
         let right3 = u64::from(chunk1);

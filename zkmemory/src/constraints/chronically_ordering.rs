@@ -284,7 +284,7 @@ impl<F: Field + PrimeField> OriginalMemoryCircuit<F> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use halo2_proofs::dev::MockProver;
     use halo2_proofs::halo2curves::bn256::Fr as Fp;

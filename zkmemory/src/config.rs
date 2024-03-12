@@ -125,7 +125,7 @@ where
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::ConfigArgs;
     use crate::base::{Base, B256};
     use crate::config::{Config, DefaultConfig};
