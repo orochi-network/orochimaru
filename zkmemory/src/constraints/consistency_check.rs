@@ -232,7 +232,7 @@ mod test {
         let indexes = successive_powers::<F>(trace.len() as u64);
         indexes
             .into_iter()
-            .zip(trace.into_iter())
+            .zip(trace)
             .collect::<Vec<(F, TraceRecord<K, V, S, T>)>>()
     }
 

@@ -427,7 +427,7 @@ mod test {
     fn random_trace_record<K: Base<S>, V: Base<T>, const S: usize, const T: usize>(
     ) -> TraceRecord<K, V, S, T> {
         let mut rng = rand::thread_rng();
-        let instruction = if rng.gen() {
+        let instruction = if rng.gen_range(0..2) == 1 {
             MemoryInstruction::Write
         } else {
             MemoryInstruction::Read
@@ -498,23 +498,26 @@ mod test {
 
     #[test]
     fn check_trace_record_mapping() {
-        let mut record = random_trace_record::<B256, B256, 32, 32>();
-        let (time_log, stack_depth, instruction, address, value) = record.get_tuple();
-        let instruction = match instruction {
-            MemoryInstruction::Write => Fp::ONE,
-            MemoryInstruction::Read => Fp::ZERO,
-        };
-        // Generate a random seed of type [u64; 5]
-        let mut rng = rand::thread_rng();
-        let mut seeds = [0u64; 5];
-        rng.fill(&mut seeds);
-        // Dot product between the trace record and the seed.
-        let dot_product = Fp::from(time_log) * Fp::from(seeds[0])
-            + Fp::from(stack_depth) * Fp::from(seeds[1])
-            + instruction * Fp::from(seeds[2])
-            + Fp::from(address) * Fp::from(seeds[3])
-            + Fp::from(value) * Fp::from(seeds[4]);
-        assert_eq!(dot_product, record.compress(seeds));
+        // Test 10 times
+        for _ in 0..10 {
+            let mut record = random_trace_record::<B256, B256, 32, 32>();
+            let (time_log, stack_depth, instruction, address, value) = record.get_tuple();
+            let instruction = match instruction {
+                MemoryInstruction::Write => Fp::ONE,
+                MemoryInstruction::Read => Fp::ZERO,
+            };
+            // Generate a random seed of type [u64; 5]
+            let mut rng = rand::thread_rng();
+            let mut seeds = [0u64; 5];
+            rng.fill(&mut seeds);
+            // Dot product between the trace record and the seed.
+            let dot_product = Fp::from(time_log) * Fp::from(seeds[0])
+                + Fp::from(stack_depth) * Fp::from(seeds[1])
+                + instruction * Fp::from(seeds[2])
+                + Fp::from(address) * Fp::from(seeds[3])
+                + Fp::from(value) * Fp::from(seeds[4]);
+            assert_eq!(dot_product, record.compress(seeds));
+        }
     }
 
     #[test]
@@ -539,5 +542,24 @@ mod test {
         let mut ipa_prover = PermutationProver::<EqAffine>::new(K, circuit, true);
         let proof = ipa_prover.create_proof();
         assert!(ipa_prover.verify(proof));
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_inequal_lengths() {
+        const K: u32 = 6;
+        // Number of trace elements in a trace, min = 2^K.
+        let trace_size = 50;
+        let mut rng = rand::thread_rng();
+        let mut trace_buffer = random_trace::<B256, B256, 32, 32, Fp>(trace_size);
+        let input_trace = trace_buffer.clone();
+        trace_buffer.shuffle(&mut rng);
+        let mut shuffle_trace = trace_buffer.clone();
+        shuffle_trace.pop();
+        let circuit = PermutationCircuit::<Fp>::new(input_trace, shuffle_trace);
+        // Test with IPA prover
+        let mut ipa_prover = PermutationProver::<EqAffine>::new(K, circuit, true);
+        let proof = ipa_prover.create_proof();
+        assert!(!ipa_prover.verify(proof));
     }
 }

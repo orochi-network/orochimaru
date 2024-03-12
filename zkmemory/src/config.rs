@@ -43,6 +43,7 @@ pub struct Config<T, const S: usize> {
 }
 
 /// Config arguments for RAM machine
+#[derive(Debug)]
 pub struct ConfigArgs<T> {
     /// Is head layout
     pub head_layout: bool,
@@ -120,5 +121,55 @@ where
             index,
             self.register.low() + (T::from(index) * self.word_size),
         )
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::ConfigArgs;
+    use crate::base::{Base, B256};
+    use crate::config::{Config, DefaultConfig};
+
+    impl PartialEq for ConfigArgs<B256> {
+        fn eq(&self, other: &Self) -> bool {
+            self.head_layout == other.head_layout
+                && self.stack_depth == other.stack_depth
+                && self.no_register == other.no_register
+                && self.buffer_size == other.buffer_size
+        }
+    }
+
+    #[test]
+    fn test_default_config() {
+        let config = ConfigArgs {
+            head_layout: true,
+            stack_depth: B256::from(1024),
+            no_register: B256::from(32),
+            buffer_size: B256::from(32),
+        };
+        assert_eq!(config, DefaultConfig::default_config());
+    }
+
+    #[test]
+    fn test_config_sections() {
+        // Test memory section
+        let config = Config::<B256, 32>::new(B256::from(32), DefaultConfig::default_config());
+        assert!(config.memory.contain(B256::MAX - B256::from(1)));
+
+        // Test tail layout
+        let config = Config::<B256, 32>::new(
+            B256::from(32),
+            ConfigArgs {
+                head_layout: false,
+                stack_depth: B256::from(1024),
+                no_register: B256::from(32),
+                buffer_size: B256::from(32),
+            },
+        );
+        assert!(config.memory.contain(B256::from(0x10000f)));
+
+        // Test register
+        config.create_register(0);
+        assert!(!config.register.contain(B256::from(10)));
     }
 }
