@@ -13,20 +13,23 @@ extern crate std;
 use crate::base::B256;
 use crate::machine::TraceRecord;
 
-use super::chronically_ordering::{OriginalMemoryCircuit, OriginalMemoryConfig};
 use super::common::CircuitExtension;
 use super::gadgets::Table;
 use super::gadgets::{ConvertedTraceRecord, LookUpTables, TraceRecordWitnessTable};
+use super::original_memory_circuit::{OriginalMemoryCircuit, OriginalMemoryConfig};
 use super::{
-    lexicographic_ordering::{SortedMemoryCircuit, SortedMemoryConfig},
-    permutation::{PermutationCircuit, ShuffleChip, ShuffleConfig},
+    permutation_circuit::{PermutationCircuit, ShuffleChip, ShuffleConfig},
+    sorted_memory_circuit::{SortedMemoryCircuit, SortedMemoryConfig},
 };
 
 /// Config for consistency check circuit
 #[derive(Debug, Clone)]
 pub struct ConsistencyConfig<F: Field + PrimeField> {
-    chronically_ordering_config: OriginalMemoryConfig<F>,
-    lexicographic_ordering_config: SortedMemoryConfig<F>,
+    // the config of the original memory
+    original_memory_config: OriginalMemoryConfig<F>,
+    // the config of the sorted memory
+    sorted_memory_config: SortedMemoryConfig<F>,
+    // the config of permutation check
     permutation_config: ShuffleConfig,
     _marker: PhantomData<F>,
 }
@@ -46,14 +49,14 @@ impl<F: Field + PrimeField> ConsistencyConfig<F> {
         alpha_power: Vec<Expression<F>>,
     ) -> Self {
         Self {
-            chronically_ordering_config: OriginalMemoryConfig::<F>::configure(
+            original_memory_config: OriginalMemoryConfig::<F>::configure(
                 meta,
                 original_trace_record,
                 lookup_tables,
                 alpha_power.clone(),
             ),
 
-            lexicographic_ordering_config: SortedMemoryConfig::<F>::configure(
+            sorted_memory_config: SortedMemoryConfig::<F>::configure(
                 meta,
                 sorted_trace_record,
                 lookup_tables,
@@ -106,14 +109,13 @@ impl<F: Field + PrimeField + From<B256> + From<B256>> CircuitExtension<F>
             original_trace_record,
             _marker: PhantomData,
         };
-        let lexicographic_ordering_circuit = SortedMemoryCircuit {
+        let sorted_memory_circuit = SortedMemoryCircuit {
             sorted_trace_record,
             _marker: PhantomData,
         };
-        lexicographic_ordering_circuit
-            .synthesize_with_layouter(config.lexicographic_ordering_config, layouter)?;
+        sorted_memory_circuit.synthesize_with_layouter(config.sorted_memory_config, layouter)?;
         original_ordering_circuit
-            .synthesize_with_layouter(config.chronically_ordering_config, layouter)?;
+            .synthesize_with_layouter(config.original_memory_config, layouter)?;
         Ok(())
     }
 }
@@ -121,8 +123,7 @@ impl<F: Field + PrimeField + From<B256> + From<B256>> CircuitExtension<F>
 impl<F: Field + PrimeField + From<B256> + From<B256>> Circuit<F> for MemoryConsistencyCircuit<F> {
     type Config = ConsistencyConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
-    #[cfg(feature = "circuit-params")]
-    type Params = ();
+
     // Method: without_witness: return the circuit that has no witnesses
     fn without_witnesses(&self) -> Self {
         Self::default()
@@ -179,7 +180,7 @@ mod test {
     use crate::machine::{AbstractTraceRecord, MemoryInstruction, TraceRecord};
     extern crate alloc;
     use crate::base::{Base, B256};
-    use crate::constraints::permutation::successive_powers;
+    use crate::constraints::permutation_circuit::successive_powers;
     use alloc::{vec, vec::Vec};
     use ff::{Field, PrimeField};
     use halo2_proofs::dev::MockProver;
@@ -304,7 +305,7 @@ mod test {
         );
 
         let trace_1 = TraceRecord::<B256, B256, 32, 32>::new(
-            0,
+            1,
             0,
             MemoryInstruction::Read,
             B256::from(0),
@@ -350,7 +351,37 @@ mod test {
         );
 
         let trace_2 = TraceRecord::<B256, B256, 32, 32>::new(
+            1,
+            0,
+            MemoryInstruction::Write,
+            B256::from(0x20),
+            B256::from(5),
+        );
+
+        build_and_test_circuit(vec![trace_0, trace_1, trace_2], 10);
+    }
+
+    #[test]
+    #[should_panic]
+    fn wrong_initial_ordering_continued() {
+        let trace_0 = TraceRecord::<B256, B256, 32, 32>::new(
+            0,
+            0,
+            MemoryInstruction::Write,
+            B256::from(0),
+            B256::from(1),
+        );
+
+        let trace_1 = TraceRecord::<B256, B256, 32, 32>::new(
             2,
+            0,
+            MemoryInstruction::Write,
+            B256::from(0),
+            B256::from(1),
+        );
+
+        let trace_2 = TraceRecord::<B256, B256, 32, 32>::new(
+            1,
             0,
             MemoryInstruction::Write,
             B256::from(0x20),

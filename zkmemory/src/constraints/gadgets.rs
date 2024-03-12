@@ -68,7 +68,7 @@ impl<const N: usize> Table<N> {
 
 /// check if a value val is zero or not
 #[derive(Clone, Copy, Debug)]
-pub struct IsZeroConfigure<F: Field + PrimeField> {
+pub struct IsZeroConfig<F: Field + PrimeField> {
     /// the value
     pub val: Column<Advice>,
     /// the inverse of value. It is any non-zero value if val=0
@@ -78,7 +78,7 @@ pub struct IsZeroConfigure<F: Field + PrimeField> {
     _marker: PhantomData<F>,
 }
 
-impl<F: Field + PrimeField> IsZeroConfigure<F> {
+impl<F: Field + PrimeField> IsZeroConfig<F> {
     /// Create the gates for checking inversion
     pub fn configure(meta: &mut ConstraintSystem<F>, selector: Column<Fixed>) -> Self {
         let val = meta.advice_column();
@@ -102,7 +102,7 @@ impl<F: Field + PrimeField> IsZeroConfigure<F> {
             vec![selector * (temp.clone() * val.clone() * (one.clone() - temp * val))]
         });
 
-        IsZeroConfigure {
+        IsZeroConfig {
             val,
             temp,
             temp_inv,
@@ -113,12 +113,12 @@ impl<F: Field + PrimeField> IsZeroConfigure<F> {
 
 #[derive(Clone, Copy, Debug)]
 /// Config for binary number
-pub struct BinaryConfigure<F: Field + PrimeField, const N: usize> {
+pub struct BinaryConfig<F: Field + PrimeField, const N: usize> {
     /// the list of bit representation
     pub bits: [Column<Advice>; N],
     _marker: PhantomData<F>,
 }
-impl<F: Field + PrimeField, const N: usize> BinaryConfigure<F, N> {
+impl<F: Field + PrimeField, const N: usize> BinaryConfig<F, N> {
     /// Requires that each bit is zero or one
     pub fn configure(meta: &mut ConstraintSystem<F>, selector: Column<Fixed>) -> Self {
         let bits = [0; N].map(|_| meta.advice_column());
@@ -130,7 +130,7 @@ impl<F: Field + PrimeField, const N: usize> BinaryConfigure<F, N> {
                 vec![selector * bit.clone() * (one.clone() - bit)]
             })
         });
-        BinaryConfigure {
+        BinaryConfig {
             bits,
             _marker: PhantomData,
         }
@@ -204,14 +204,14 @@ impl<F: Field + PrimeField> TraceRecordWitnessTable<F> {
 }
 
 #[derive(Clone, Copy, Debug)]
-/// check the lexicographic ordering of time or address||time
-pub(crate) struct GreaterThanConfigure<F: Field + PrimeField, const N: usize> {
+/// config for checking the ordering of time or address||time
+/// in original memory or sorted memory respectively
+pub(crate) struct GreaterThanConfig<F: Field + PrimeField, const N: usize> {
     pub(crate) difference: Column<Advice>,
     pub(crate) difference_inverse: Column<Advice>,
-    pub(crate) first_difference_limb: BinaryConfigure<F, N>,
+    pub(crate) first_difference_limb: BinaryConfig<F, N>,
 }
-
-impl<F: Field + PrimeField, const N: usize> GreaterThanConfigure<F, N> {
+impl<F: Field + PrimeField, const N: usize> GreaterThanConfig<F, N> {
     /// Add the constraints for lexicographic ordering
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
@@ -223,7 +223,7 @@ impl<F: Field + PrimeField, const N: usize> GreaterThanConfigure<F, N> {
     ) -> Self {
         let difference = meta.advice_column();
         let difference_inverse = meta.advice_column();
-        let first_difference_limb = BinaryConfigure::<F, N>::configure(meta, selector);
+        let first_difference_limb = BinaryConfig::<F, N>::configure(meta, selector);
         let one = Expression::Constant(F::ONE);
         let limb_vector: Vec<u8> = (0..40).collect();
 
@@ -306,7 +306,7 @@ impl<F: Field + PrimeField, const N: usize> GreaterThanConfigure<F, N> {
                 meta.query_advice(difference, Rotation::cur())
             });
 
-        GreaterThanConfigure {
+        GreaterThanConfig {
             difference,
             difference_inverse,
             first_difference_limb,
@@ -336,7 +336,7 @@ fn rlc_limb_differences<F: Field + PrimeField>(
     result
 }
 
-/// The lookup tables
+/// The lookup tables. We have 3 tables of size 256,40 and 2
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct LookUpTables {
     pub(crate) size256_table: Table<256>,
@@ -382,7 +382,10 @@ impl<F: Field + PrimeField> Queries<F> {
             .collect()
     }
 }
+
 /// Trace record struct for Lexicographic ordering circuit
+/// We need every element to be of an array of type F, where each
+/// element of the array does not exceed 255
 #[derive(Debug, Clone)]
 pub(crate) struct ConvertedTraceRecord<F: Field + PrimeField> {
     pub(crate) address: [F; 32], //256 bits
@@ -398,6 +401,7 @@ impl<F: Field + PrimeField> ConvertedTraceRecord<F> {
     }
 }
 
+// convert a trace record into a ConvertedTraceRecord struct
 impl<F: Field + PrimeField> From<TraceRecord<B256, B256, 32, 32>> for ConvertedTraceRecord<F> {
     fn from(value: TraceRecord<B256, B256, 32, 32>) -> Self {
         Self {

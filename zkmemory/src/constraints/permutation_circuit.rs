@@ -394,7 +394,7 @@ mod test {
 
     use crate::{
         base::{Base, B256},
-        constraints::permutation::{PermutationCircuit, PermutationProver},
+        constraints::permutation_circuit::{PermutationCircuit, PermutationProver},
         machine::{AbstractTraceRecord, MemoryInstruction, TraceRecord},
     };
     use ff::Field;

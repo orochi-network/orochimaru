@@ -2,7 +2,7 @@ extern crate alloc;
 use super::{
     common::CircuitExtension,
     gadgets::{
-        ConvertedTraceRecord, GreaterThanConfigure, LookUpTables, Table, TraceRecordWitnessTable,
+        ConvertedTraceRecord, GreaterThanConfig, LookUpTables, Table, TraceRecordWitnessTable,
     },
 };
 use crate::constraints::gadgets::Queries;
@@ -18,12 +18,21 @@ use rand::thread_rng;
 #[derive(Clone, Copy, Debug)]
 /// Config for trace record that is sorted by time_log
 pub(crate) struct OriginalMemoryConfig<F: Field + PrimeField> {
+    // the original trace circuit
     pub(crate) trace_record: TraceRecordWitnessTable<F>,
+    // the selectors
     pub(crate) selector: Column<Fixed>,
     pub(crate) selector_zero: Selector,
-    pub(crate) greater_than: GreaterThanConfigure<F, 3>,
+    // the config for checking the current time log is bigger than the
+    // previous one
+    pub(crate) greater_than: GreaterThanConfig<F, 3>,
+    // the lookup table
     pub(crate) lookup_tables: LookUpTables,
 }
+// current constraints in this configure:
+// 1) time[0]=0
+// 2) time[i]<time[i+1]
+// there will be more constraints in the config when we support push and pop
 impl<F: Field + PrimeField> OriginalMemoryConfig<F> {
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
@@ -35,7 +44,7 @@ impl<F: Field + PrimeField> OriginalMemoryConfig<F> {
         let selector_zero = meta.selector();
         // this is used to check that time_log[i]<time_log[i+1] for all i
         // we set address_included=false because we do not need address here
-        let greater_than = GreaterThanConfigure::<F, 3>::configure(
+        let greater_than = GreaterThanConfig::<F, 3>::configure(
             meta,
             trace_record,
             alpha_power,
@@ -63,14 +72,14 @@ impl<F: Field + PrimeField> OriginalMemoryConfig<F> {
     }
 }
 
-/// Circuit for sorted trace record
+/// Circuit for original trace record
 #[derive(Default)]
-pub(crate) struct OriginalMemoryCircuit<F: PrimeField> {
+pub(crate) struct OriginalMemoryCircuit<F: Field + PrimeField> {
     pub(crate) original_trace_record: Vec<ConvertedTraceRecord<F>>,
     pub(crate) _marker: PhantomData<F>,
 }
 
-/// Implement the CircuitExtension trait for the SortedMemoryCircuit
+/// Implement the CircuitExtension trait for the OriginalMemoryCircuit
 impl<F: Field + PrimeField> CircuitExtension<F> for OriginalMemoryCircuit<F> {
     fn synthesize_with_layouter(
         &self,
@@ -100,6 +109,7 @@ impl<F: Field + PrimeField> Circuit<F> for OriginalMemoryCircuit<F> {
     fn without_witnesses(&self) -> Self {
         Self::default()
     }
+
     // configure the circuit
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
         let rng = thread_rng();
@@ -114,12 +124,15 @@ impl<F: Field + PrimeField> Circuit<F> for OriginalMemoryCircuit<F> {
             size2_table: Table::<2>::construct(meta),
         };
         // the random challenges
+        // for the purpose of testing, we let alpha to be uniformly distributed
+        // later, one can force the prover to commit the memory traces first, then
+        // let alpha to be the hash of the commitment
         let alpha = Expression::Constant(F::random(rng));
-        let mut tmp = Expression::Constant(F::ONE);
-        let mut alpha_power: Vec<Expression<F>> = vec![tmp.clone()];
-        for _ in 0..40 {
-            tmp = tmp * alpha.clone();
-            alpha_power.push(tmp.clone());
+        let mut temp = Expression::Constant(F::ONE);
+        let mut alpha_power: Vec<Expression<F>> = vec![temp.clone()];
+        for _ in 0..8 {
+            temp = temp * alpha.clone();
+            alpha_power.push(temp.clone());
         }
 
         OriginalMemoryConfig::configure(meta, trace_record, lookup_tables, alpha_power)

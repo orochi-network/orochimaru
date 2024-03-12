@@ -21,10 +21,10 @@ pub(crate) struct SortedMemoryConfig<F: Field + PrimeField> {
     //  the fields of an execution trace
     pub(crate) trace_record: TraceRecordWitnessTable<F>,
     // the difference between the current and the previous address
-    pub(crate) addr_cur_prev: IsZeroConfigure<F>,
+    pub(crate) addr_cur_prev: IsZeroConfig<F>,
     // the config for checking the current address||time_log is bigger
     // than the previous one
-    pub(crate) greater_than: GreaterThanConfigure<F, 6>,
+    pub(crate) greater_than: GreaterThanConfig<F, 6>,
     // the selectors
     pub(crate) selector: Column<Fixed>,
     pub(crate) selector_zero: Selector,
@@ -33,10 +33,12 @@ pub(crate) struct SortedMemoryConfig<F: Field + PrimeField> {
     // just the phantom data
     pub(crate) _marker: PhantomData<F>,
 }
-
-// implement the configure method for selecting gates
-// we have the gates for checking inverse, lookup and checking that
-// all values before first_difference_limb are equal to zero
+// current constraints in this configure:
+// 1) instruction[0]=1
+// 2) address[i+1]||time[i+1]>address[i]||time[i]
+// 3) (addr[i+1]-addr[i])*(instruction[i+1]-1)*(val[i+1]-val[i])=0
+// 4) (addr[i+1]-addr[i])*(instruction[i+1]-1)=0
+// there will be more constraints in the config when we support push and pop
 impl<F: Field + PrimeField> SortedMemoryConfig<F> {
     /// Configuration for the circuit
     pub fn configure(
@@ -49,10 +51,10 @@ impl<F: Field + PrimeField> SortedMemoryConfig<F> {
 
         let selector = meta.fixed_column();
         let selector_zero = meta.selector();
-        let addr_cur_prev = IsZeroConfigure::<F>::configure(meta, selector);
+        let addr_cur_prev = IsZeroConfig::<F>::configure(meta, selector);
 
         // addr[i+1]>addr[i] OR addr[i+1]=addr[i] and time[i+1]>time[i]
-        let greater_than = GreaterThanConfigure::<F, 6>::configure(
+        let greater_than = GreaterThanConfig::<F, 6>::configure(
             meta,
             trace_record,
             alpha_power,
@@ -93,7 +95,7 @@ impl<F: Field + PrimeField> SortedMemoryConfig<F> {
             },
         );
 
-        // instruction[i]=1 for all i
+        // instruction[i] is in [0,1] for all i
         lookup_tables
             .size2_table
             .range_check(meta, "instruction must be in 0..1", |meta| {
@@ -152,6 +154,7 @@ fn limbs_to_expression<F: Field + PrimeField>(limb: [Expression<F>; 32]) -> Expr
 /// Circuit for sorted trace record
 #[derive(Default)]
 pub(crate) struct SortedMemoryCircuit<F: PrimeField> {
+    // the sorted memory trace record
     pub(crate) sorted_trace_record: Vec<ConvertedTraceRecord<F>>,
     pub(crate) _marker: PhantomData<F>,
 }
@@ -200,12 +203,15 @@ impl<F: Field + PrimeField> Circuit<F> for SortedMemoryCircuit<F> {
             size2_table: Table::<2>::construct(meta),
         };
         // the random challenges
+        // for the purpose of testing, we let alpha to be uniformly distributed
+        // later, one can force the prover to commit the memory traces first, then
+        // let alpha to be the hash of the commitment
         let alpha = Expression::Constant(F::random(rng));
-        let mut tmp = Expression::Constant(F::ONE);
-        let mut alpha_power: Vec<Expression<F>> = vec![tmp.clone()];
+        let mut temp = Expression::Constant(F::ONE);
+        let mut alpha_power: Vec<Expression<F>> = vec![temp.clone()];
         for _ in 0..40 {
-            tmp = tmp * alpha.clone();
-            alpha_power.push(tmp.clone());
+            temp = temp * alpha.clone();
+            alpha_power.push(temp.clone());
         }
 
         SortedMemoryConfig::configure(meta, trace_record, lookup_tables, alpha_power)
@@ -407,10 +413,12 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
         Ok(())
     }
 
+    // stack address and time into a single array of type F
     fn trace_to_be_limbs(&self, time_log: [F; 8], address: [F; 32]) -> Vec<F> {
         address.iter().chain(time_log.iter()).cloned().collect()
     }
 
+    // converts the limbs of time_log into a single value of type F
     fn address_limb_to_field(&self, address: [F; 32]) -> F {
         let initial_sum = F::ZERO;
         let initial_tmp = F::from(256_u64);
@@ -464,11 +472,11 @@ mod test {
 
     #[test]
     fn test_invalid_address() {
-        // each limb of address is supposed to be in [0..63]
+        // each limb of address is supposed to be in [0..256]
         let trace0 = ConvertedTraceRecord {
-            address: [Fp::from(64); 32],
+            address: [Fp::from(256); 32],
             time_log: [Fp::from(0); 8],
-            instruction: Fp::from(0),
+            instruction: Fp::from(1),
             value: [Fp::from(63); 32],
         };
         let trace = vec![trace0];
@@ -484,12 +492,12 @@ mod test {
 
     #[test]
     fn test_invalid_time_log() {
-        // each limb of address is supposed to be in [0..63]
+        // each limb of address is supposed to be in [0..256]
         let trace0 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
-            time_log: [Fp::from(64); 8],
-            instruction: Fp::from(0),
-            value: [Fp::from(63); 32],
+            time_log: [Fp::from(256); 8],
+            instruction: Fp::from(1),
+            value: [Fp::from(0); 32],
         };
         let trace = vec![trace0];
         let circuit = SortedMemoryCircuit {
@@ -504,12 +512,12 @@ mod test {
 
     #[test]
     fn test_invalid_value() {
-        // each limb of address is supposed to be in [0..63]
+        // each limb of address is supposed to be in [0..255]
         let trace0 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(0); 8],
-            instruction: Fp::from(0),
-            value: [Fp::from(64); 32],
+            instruction: Fp::from(1),
+            value: [Fp::from(256); 32],
         };
         let trace = vec![trace0];
         let circuit = SortedMemoryCircuit {
@@ -533,16 +541,7 @@ mod test {
 
         let trace1 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
-            time_log: [
-                Fp::from(0),
-                Fp::from(56),
-                Fp::from(0),
-                Fp::from(1),
-                Fp::from(43),
-                Fp::from(32),
-                Fp::from(28),
-                Fp::from(1),
-            ],
+            time_log: [Fp::from(1); 8],
             instruction: Fp::from(1),
             value: [Fp::from(63); 32],
         };
@@ -616,14 +615,14 @@ mod test {
     fn invalid_read() {
         let trace0 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
-            time_log: [Fp::from(1); 8],
+            time_log: [Fp::from(0); 8],
             instruction: Fp::from(1),
             value: [Fp::from(63); 32],
         };
 
         let trace1 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
-            time_log: [Fp::from(0); 8],
+            time_log: [Fp::from(1); 8],
             instruction: Fp::from(0),
             value: [Fp::from(50); 32],
         };
@@ -721,6 +720,40 @@ mod test {
             time_log: [Fp::from(3); 8],
             instruction: Fp::from(0),
             value: [Fp::from(50); 32],
+        };
+
+        let trace = vec![trace0, trace1, trace2];
+        let circuit = SortedMemoryCircuit {
+            sorted_trace_record: trace,
+            _marker: PhantomData,
+        };
+        // the number of rows cannot exceed 2^k
+        let k = 10;
+        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+        assert_ne!(prover.verify(), Ok(()));
+    }
+
+    #[test]
+    fn invalid_read3() {
+        let trace0 = ConvertedTraceRecord {
+            address: [Fp::from(0); 32],
+            time_log: [Fp::from(1); 8],
+            instruction: Fp::from(1),
+            value: [Fp::from(63); 32],
+        };
+
+        let trace1 = ConvertedTraceRecord {
+            address: [Fp::from(0); 32],
+            time_log: [Fp::from(2); 8],
+            instruction: Fp::from(1),
+            value: [Fp::from(50); 32],
+        };
+
+        let trace2 = ConvertedTraceRecord {
+            address: [Fp::from(0); 32],
+            time_log: [Fp::from(3); 8],
+            instruction: Fp::from(0),
+            value: [Fp::from(63); 32],
         };
 
         let trace = vec![trace0, trace1, trace2];
