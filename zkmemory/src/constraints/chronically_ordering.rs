@@ -33,6 +33,8 @@ impl<F: Field + PrimeField> OriginalMemoryConfig<F> {
     ) -> Self {
         let selector = meta.fixed_column();
         let selector_zero = meta.selector();
+        // this is used to check that time_log[i]<time_log[i+1] for all i
+        // we set address_included=false because we do not need address here
         let greater_than = GreaterThanConfigure::<F, 3>::configure(
             meta,
             trace_record,
@@ -41,6 +43,7 @@ impl<F: Field + PrimeField> OriginalMemoryConfig<F> {
             selector,
             false,
         );
+        // check that time_log[0]=0
         meta.create_gate("first accessed memory is at time 0", |meta| {
             let selector_zero = meta.query_selector(selector_zero);
             let time_log = Queries::new(meta, trace_record, Rotation::cur()).time_log;
@@ -75,7 +78,7 @@ impl<F: Field + PrimeField> CircuitExtension<F> for OriginalMemoryCircuit<F> {
         layouter: &mut impl Layouter<F>,
     ) -> Result<(), Error> {
         layouter.assign_region(
-            || "chronically_ordering",
+            || "original memory trace region",
             |mut region| {
                 for i in 0..self.original_trace_record.len() {
                     self.original_memory_assign(&mut region, config, i)?;
@@ -187,12 +190,9 @@ impl<F: Field + PrimeField> OriginalMemoryCircuit<F> {
                 self.original_trace_record[offset].get_tuple();
             let (_prev_address, prev_time_log, _prev_instruction, _prev_value) =
                 self.original_trace_record[offset - 1].get_tuple();
-            let cur_be_limbs = self.time_log_to_be_limbs(cur_time_log);
-            let prev_be_limbs = self.time_log_to_be_limbs(prev_time_log);
-            let mut limb_vector = vec![0_u8];
-            for i in 1..8 {
-                limb_vector.push(i);
-            }
+            let cur_be_limbs = self.time_log_to_vec(cur_time_log);
+            let prev_be_limbs = self.time_log_to_vec(prev_time_log);
+            let limb_vector: Vec<u8> = (0..8).collect();
             // find the minimal index such that cur is not equal to prev
             let find_result = limb_vector
                 .iter()
@@ -203,7 +203,7 @@ impl<F: Field + PrimeField> OriginalMemoryCircuit<F> {
             let ((index, cur_limb), prev_limb) = if cfg!(test) {
                 find_result.unwrap_or(((&8, &zero), &zero))
             } else {
-                find_result.expect("two trace records cannot be the same")
+                find_result.expect("two trace records cannot have equal time log")
             };
             let difference = *cur_limb - *prev_limb;
 
@@ -278,10 +278,8 @@ impl<F: Field + PrimeField> OriginalMemoryCircuit<F> {
         Ok(())
     }
 
-    fn time_log_to_be_limbs(&self, time_log: [F; 8]) -> Vec<F> {
-        let mut be_bytes = vec![];
-        be_bytes.extend_from_slice(&time_log);
-        be_bytes
+    fn time_log_to_vec(&self, time_log: [F; 8]) -> Vec<F> {
+        time_log.to_vec()
     }
 }
 
