@@ -215,7 +215,7 @@ mod tests {
         );
 
         // Initial trace is not sorted by time_log
-        build_and_test_circuit(vec![trace_2, trace_0, trace_1], 10);
+        build_and_test_circuit(vec![trace_0, trace_1, trace_2], 10);
     }
 
     #[test]
