@@ -1,21 +1,18 @@
 extern crate alloc;
-
-use core::marker::PhantomData;
-
+use crate::{
+    base::{Base, B256},
+    machine::{MemoryInstruction, TraceRecord},
+};
 use alloc::vec::Vec;
 use alloc::{format, vec};
+use core::marker::PhantomData;
 use ff::{Field, PrimeField};
-use halo2_proofs::circuit::Region;
-use halo2_proofs::plonk::Advice;
 use halo2_proofs::{
-    circuit::Value,
-    plonk::{Column, ConstraintSystem, Error, Expression, Fixed, VirtualCells},
+    circuit::{Region, Value},
+    plonk::{Advice, Column, ConstraintSystem, Error, Expression, Fixed, VirtualCells},
     poly::Rotation,
 };
 use itertools::Itertools;
-
-use crate::base::{Base, B256};
-use crate::machine::{MemoryInstruction, TraceRecord};
 
 /// Lookup table for max n bits range check
 #[derive(Clone, Copy, Debug)]
@@ -355,10 +352,10 @@ pub(crate) struct LookUpTables {
 /// Query the element of a trace record at a specific position
 #[derive(Clone, Debug)]
 pub(crate) struct Queries<F: Field + PrimeField> {
-    pub(crate) address: [Expression<F>; 32], //64 bits
-    pub(crate) time_log: [Expression<F>; 8], //64 bits
+    pub(crate) address: [Expression<F>; 32], // 256 bits
+    pub(crate) time_log: [Expression<F>; 8], // 64 bits
     pub(crate) instruction: Expression<F>,   // 0 or 1
-    pub(crate) value: [Expression<F>; 32],   //64 bit
+    pub(crate) value: [Expression<F>; 32],   // 256 bit
 }
 
 impl<F: Field + PrimeField> Queries<F> {
@@ -393,13 +390,12 @@ impl<F: Field + PrimeField> Queries<F> {
 
 /// Trace record struct for Lexicographic ordering circuit
 /// We need every element to be of an array of type F, where each
-///
 #[derive(Debug, Clone)]
 pub(crate) struct ConvertedTraceRecord<F: Field + PrimeField> {
-    pub(crate) address: [F; 32], //256 bits
-    pub(crate) time_log: [F; 8], //256 bits
+    pub(crate) address: [F; 32], // 256 bits
+    pub(crate) time_log: [F; 8], // 256 bits
     pub(crate) instruction: F,   // 0 or 1
-    pub(crate) value: [F; 32],   //256 bit
+    pub(crate) value: [F; 32],   // 256 bit
 }
 
 impl<F: Field + PrimeField> ConvertedTraceRecord<F> {

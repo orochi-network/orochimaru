@@ -10,8 +10,7 @@ use crate::{
     },
     machine::TraceRecord,
 };
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 use core::marker::PhantomData;
 use ff::{Field, PrimeField};
 use halo2_proofs::{

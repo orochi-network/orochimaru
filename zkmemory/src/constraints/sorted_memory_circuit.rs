@@ -65,25 +65,18 @@ impl<F: Field + PrimeField> SortedMemoryConfig<F> {
         });
 
         // (addr[i+1]-addr[i])*(instruction[i+1]-1)*(val[i+1]-val[i])=0
-        meta.create_gate(
-            "if the current trace is read, its value must be equal to the previous trace value",
-            |meta| {
-                let selector = meta.query_fixed(selector, Rotation::cur());
-                let cur = Queries::new(meta, trace_record, Rotation::cur());
-                let prev = Queries::new(meta, trace_record, Rotation::prev());
-                let addr_diff = meta.query_advice(addr_cur_prev.val, Rotation::cur());
-                let temp = meta.query_advice(addr_cur_prev.temp, Rotation::cur());
-                let val_diff = limbs_to_expression(cur.value) - limbs_to_expression(prev.value);
-                let should_be_zero = one.clone() - addr_diff.clone() * temp;
-                let should_be_zero_2 = limbs_to_expression(cur.address)
-                    - limbs_to_expression(prev.address)
-                    - addr_diff.clone();
-                vec![
-                    selector.clone() * (cur.instruction - one.clone()) * val_diff * should_be_zero,
-                    selector.clone() * should_be_zero_2,
-                ]
-            },
-        );
+        meta.create_gate("if the current trace is read, then its value must be equal to the previous trace value", |meta| {
+            let selector = meta.query_fixed(selector, Rotation::cur());
+            let cur = Queries::new(meta,trace_record,Rotation::cur());
+            let prev = Queries::new(meta,trace_record,Rotation::prev());
+            let addr_diff=meta.query_advice(addr_cur_prev.val, Rotation::cur());
+            let temp=meta.query_advice(addr_cur_prev.temp, Rotation::cur());
+            let val_diff=limbs_to_expression(cur.value)-limbs_to_expression(prev.value);
+          let should_be_zero=one.clone()-addr_diff.clone()*temp;
+          let should_be_zero_2=limbs_to_expression(cur.address)-limbs_to_expression(prev.address)-addr_diff.clone();
+            vec![selector.clone() * (cur.instruction - one.clone()) * val_diff*should_be_zero,
+            selector.clone()*should_be_zero_2]
+        });
 
         // (addr[i+1]-addr[i])*(instruction[i+1]-1)=0
         meta.create_gate(
