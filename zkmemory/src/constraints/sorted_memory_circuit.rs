@@ -1,5 +1,11 @@
 extern crate alloc;
-use crate::constraints::{common::CircuitExtension, gadgets::*};
+use crate::constraints::{
+    common::CircuitExtension,
+    gadgets::{
+        ConvertedTraceRecord, GreaterThanConfig, IsZeroConfig, LookUpTables, Queries, Table,
+        TraceRecordWitnessTable,
+    },
+};
 use alloc::{format, vec, vec::Vec};
 use core::marker::PhantomData;
 use ff::{Field, PrimeField};
@@ -72,8 +78,8 @@ impl<F: Field + PrimeField> SortedMemoryConfig<F> {
             let addr_diff=meta.query_advice(addr_cur_prev.val, Rotation::cur());
             let temp=meta.query_advice(addr_cur_prev.temp, Rotation::cur());
             let val_diff=limbs_to_expression(cur.value)-limbs_to_expression(prev.value);
-          let should_be_zero=one.clone()-addr_diff.clone()*temp;
-          let should_be_zero_2=limbs_to_expression(cur.address)-limbs_to_expression(prev.address)-addr_diff.clone();
+            let should_be_zero=one.clone()-addr_diff.clone()*temp;
+            let should_be_zero_2=limbs_to_expression(cur.address)-limbs_to_expression(prev.address)-addr_diff.clone();
             vec![selector.clone() * (cur.instruction - one.clone()) * val_diff*should_be_zero,
             selector.clone()*should_be_zero_2]
         });
@@ -424,9 +430,23 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use crate::constraints::sorted_memory_circuit::{ConvertedTraceRecord, SortedMemoryCircuit};
     use halo2_proofs::dev::MockProver;
     use halo2curves::bn256::Fr as Fp;
+    extern crate alloc;
+    extern crate std;
+    use alloc::{vec, vec::Vec};
+    use std::marker::PhantomData;
+    // Common test function to build and the the SortedMemoryCircuit
+    fn build_and_test_circuit(trace: Vec<ConvertedTraceRecord<Fp>>, k: u32) {
+        let circuit = SortedMemoryCircuit::<Fp> {
+            sorted_trace_record: trace,
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(k, &circuit, vec![]).expect("Cannot run the circuit");
+        assert_eq!(prover.verify(), Ok(()));
+    }
     #[test]
     fn test_ok_one_trace() {
         let trace0 = ConvertedTraceRecord {
@@ -435,18 +455,11 @@ mod test {
             instruction: Fp::from(1),
             value: [Fp::from(63); 32],
         };
-        let trace = vec![trace0];
-        let circuit = SortedMemoryCircuit {
-            sorted_trace_record: trace,
-            _marker: PhantomData,
-        };
-        // The number of rows cannot exceed 2^k
-        let k = 10;
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        assert_eq!(prover.verify(), Ok(()));
+        build_and_test_circuit(vec![trace0], 10);
     }
 
     #[test]
+    #[should_panic]
     fn test_error_invalid_instruction() {
         // First instruction is supposed to be write
         let trace0 = ConvertedTraceRecord {
@@ -455,18 +468,11 @@ mod test {
             instruction: Fp::from(0),
             value: [Fp::from(63); 32],
         };
-        let trace = vec![trace0];
-        let circuit = SortedMemoryCircuit {
-            sorted_trace_record: trace,
-            _marker: PhantomData,
-        };
-        // The number of rows cannot exceed 2^k
-        let k = 10;
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        assert_ne!(prover.verify(), Ok(()));
+        build_and_test_circuit(vec![trace0], 10);
     }
 
     #[test]
+    #[should_panic]
     fn test_invalid_address() {
         // Each limb of address is supposed to be in [0..256]
         let trace0 = ConvertedTraceRecord {
@@ -475,18 +481,11 @@ mod test {
             instruction: Fp::from(1),
             value: [Fp::from(63); 32],
         };
-        let trace = vec![trace0];
-        let circuit = SortedMemoryCircuit {
-            sorted_trace_record: trace,
-            _marker: PhantomData,
-        };
-        // The number of rows cannot exceed 2^k
-        let k = 10;
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        assert_ne!(prover.verify(), Ok(()));
+        build_and_test_circuit(vec![trace0], 10);
     }
 
     #[test]
+    #[should_panic]
     fn test_invalid_time_log() {
         // Each limb of address is supposed to be in [0..256]
         let trace0 = ConvertedTraceRecord {
@@ -495,18 +494,11 @@ mod test {
             instruction: Fp::from(1),
             value: [Fp::from(0); 32],
         };
-        let trace = vec![trace0];
-        let circuit = SortedMemoryCircuit {
-            sorted_trace_record: trace,
-            _marker: PhantomData,
-        };
-        // The number of rows cannot exceed 2^k
-        let k = 10;
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        assert_ne!(prover.verify(), Ok(()));
+        build_and_test_circuit(vec![trace0], 10);
     }
 
     #[test]
+    #[should_panic]
     fn test_invalid_value() {
         // Each limb of address is supposed to be in [0..255]
         let trace0 = ConvertedTraceRecord {
@@ -515,15 +507,7 @@ mod test {
             instruction: Fp::from(1),
             value: [Fp::from(256); 32],
         };
-        let trace = vec![trace0];
-        let circuit = SortedMemoryCircuit {
-            sorted_trace_record: trace,
-            _marker: PhantomData,
-        };
-        // The number of rows cannot exceed 2^k
-        let k = 10;
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        assert_ne!(prover.verify(), Ok(()));
+        build_and_test_circuit(vec![trace0], 10);
     }
 
     #[test]
@@ -541,19 +525,11 @@ mod test {
             instruction: Fp::from(1),
             value: [Fp::from(63); 32],
         };
-
-        let trace = vec![trace0, trace1];
-        let circuit = SortedMemoryCircuit {
-            sorted_trace_record: trace,
-            _marker: PhantomData,
-        };
-        // The number of rows cannot exceed 2^k
-        let k = 10;
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        assert_eq!(prover.verify(), Ok(()));
+        build_and_test_circuit(vec![trace0, trace1], 10);
     }
 
     #[test]
+    #[should_panic]
     fn wrong_address_order() {
         let trace0 = ConvertedTraceRecord {
             address: [Fp::from(1); 32],
@@ -568,19 +544,11 @@ mod test {
             instruction: Fp::from(0),
             value: [Fp::from(63); 32],
         };
-
-        let trace = vec![trace0, trace1];
-        let circuit = SortedMemoryCircuit {
-            sorted_trace_record: trace,
-            _marker: PhantomData,
-        };
-        // The number of rows cannot exceed 2^k
-        let k = 10;
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        assert_ne!(prover.verify(), Ok(()));
+        build_and_test_circuit(vec![trace0, trace1], 10);
     }
 
     #[test]
+    #[should_panic]
     fn wrong_time_log_order() {
         let trace0 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
@@ -595,19 +563,11 @@ mod test {
             instruction: Fp::from(0),
             value: [Fp::from(63); 32],
         };
-
-        let trace = vec![trace0, trace1];
-        let circuit = SortedMemoryCircuit {
-            sorted_trace_record: trace,
-            _marker: PhantomData,
-        };
-        // The number of rows cannot exceed 2^k
-        let k = 10;
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        assert_ne!(prover.verify(), Ok(()));
+        build_and_test_circuit(vec![trace0, trace1], 10);
     }
 
     #[test]
+    #[should_panic]
     fn invalid_read() {
         let trace0 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
@@ -622,19 +582,11 @@ mod test {
             instruction: Fp::from(0),
             value: [Fp::from(50); 32],
         };
-
-        let trace = vec![trace0, trace1];
-        let circuit = SortedMemoryCircuit {
-            sorted_trace_record: trace,
-            _marker: PhantomData,
-        };
-        // The number of rows cannot exceed 2^k
-        let k = 10;
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        assert_ne!(prover.verify(), Ok(()));
+        build_and_test_circuit(vec![trace0, trace1], 10);
     }
 
     #[test]
+    #[should_panic]
     fn non_first_write_access_for_two_traces() {
         let trace0 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
@@ -649,16 +601,7 @@ mod test {
             instruction: Fp::from(0),
             value: [Fp::from(50); 32],
         };
-
-        let trace = vec![trace0, trace1];
-        let circuit = SortedMemoryCircuit {
-            sorted_trace_record: trace,
-            _marker: PhantomData,
-        };
-        // The number of rows cannot exceed 2^k
-        let k = 10;
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        assert_ne!(prover.verify(), Ok(()));
+        build_and_test_circuit(vec![trace0, trace1], 10);
     }
 
     #[test]
@@ -683,19 +626,11 @@ mod test {
             instruction: Fp::from(1),
             value: [Fp::from(50); 32],
         };
-
-        let trace = vec![trace0, trace1, trace2];
-        let circuit = SortedMemoryCircuit {
-            sorted_trace_record: trace,
-            _marker: PhantomData,
-        };
-        // The number of rows cannot exceed 2^k
-        let k = 10;
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        assert_eq!(prover.verify(), Ok(()));
+        build_and_test_circuit(vec![trace0, trace1, trace2], 10);
     }
 
     #[test]
+    #[should_panic]
     fn invalid_read2() {
         let trace0 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
@@ -717,19 +652,11 @@ mod test {
             instruction: Fp::from(0),
             value: [Fp::from(50); 32],
         };
-
-        let trace = vec![trace0, trace1, trace2];
-        let circuit = SortedMemoryCircuit {
-            sorted_trace_record: trace,
-            _marker: PhantomData,
-        };
-        // The number of rows cannot exceed 2^k
-        let k = 10;
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        assert_ne!(prover.verify(), Ok(()));
+        build_and_test_circuit(vec![trace0, trace1, trace2], 10);
     }
 
     #[test]
+    #[should_panic]
     fn invalid_read3() {
         let trace0 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
@@ -751,15 +678,6 @@ mod test {
             instruction: Fp::from(0),
             value: [Fp::from(63); 32],
         };
-
-        let trace = vec![trace0, trace1, trace2];
-        let circuit = SortedMemoryCircuit {
-            sorted_trace_record: trace,
-            _marker: PhantomData,
-        };
-        // The number of rows cannot exceed 2^k
-        let k = 10;
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        assert_ne!(prover.verify(), Ok(()));
+        build_and_test_circuit(vec![trace0, trace1, trace2], 10);
     }
 }
