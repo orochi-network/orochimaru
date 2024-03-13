@@ -63,14 +63,14 @@ impl<const N: usize> Table<N> {
     }
 }
 
-/// Check if a value val is zero or not
+/// check if a value val is zero or not
 #[derive(Clone, Copy, Debug)]
 pub struct IsZeroConfig<F: Field + PrimeField> {
-    /// The value
+    /// the value
     pub val: Column<Advice>,
-    /// The inverse of value. It is any non-zero value if val=0
+    /// the inverse of value. It is any non-zero value if val=0
     pub temp: Column<Advice>,
-    /// The inverse of temp.
+    /// the inverse of temp.
     pub temp_inv: Column<Advice>,
     _marker: PhantomData<F>,
 }
@@ -84,14 +84,14 @@ impl<F: Field + PrimeField> IsZeroConfig<F> {
         let one = Expression::Constant(F::ONE);
 
         // temp*temp_inv is equal to 1
-        meta.create_gate("temp*temp_inv is equal to 1", |meta| {
+        meta.create_gate("the inverse of val muse be non-zero", |meta| {
             let selector = meta.query_fixed(selector, Rotation::cur());
             let temp = meta.query_advice(temp, Rotation::cur());
             let temp_inv = meta.query_advice(temp_inv, Rotation::cur());
             vec![selector * (temp * temp_inv - one.clone())]
         });
 
-        // If val is non-zero, then temp is the inversion of val
+        // if val is non-zero, then temp is the inversion of val
         meta.create_gate("val*temp is equal to 0 or 1", |meta| {
             let selector = meta.query_fixed(selector, Rotation::cur());
             let val = meta.query_advice(val, Rotation::cur());
@@ -111,7 +111,7 @@ impl<F: Field + PrimeField> IsZeroConfig<F> {
 #[derive(Clone, Copy, Debug)]
 /// Config for binary number
 pub struct BinaryConfig<F: Field + PrimeField, const N: usize> {
-    /// The list of bit representation
+    /// the list of bit representation
     pub bits: [Column<Advice>; N],
     _marker: PhantomData<F>,
 }
@@ -133,7 +133,7 @@ impl<F: Field + PrimeField, const N: usize> BinaryConfig<F, N> {
         }
     }
 
-    /// Map a value to its corresponding binary witness for the config
+    /// map a value to its corresponding binary witness for the config
     pub fn assign(
         &self,
         region: &mut Region<'_, F>,
@@ -152,7 +152,7 @@ impl<F: Field + PrimeField, const N: usize> BinaryConfig<F, N> {
     }
 }
 
-// Convert a value into an binary array of size N
+// convert a value into an binary array of size N
 fn as_bits<const N: usize>(value: u8) -> [u8; N] {
     let mut value = value;
     let mut bits = [0; N];
@@ -163,7 +163,7 @@ fn as_bits<const N: usize>(value: u8) -> [u8; N] {
     bits
 }
 
-/// Return 1 if lhs=rhs as bits and 0 otherwise
+/// return 1 if lhs=rhs as bits and 0 otherwise
 pub fn equal_value<F: Field + PrimeField, const N: usize>(
     lhs: [Expression<F>; N],
     rhs: u8,
@@ -201,7 +201,7 @@ impl<F: Field + PrimeField> TraceRecordWitnessTable<F> {
 }
 
 #[derive(Clone, Copy, Debug)]
-/// Config for checking the ordering of time or address||time
+/// config for checking the ordering of time or address||time
 /// in original memory or sorted memory respectively
 pub(crate) struct GreaterThanConfig<F: Field + PrimeField, const N: usize> {
     pub(crate) difference: Column<Advice>,
@@ -224,7 +224,7 @@ impl<F: Field + PrimeField, const N: usize> GreaterThanConfig<F, N> {
         let one = Expression::Constant(F::ONE);
         let limb_vector: Vec<u8> = (0..40).collect();
 
-        // Inversion gate for difference
+        // inversion gate for difference
         meta.create_gate("difference is non-zero", |meta| {
             let selector = meta.query_fixed(selector, Rotation::cur());
             let difference = meta.query_advice(difference, Rotation::cur());
@@ -232,7 +232,7 @@ impl<F: Field + PrimeField, const N: usize> GreaterThanConfig<F, N> {
             vec![selector * (difference * difference_inverse - one.clone())]
         });
 
-        // Limbs before first differences are zero
+        // limbs before first differences are zero
         meta.create_gate("limbs before first differences are zero", |meta| {
             let selector = meta.query_fixed(selector, Rotation::cur());
             let first_difference_limb = first_difference_limb
@@ -253,7 +253,7 @@ impl<F: Field + PrimeField, const N: usize> GreaterThanConfig<F, N> {
             constraints
         });
 
-        // Difference equals difference of limbs at index
+        // difference equals difference of limbs at index
         meta.create_gate("difference equals difference of limbs at index", |meta| {
             let selector = meta.query_fixed(selector, Rotation::cur());
             let cur = Queries::new(meta, trace_record, Rotation::cur());
@@ -277,7 +277,7 @@ impl<F: Field + PrimeField, const N: usize> GreaterThanConfig<F, N> {
             constraints
         });
 
-        // First_difference_limb is in [0..40]. we only consider this when
+        // first_difference_limb is in [0..40]. we only consider this when
         // including address||time_log, since it has 40 bits.
         if address_included {
             lookup_tables.size40_table.range_check(
@@ -296,7 +296,7 @@ impl<F: Field + PrimeField, const N: usize> GreaterThanConfig<F, N> {
                 },
             );
         }
-        // Lookup gate for difference. It must be in [0..256]
+        // lookup gate for difference. It must be in [0..256]
         lookup_tables
             .size256_table
             .range_check(meta, "difference fits in 0..256", |meta| {
@@ -346,12 +346,12 @@ pub(crate) struct LookUpTables {
 pub(crate) struct Queries<F: Field + PrimeField> {
     pub(crate) address: [Expression<F>; 32], // 256 bits
     pub(crate) time_log: [Expression<F>; 8], // 64 bits
-    pub(crate) instruction: Expression<F>,   // 0: Read or 1: Write
+    pub(crate) instruction: Expression<F>,   // 0 or 1
     pub(crate) value: [Expression<F>; 32],   // 256 bit
 }
 
 impl<F: Field + PrimeField> Queries<F> {
-    /// Converts the attributes of a trace record to type Expression<F>
+    /// converts the attributes of a trace record to type Expression<F>
     pub fn new(
         meta: &mut VirtualCells<'_, F>,
         trace_record: TraceRecordWitnessTable<F>,
@@ -366,12 +366,12 @@ impl<F: Field + PrimeField> Queries<F> {
         }
     }
 
-    // Stack address and time_log into a single array for comparison
+    // stack address and time_log into a single array for comparison
+    // if address_included=false, then only time_log is stacked
     fn be_limbs(&self, address_included: bool) -> Vec<Expression<F>> {
         if !address_included {
             return self.time_log.to_vec();
         }
-
         self.address
             .iter()
             .chain(self.time_log.iter())
@@ -382,12 +382,11 @@ impl<F: Field + PrimeField> Queries<F> {
 
 /// Trace record struct for Lexicographic ordering circuit
 /// We need every element to be of an array of type F, where each
-/// element of the array does not exceed 255
 #[derive(Debug, Clone)]
 pub(crate) struct ConvertedTraceRecord<F: Field + PrimeField> {
     pub(crate) address: [F; 32], // 256 bits
-    pub(crate) time_log: [F; 8], // 64 bits
-    pub(crate) instruction: F,   // 0: Read or 1:Write
+    pub(crate) time_log: [F; 8], // 256 bits
+    pub(crate) instruction: F,   // 0 or 1
     pub(crate) value: [F; 32],   // 256 bit
 }
 
@@ -397,8 +396,8 @@ impl<F: Field + PrimeField> ConvertedTraceRecord<F> {
         (self.address, self.time_log, self.instruction, self.value)
     }
 }
-
-// Convert a trace record into a ConvertedTraceRecord struct
+// convert the original trace record into a converted trace record
+// for serving as the witness of the ciruits
 impl<F: Field + PrimeField> From<TraceRecord<B256, B256, 32, 32>> for ConvertedTraceRecord<F> {
     fn from(value: TraceRecord<B256, B256, 32, 32>) -> Self {
         Self {

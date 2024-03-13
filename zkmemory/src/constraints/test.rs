@@ -269,40 +269,127 @@ mod tests {
             0,
             MemoryInstruction::Write,
             B256::from(0),
-            B256::from(1),
+            B256::from(1234567),
         );
 
         let trace_1 = TraceRecord::<B256, B256, 32, 32>::new(
-            1,
+            1844674407411614,
             0,
             MemoryInstruction::Write,
-            B256::from(0x20),
-            B256::from(2),
+            B256::from(0x20fffab),
+            B256::from(231768),
         );
 
         let trace_2 = TraceRecord::<B256, B256, 32, 32>::new(
-            2,
+            1844674407551616,
             0,
             MemoryInstruction::Read,
-            B256::from(0x20),
-            B256::from(0x2),
+            B256::from(0x20fffab),
+            B256::from(231768),
         );
 
         let trace_3 = TraceRecord::<B256, B256, 32, 32>::new(
-            3,
+            2844674608551677,
             0,
             MemoryInstruction::Write,
-            B256::from(0x6f),
-            B256::from(3),
+            B256::from(0x60abcd1),
+            B256::from(333333),
         );
 
         let trace_4 = TraceRecord::<B256, B256, 32, 32>::new(
-            4,
+            4744674428611677,
             0,
             MemoryInstruction::Read,
             B256::from(0),
-            B256::from(1),
+            B256::from(1234567),
         );
-        build_and_test_circuit(vec![trace_0, trace_1, trace_2, trace_3, trace_4], 10);
+
+        let trace_5 = TraceRecord::<B256, B256, 32, 32>::new(
+            4744674528611677,
+            0,
+            MemoryInstruction::Write,
+            B256::from(0x60abed1),
+            B256::from(23121323),
+        );
+
+        let trace_6 = TraceRecord::<B256, B256, 32, 32>::new(
+            4744674528641677,
+            0,
+            MemoryInstruction::Read,
+            B256::from(0x60abed1),
+            B256::from(23121323),
+        );
+
+        build_and_test_circuit(
+            vec![
+                trace_0, trace_1, trace_2, trace_3, trace_4, trace_5, trace_6,
+            ],
+            10,
+        );
+    }
+
+    #[test]
+    fn test_basic_read_write2() {
+        let trace_0 = TraceRecord::<B256, B256, 32, 32>::new(
+            0,
+            0,
+            MemoryInstruction::Write,
+            B256::from(0xeeff111),
+            B256::from(1231413414),
+        );
+
+        let trace_1 = TraceRecord::<B256, B256, 32, 32>::new(
+            253,
+            0,
+            MemoryInstruction::Write,
+            B256::from(0xeeff112),
+            B256::from(1231431414),
+        );
+
+        let trace_2 = TraceRecord::<B256, B256, 32, 32>::new(
+            500,
+            0,
+            MemoryInstruction::Read,
+            B256::from(0xeeff112),
+            B256::from(1231431414),
+        );
+
+        let trace_3 = TraceRecord::<B256, B256, 32, 32>::new(
+            603,
+            0,
+            MemoryInstruction::Write,
+            B256::from(0xeeff222),
+            B256::from(1231433214),
+        );
+
+        let trace_4 = TraceRecord::<B256, B256, 32, 32>::new(
+            724,
+            0,
+            MemoryInstruction::Write,
+            B256::from(0xeeff222),
+            B256::from(23434123),
+        );
+
+        let trace_5 = TraceRecord::<B256, B256, 32, 32>::new(
+            897,
+            0,
+            MemoryInstruction::Read,
+            B256::from(0xeeff222),
+            B256::from(23434123),
+        );
+
+        let trace_6 = TraceRecord::<B256, B256, 32, 32>::new(
+            8192,
+            0,
+            MemoryInstruction::Write,
+            B256::from(0xffff222),
+            B256::from(231121323),
+        );
+        build_and_test_circuit(
+            vec![
+                trace_0, trace_1, trace_2, trace_3, trace_4, trace_5, trace_6,
+            ],
+            10,
+        );
     }
 }
