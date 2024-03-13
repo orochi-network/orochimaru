@@ -64,7 +64,7 @@ mod tests {
             shuffle: sorted_trace.clone(),
         };
 
-        let prover = MockProver::run(k, &circuit, vec![]).expect("What");
+        let prover = MockProver::run(k, &circuit, vec![]).expect("Cannot run the circuit");
         assert_eq!(prover.verify(), Ok(()));
     }
 

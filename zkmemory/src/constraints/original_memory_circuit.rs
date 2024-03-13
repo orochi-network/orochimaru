@@ -203,8 +203,8 @@ impl<F: Field + PrimeField> OriginalMemoryCircuit<F> {
                 self.original_trace_record[offset].get_tuple();
             let (_prev_address, prev_time_log, _prev_instruction, _prev_value) =
                 self.original_trace_record[offset - 1].get_tuple();
-            let cur_be_limbs = self.time_log_to_vec(cur_time_log);
-            let prev_be_limbs = self.time_log_to_vec(prev_time_log);
+            let cur_be_limbs = cur_time_log.to_vec();
+            let prev_be_limbs = prev_time_log.to_vec();
             let limb_vector: Vec<u8> = (0..8).collect();
             // Find the minimal index such that cur is not equal to prev
             let find_result = limb_vector
@@ -290,19 +290,31 @@ impl<F: Field + PrimeField> OriginalMemoryCircuit<F> {
         }
         Ok(())
     }
-
-    fn time_log_to_vec(&self, time_log: [F; 8]) -> Vec<F> {
-        time_log.to_vec()
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::constraints::original_memory_circuit::{
+        ConvertedTraceRecord, OriginalMemoryCircuit,
+    };
     use halo2_proofs::dev::MockProver;
     use halo2curves::bn256::Fr as Fp;
+    extern crate alloc;
+    extern crate std;
+    use alloc::{vec, vec::Vec};
+    use std::marker::PhantomData;
+    // Common function to build and test the circuit
+    fn build_and_test_circuit(trace: Vec<ConvertedTraceRecord<Fp>>, k: u32) {
+        let circuit = OriginalMemoryCircuit::<Fp> {
+            original_trace_record: trace,
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(k, &circuit, vec![]).expect("Cannot run the circuit");
+        assert_eq!(prover.verify(), Ok(()));
+    }
     #[test]
-    fn test_ok_one_trace() {
+    fn test_one_trace() {
         let trace0 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(0); 8],
@@ -310,33 +322,19 @@ mod tests {
             value: [Fp::from(63); 32],
         };
         let trace = vec![trace0];
-        let circuit = OriginalMemoryCircuit {
-            original_trace_record: trace,
-            _marker: PhantomData,
-        };
-        // the number of rows cannot exceed 2^k
-        let k = 10;
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        assert_eq!(prover.verify(), Ok(()));
+        build_and_test_circuit(trace, 10);
     }
 
     #[test]
     fn test_wrong_starting_time() {
+        // Trace with time_log starts at 1
         let trace0 = ConvertedTraceRecord {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(1); 8],
             instruction: Fp::from(1),
             value: [Fp::from(63); 32],
         };
-        let trace = vec![trace0];
-        let circuit = OriginalMemoryCircuit {
-            original_trace_record: trace,
-            _marker: PhantomData,
-        };
-        // the number of rows cannot exceed 2^k
-        let k = 10;
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        assert_ne!(prover.verify(), Ok(()));
+        build_and_test_circuit(vec![trace0], 10);
     }
 
     #[test]
@@ -365,15 +363,7 @@ mod tests {
             instruction: Fp::from(1),
             value: [Fp::from(63); 32],
         };
-        let trace = vec![trace0, trace1, trace2, trace3];
-        let circuit = OriginalMemoryCircuit {
-            original_trace_record: trace,
-            _marker: PhantomData,
-        };
-        // the number of rows cannot exceed 2^k
-        let k = 10;
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        assert_eq!(prover.verify(), Ok(()));
+        build_and_test_circuit(vec![trace0, trace1, trace2, trace3], 10);
     }
 
     #[test]
@@ -397,14 +387,6 @@ mod tests {
             instruction: Fp::from(1),
             value: [Fp::from(63); 32],
         };
-        let trace = vec![trace0, trace1, trace2];
-        let circuit = OriginalMemoryCircuit {
-            original_trace_record: trace,
-            _marker: PhantomData,
-        };
-        // the number of rows cannot exceed 2^k
-        let k = 10;
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        assert_ne!(prover.verify(), Ok(()));
+        build_and_test_circuit(vec![trace0, trace1, trace2], 10);
     }
 }

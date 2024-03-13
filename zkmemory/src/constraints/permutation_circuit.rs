@@ -56,7 +56,7 @@ impl<F: Field + PrimeField> ShuffleChip<F> {
         }
     }
 
-    /// configure the gates
+    /// Configure the gates
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
         input_0: Column<Advice>,
@@ -389,7 +389,7 @@ pub fn successive_powers<F: Field + PrimeField>(size: u64) -> Vec<F> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
 
     use crate::{
         base::{Base, B256},
@@ -497,7 +497,7 @@ mod test {
 
     #[test]
     fn check_trace_record_mapping() {
-        // Test 10 times
+        // Test 10 times so that the trace will always have Read and Write instructions
         for _ in 0..10 {
             let mut record = random_trace_record::<B256, B256, 32, 32>();
             let (time_log, stack_depth, instruction, address, value) = record.get_tuple();
