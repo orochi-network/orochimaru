@@ -252,7 +252,7 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
             // Assign the time_log witness
             for (i, &cur_t) in cur_time_log.iter().enumerate() {
                 region.assign_advice(
-                    || format!("address{}", offset),
+                    || format!("time_log{}", offset),
                     config.trace_record.time_log[i],
                     offset,
                     || Value::known(cur_t),
@@ -339,7 +339,7 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
             // Assign the time_log witness
             for (i, &cur_t) in cur_time_log.iter().enumerate() {
                 region.assign_advice(
-                    || format!("address{}", offset),
+                    || format!("time_log{}", offset),
                     config.trace_record.time_log[i],
                     offset,
                     || Value::known(cur_t),
