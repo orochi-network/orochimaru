@@ -572,3 +572,459 @@ macro_rules! impl_stack_machine {
         }
     };
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        base::{Base, B256},
+        config::{AllocatedSection, Config, ConfigArgs, DefaultConfig},
+        error::Error,
+        machine::{
+            AbstractContext, AbstractInstruction, AbstractMachine, AbstractMemoryMachine,
+            AbstractRegisterMachine, AbstractStackMachine, CellInteraction, Register, TraceRecord,
+        },
+    };
+    extern crate alloc;
+    extern crate std;
+    use alloc::{vec, vec::Vec};
+    use rbtree::RBTree;
+    use std::marker::PhantomData;
+
+    /// My instruction set for the machine
+    #[derive(Debug, Clone, Copy)]
+    pub enum MyInstruction<M, K, V, const S: usize, const T: usize>
+    where
+        K: Base<S>,
+        V: Base<T>,
+    {
+        /// Read from memory
+        Read(K),
+        /// Write to memory
+        Write(K, V),
+        /// Push to stack
+        Push(V),
+        /// Pop from stack
+        Pop(),
+        /// Move from register to register (Mov(r2, r1) moves the value of r1 to r2)
+        Mov(Register<K>, Register<K>),
+        /// Swap value from top stack  to register
+        Swap(Register<K>),
+        /// Load from memory to register
+        Load(Register<K>, K),
+        /// Save from register to memory
+        Save(K, Register<K>),
+        /// Invalid instruction
+        Invalid(PhantomData<M>),
+        /// Add two registers, register 1 = register 1 + register 2
+        Add(Register<K>, Register<K>),
+    }
+
+    /// Type alias Instruction
+    pub type Instruction = MyInstruction<StateMachine<B256, B256, 32, 32>, B256, B256, 32, 32>;
+
+    /// RAM Machine
+    #[derive(Debug, Clone)]
+    pub struct StateMachine<K, V, const S: usize, const T: usize>
+    where
+        K: Base<S>,
+        V: Base<T>,
+    {
+        // Memory
+        memory: RBTree<K, V>,
+        memory_allocated: AllocatedSection<K>,
+        word_size: K,
+        time_log: u64,
+
+        // Stack
+        stack_allocated: AllocatedSection<K>,
+        max_stack_depth: u64,
+        stack_depth: u64,
+        stack_ptr: K,
+
+        // Register
+        register_allocated: AllocatedSection<K>,
+
+        /// Register r0
+        pub r0: Register<K>,
+        /// Register r1
+        pub r1: Register<K>,
+        /// Register r2
+        pub r2: Register<K>,
+        /// Register r3
+        pub r3: Register<K>,
+        /// Register r4
+        pub r4: Register<K>,
+
+        // Trace
+        execution_trace: RBTree<TraceRecord<K, V, S, T>, PhantomData<()>>,
+    }
+
+    impl<M, K, V, const S: usize, const T: usize> AbstractContext<M, K, V> for StateMachine<K, V, S, T>
+    where
+        Self: core::fmt::Debug
+            + Sized
+            + AbstractMachine<K, V, Context = M::Context, Instruction = M::Instruction>,
+        K: Base<S>,
+        V: Base<T>,
+        M: AbstractMachine<K, V, Machine = StateMachine<K, V, S, T>>,
+    {
+        fn set_stack_depth(&mut self, stack_depth: u64) {
+            self.stack_depth = stack_depth;
+        }
+
+        fn stack_depth(&self) -> u64 {
+            self.stack_depth
+        }
+
+        fn stack_ptr(&self) -> K {
+            self.stack_ptr
+        }
+
+        fn time_log(&self) -> u64 {
+            self.time_log
+        }
+
+        fn set_time_log(&mut self, time_log: u64) {
+            self.time_log = time_log;
+        }
+
+        fn set_stack_ptr(&mut self, stack_ptr: K) {
+            self.stack_ptr = stack_ptr;
+        }
+
+        fn memory(&mut self) -> &'_ mut RBTree<K, V> {
+            &mut self.memory
+        }
+    }
+
+    impl<M, K, V, const S: usize, const T: usize> AbstractInstruction<M, K, V>
+        for MyInstruction<M, K, V, S, T>
+    where
+        Self: core::fmt::Debug + Sized,
+        K: Base<S>,
+        V: Base<T>,
+        M: AbstractMachine<K, V, Machine = StateMachine<K, V, S, T>>,
+    {
+        fn exec(&self, machine: &mut M::Machine) {
+            match self {
+                MyInstruction::Invalid(_) => {
+                    panic!("Invalid instruction")
+                }
+                MyInstruction::Read(addr) => {
+                    if !machine.memory_allocated.contain(*addr) {
+                        panic!("{}", Error::MemoryAccessDeinied);
+                    } else {
+                        machine.read(*addr).expect("Unable to read to memory");
+                    }
+                }
+                MyInstruction::Write(addr, val) => {
+                    if !machine.memory_allocated.contain(*addr) {
+                        panic!("{}", Error::MemoryAccessDeinied);
+                    } else {
+                        machine
+                            .write(*addr, *val)
+                            .expect("Unable to write to memory");
+                    }
+                }
+                MyInstruction::Push(value) => {
+                    machine.push(*value).expect("Unable to push value to stack");
+                }
+                MyInstruction::Pop() => {
+                    machine.pop().expect("Unable to pop value from stack");
+                }
+                MyInstruction::Mov(reg1, reg2) => {
+                    match machine.get(*reg2).expect("Unable to access register 1") {
+                        CellInteraction::SingleCell(_, _, value) => {
+                            machine.set(*reg1, value).expect("Unable to set register 2");
+                        }
+                        _ => panic!("Register unable to be two cells"),
+                    }
+                    // Mov value from register 2 to register 1
+                }
+                MyInstruction::Swap(reg) => {
+                    match machine.pop().expect("Unable to pop value from stack") {
+                        (_, CellInteraction::SingleCell(_op, _addr, value)) => {
+                            machine
+                                .push(value)
+                                .expect("Unable to push register's value to stack");
+                            machine.set(*reg, value).expect("Unable to set register");
+                        }
+                        _ => panic!("Stack unable to be two cells"),
+                    };
+                }
+                MyInstruction::Load(reg, addr) => {
+                    match machine.read(*addr).expect("Unable to read memory") {
+                        CellInteraction::SingleCell(_, _, value) => {
+                            machine.set(*reg, value).expect("Unable to set register");
+                        }
+                        CellInteraction::DoubleCell(_, _, cvalue, _, _, _, _) => {
+                            machine.set(*reg, cvalue).expect("Unable to set register");
+                        }
+                    };
+                }
+                MyInstruction::Save(address, reg) => {
+                    match machine.get(*reg).expect("Unable to access register") {
+                        CellInteraction::SingleCell(_, _, value) => {
+                            machine
+                                .write(*address, value)
+                                .expect("Unable to write to memory");
+                        }
+                        _ => panic!("Register unable to be two cells"),
+                    }
+                }
+                MyInstruction::Add(reg1, reg2) => {
+                    match machine.get(*reg1).expect("Unable to access register 1") {
+                        CellInteraction::SingleCell(_, _, value1) => {
+                            match machine.get(*reg2).expect("Unable to access register 2") {
+                                CellInteraction::SingleCell(_, _, value2) => {
+                                    machine
+                                        .set(*reg1, value1 + value2)
+                                        .expect("Unable to set register 1");
+                                }
+                                _ => panic!("Register unable to be two cells"),
+                            }
+                        }
+                        _ => panic!("Register unable to be two cells"),
+                    }
+                }
+            }
+        }
+    }
+
+    impl<K, V, const S: usize, const T: usize> StateMachine<K, V, S, T>
+    where
+        K: Base<S>,
+        V: Base<T>,
+    {
+        /// Create a new RAM machine
+        pub fn new(config: ConfigArgs<K>) -> Self {
+            let config = Config::new(K::WORD_SIZE, config);
+            Self {
+                // Memory section
+                memory: RBTree::new(),
+                memory_allocated: config.memory,
+                word_size: config.word_size,
+                time_log: 0,
+
+                // Stack
+                stack_allocated: config.stack,
+                max_stack_depth: config.stack_depth.into(),
+                stack_depth: 0,
+                stack_ptr: K::zero(),
+
+                // Register
+                register_allocated: config.register,
+                r0: config.create_register(0),
+                r1: config.create_register(1),
+                r2: config.create_register(2),
+                r3: config.create_register(3),
+                r4: config.create_register(4),
+
+                // Execution trace
+                execution_trace: RBTree::new(),
+            }
+        }
+    }
+
+    impl<K, V, const S: usize, const T: usize> AbstractMachine<K, V> for StateMachine<K, V, S, T>
+    where
+        K: Base<S>,
+        V: Base<T>,
+    {
+        type Machine = Self;
+        type Context = Self;
+        type Instruction = MyInstruction<Self, K, V, S, T>;
+        type TraceRecord = TraceRecord<K, V, S, T>;
+
+        fn context(&mut self) -> &'_ mut Self::Context {
+            self
+        }
+
+        fn word_size(&self) -> K {
+            self.word_size
+        }
+
+        fn register_start(&self) -> K {
+            self.register_allocated.low()
+        }
+
+        fn ro_context(&self) -> &'_ Self::Context {
+            self
+        }
+
+        fn track(&mut self, trace: Self::TraceRecord) {
+            self.execution_trace.insert(trace, PhantomData);
+        }
+
+        fn trace(&self) -> Vec<Self::TraceRecord> {
+            self.execution_trace.keys().copied().collect()
+        }
+
+        fn exec(&mut self, instruction: &Self::Instruction) {
+            instruction.exec(self);
+        }
+
+        fn base_address(&self) -> K {
+            self.memory_allocated.low()
+        }
+
+        fn get_memory_address(&self) -> (K, K) {
+            (self.memory_allocated.low(), self.memory_allocated.high())
+        }
+
+        fn get_stack_depth(&self) -> u64 {
+            self.ro_context().stack_depth
+        }
+
+        fn max_stack_depth(&self) -> u64 {
+            self.ro_context().max_stack_depth
+        }
+    }
+
+    impl<K, V, const S: usize, const T: usize> AbstractMemoryMachine<K, V, S, T>
+        for StateMachine<K, V, S, T>
+    where
+        K: Base<S>,
+        V: Base<T>,
+        Self: AbstractMachine<K, V>,
+    {
+    }
+
+    impl<K, V, const S: usize, const T: usize> AbstractRegisterMachine<K, V, S, T>
+        for StateMachine<K, V, S, T>
+    where
+        K: Base<S>,
+        V: Base<T>,
+        Self: AbstractMemoryMachine<K, V, S, T>,
+    {
+        fn new_register(&self, register_index: usize) -> Option<crate::machine::Register<K>> {
+            Some(Register::new(
+                register_index,
+                self.register_start() + K::from(register_index) * K::WORD_SIZE,
+            ))
+        }
+    }
+
+    impl<K, V, const S: usize, const T: usize> AbstractStackMachine<K, V, S, T>
+        for StateMachine<K, V, S, T>
+    where
+        K: Base<S>,
+        V: Base<T>,
+        Self: AbstractMemoryMachine<K, V, S, T>,
+    {
+    }
+
+    #[test]
+    fn test_read_write_one_cell() {
+        let mut sm = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default_config());
+        let base = sm.base_address();
+        let write_chunk = B256::from(1025);
+        let program = vec![
+            Instruction::Write(base + B256::from(32), B256::from(1025)),
+            Instruction::Read(base + B256::from(32)),
+        ];
+        // Execute the program
+        for instruction in program {
+            sm.exec(&instruction);
+        }
+        assert_eq!(write_chunk, sm.dummy_read(base + B256::from(32)));
+    }
+
+    #[test]
+    fn test_read_write_two_cells() {
+        let mut sm = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default_config());
+        let base = sm.base_address();
+        let write_chunk = [5u8; 32];
+        let program = vec![
+            Instruction::Write(base + B256::from(1), B256::from(write_chunk)),
+            Instruction::Read(base + B256::from(0)),
+            Instruction::Read(base + B256::from(32)),
+            Instruction::Read(base + B256::from(1)),
+        ];
+        // Execute the program
+        for instruction in program {
+            sm.exec(&instruction);
+        }
+        let read_chunk_low = {
+            let mut buffer = [5u8; 32];
+            buffer[0] = 0u8;
+            buffer
+        };
+
+        let read_chunk_high = {
+            let mut buffer = [0u8; 32];
+            buffer[0] = 5u8;
+            buffer
+        };
+
+        assert_eq!(sm.dummy_read(base), B256::from(read_chunk_low));
+        assert_eq!(
+            sm.dummy_read(base + B256::from(32)),
+            B256::from(read_chunk_high)
+        );
+    }
+
+    #[test]
+    fn test_arithmetics() {
+        let chunk1 = [5u8; 32];
+        let chunk2 = [190u8; 32];
+        let add_chunk = [195u8; 32];
+
+        let mut sm = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default_config());
+
+        let base = sm.base_address();
+        let program = vec![
+            Instruction::Write(base + B256::from(0), B256::from(chunk1)),
+            Instruction::Write(base + B256::from(32), B256::from(chunk2)),
+            Instruction::Load(sm.r0, base + B256::from(0)),
+            Instruction::Load(sm.r1, base + B256::from(32)),
+            Instruction::Add(sm.r0, sm.r1),
+            Instruction::Save(base + B256::from(64), sm.r0),
+        ];
+        // Execute the program
+        for instruction in program {
+            sm.exec(&instruction);
+        }
+
+        assert_eq!(sm.dummy_read(base + B256::from(64)), B256::from(add_chunk));
+    }
+
+    #[test]
+    fn test_stack_machine() {
+        let mut sm = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default_config());
+
+        assert_eq!(sm.stack_allocated.low(), B256::zero());
+        let base = sm.base_address();
+        let program = vec![
+            Instruction::Push(B256::from(1000)),
+            Instruction::Push(B256::from(170)),
+            Instruction::Swap(sm.r0),
+            Instruction::Pop(),
+            Instruction::Swap(sm.r1),
+            Instruction::Pop(),
+            Instruction::Mov(sm.r2, sm.r0),
+            Instruction::Save(base + B256::from(128), sm.r0),
+            Instruction::Save(base + B256::from(160), sm.r1),
+            Instruction::Save(base + B256::from(192), sm.r2),
+        ];
+        // Execute program1
+        for instruction in program {
+            sm.exec(&instruction);
+        }
+
+        assert_eq!(sm.dummy_read(base + B256::from(128)), B256::from(170));
+        assert_eq!(sm.dummy_read(base + B256::from(160)), B256::from(1000));
+        assert_eq!(sm.dummy_read(base + B256::from(192)), B256::from(170));
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_invalid_instruction() {
+        let mut sm = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default_config());
+        let program = vec![Instruction::Invalid(PhantomData)];
+
+        for instruction in program {
+            sm.exec(&instruction);
+        }
+    }
+}

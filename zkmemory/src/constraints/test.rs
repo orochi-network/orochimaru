@@ -1,10 +1,14 @@
 #[cfg(test)]
-mod test {
-    use crate::machine::{AbstractTraceRecord, MemoryInstruction, TraceRecord};
+mod tests {
+    use crate::{
+        base::{Base, B256},
+        constraints::{
+            consistency_check_circuit::MemoryConsistencyCircuit,
+            permutation_circuit::successive_powers,
+        },
+        machine::{AbstractTraceRecord, MemoryInstruction, TraceRecord},
+    };
     extern crate alloc;
-    use crate::base::{Base, B256};
-    use crate::constraints::consistency_check_circuit::MemoryConsistencyCircuit;
-    use crate::constraints::permutation_circuit::successive_powers;
     use alloc::{vec, vec::Vec};
     use ff::{Field, PrimeField};
     use halo2_proofs::dev::MockProver;
