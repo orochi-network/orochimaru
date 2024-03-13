@@ -10,5 +10,5 @@ pub mod original_memory_circuit;
 pub mod permutation_circuit;
 /// Check the correctness of memory sorting
 pub mod sorted_memory_circuit;
-/// Testcases
+/// Testcases for memory consistency check circuit
 pub mod test;
