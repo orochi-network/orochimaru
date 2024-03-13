@@ -103,7 +103,7 @@ impl<F: Field + PrimeField + From<B256> + From<B256>> CircuitExtension<F>
         for (_, trace) in self.input.clone() {
             original_trace_record.push(ConvertedTraceRecord::<F>::from(trace));
         }
-        let original_ordering_circuit = OriginalMemoryCircuit {
+        let original_memory_circuit = OriginalMemoryCircuit {
             original_trace_record,
             _marker: PhantomData,
         };
@@ -112,7 +112,7 @@ impl<F: Field + PrimeField + From<B256> + From<B256>> CircuitExtension<F>
             _marker: PhantomData,
         };
         sorted_memory_circuit.synthesize_with_layouter(config.sorted_memory_config, layouter)?;
-        original_ordering_circuit
+        original_memory_circuit
             .synthesize_with_layouter(config.original_memory_config, layouter)?;
         Ok(())
     }

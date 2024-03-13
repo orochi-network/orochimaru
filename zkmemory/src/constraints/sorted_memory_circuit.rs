@@ -74,7 +74,8 @@ impl<F: Field + PrimeField> SortedMemoryConfig<F> {
             let val_diff=limbs_to_expression(cur.value)-limbs_to_expression(prev.value);
           let should_be_zero=one.clone()-addr_diff.clone()*temp;
           let should_be_zero_2=limbs_to_expression(cur.address)-limbs_to_expression(prev.address)-addr_diff.clone();
-            vec![selector.clone() * (cur.instruction - one.clone()) * val_diff*should_be_zero, selector.clone()*should_be_zero_2]
+            vec![selector.clone() * (cur.instruction - one.clone()) * val_diff*should_be_zero,
+            selector.clone()*should_be_zero_2]
         });
 
         // (addr[i+1]-addr[i])*(instruction[i+1]-1)=0
@@ -134,16 +135,11 @@ impl<F: Field + PrimeField> SortedMemoryConfig<F> {
 }
 
 fn limbs_to_expression<F: Field + PrimeField>(limb: [Expression<F>; 32]) -> Expression<F> {
-    let initial_sum = Expression::Constant(F::ZERO);
-    let initial_tmp = Expression::Constant(F::from(256_u64));
-    (0..32)
-        .fold((initial_sum, initial_tmp), |(sum, tmp), i| {
-            (
-                sum + tmp.clone() * limb[31 - i].clone(),
-                tmp * Expression::Constant(F::from(256_u64)),
-            )
-        })
-        .0
+    let mut sum = Expression::Constant(F::ZERO);
+    for t in limb.iter().skip(1) {
+        sum = sum * Expression::Constant(F::from(256_u64)) + t.clone();
+    }
+    sum
 }
 
 /// Circuit for sorted trace record
@@ -234,6 +230,8 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
         if offset == 0 {
             let (cur_address, cur_time_log, cur_instruction, cur_value) =
                 self.sorted_trace_record[offset].get_tuple();
+
+            // Turn on the first selector when offset=0
             config.selector_zero.enable(region, offset)?;
 
             // Assign the address witness
@@ -294,11 +292,12 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
             let ((index, cur_limb), prev_limb) = if cfg!(test) {
                 find_result.unwrap_or(((&40, &zero), &zero))
             } else {
-                find_result.expect("two trace records cannot be the same")
+                find_result.expect("two trace records cannot have the same address then time log")
             };
             // Difference of address||time_log
             let difference = *cur_limb - *prev_limb;
 
+            // Difference of address
             let address_diff =
                 self.address_limb_to_field(cur_address) - self.address_limb_to_field(prev_address);
 
@@ -415,9 +414,11 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
 
     // Converts the limbs of time_log into a single value of type F
     fn address_limb_to_field(&self, address: [F; 32]) -> F {
-        let initial_sum = F::ZERO;
-        let initial_tmp = F::from(256_u64);
-        (0..32).fold(initial_sum, |acc, i| acc + initial_tmp * address[31 - i])
+        let mut sum = F::ZERO;
+        for t in address.iter().skip(1) {
+            sum = sum * F::from(256_u64) + *t;
+        }
+        sum
     }
 }
 

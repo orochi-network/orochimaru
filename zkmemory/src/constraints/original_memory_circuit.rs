@@ -58,7 +58,7 @@ impl<F: Field + PrimeField> OriginalMemoryConfig<F> {
             let time_log = Queries::new(meta, trace_record, Rotation::cur()).time_log;
             let mut time = time_log[0].clone();
             for t in time_log.iter().skip(1) {
-                time = time * Expression::Constant(F::from(64_u64)) + t.clone();
+                time = time * Expression::Constant(F::from(256_u64)) + t.clone();
             }
             vec![selector_zero * time]
         });
@@ -75,6 +75,7 @@ impl<F: Field + PrimeField> OriginalMemoryConfig<F> {
 /// Circuit for original trace record
 #[derive(Default)]
 pub(crate) struct OriginalMemoryCircuit<F: Field + PrimeField> {
+    // the original memory trace record
     pub(crate) original_trace_record: Vec<ConvertedTraceRecord<F>>,
     pub(crate) _marker: PhantomData<F>,
 }
@@ -161,7 +162,9 @@ impl<F: Field + PrimeField> OriginalMemoryCircuit<F> {
             let (cur_address, cur_time_log, cur_instruction, cur_value) =
                 self.original_trace_record[offset].get_tuple();
 
+            // Turn on the first selector when offset=0
             config.selector_zero.enable(region, offset)?;
+
             // Assign the address witness
             for (i, j) in cur_address.iter().zip(config.trace_record.address) {
                 region.assign_advice(
@@ -199,18 +202,17 @@ impl<F: Field + PrimeField> OriginalMemoryCircuit<F> {
         }
         // Handle the case offset >= 1
         else {
+            // Get the current and the previous trace record
             let (cur_address, cur_time_log, cur_instruction, cur_value) =
                 self.original_trace_record[offset].get_tuple();
             let (_prev_address, prev_time_log, _prev_instruction, _prev_value) =
                 self.original_trace_record[offset - 1].get_tuple();
-            let cur_be_limbs = self.time_log_to_vec(cur_time_log);
-            let prev_be_limbs = self.time_log_to_vec(prev_time_log);
             let limb_vector: Vec<u8> = (0..8).collect();
             // Find the minimal index such that cur is not equal to prev
             let find_result = limb_vector
                 .iter()
-                .zip(&cur_be_limbs)
-                .zip(&prev_be_limbs)
+                .zip(&cur_time_log)
+                .zip(&prev_time_log)
                 .find(|((_, a), b)| a != b);
             let zero = F::ZERO;
             let ((index, cur_limb), prev_limb) = if cfg!(test) {
@@ -289,10 +291,6 @@ impl<F: Field + PrimeField> OriginalMemoryCircuit<F> {
                 .assign(region, offset, *index)?;
         }
         Ok(())
-    }
-
-    fn time_log_to_vec(&self, time_log: [F; 8]) -> Vec<F> {
-        time_log.to_vec()
     }
 }
 
@@ -397,6 +395,64 @@ mod tests {
             instruction: Fp::from(1),
             value: [Fp::from(63); 32],
         };
+        let trace = vec![trace0, trace1, trace2];
+        let circuit = OriginalMemoryCircuit {
+            original_trace_record: trace,
+            _marker: PhantomData,
+        };
+        // the number of rows cannot exceed 2^k
+        let k = 10;
+        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+        assert_ne!(prover.verify(), Ok(()));
+    }
+
+    #[test]
+    fn test_invalid_time_order() {
+        let trace0 = ConvertedTraceRecord {
+            address: [Fp::from(0); 32],
+            time_log: [Fp::from(1); 8],
+            instruction: Fp::from(1),
+            value: [Fp::from(63); 32],
+        };
+        let trace1 = ConvertedTraceRecord {
+            address: [Fp::from(1); 32],
+            time_log: [Fp::from(0); 8],
+            instruction: Fp::from(1),
+            value: [Fp::from(63); 32],
+        };
+
+        let trace = vec![trace0, trace1];
+        let circuit = OriginalMemoryCircuit {
+            original_trace_record: trace,
+            _marker: PhantomData,
+        };
+        // the number of rows cannot exceed 2^k
+        let k = 10;
+        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+        assert_ne!(prover.verify(), Ok(()));
+    }
+
+    #[test]
+    fn also_test_invalid_time_order() {
+        let trace0 = ConvertedTraceRecord {
+            address: [Fp::from(0); 32],
+            time_log: [Fp::from(0); 8],
+            instruction: Fp::from(1),
+            value: [Fp::from(63); 32],
+        };
+        let trace1 = ConvertedTraceRecord {
+            address: [Fp::from(1); 32],
+            time_log: [Fp::from(2); 8],
+            instruction: Fp::from(1),
+            value: [Fp::from(63); 32],
+        };
+        let trace2 = ConvertedTraceRecord {
+            address: [Fp::from(1); 32],
+            time_log: [Fp::from(1); 8],
+            instruction: Fp::from(1),
+            value: [Fp::from(63); 32],
+        };
+
         let trace = vec![trace0, trace1, trace2];
         let circuit = OriginalMemoryCircuit {
             original_trace_record: trace,
