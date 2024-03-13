@@ -66,7 +66,7 @@ impl<F: Field + PrimeField> ShuffleChip<F> {
     ) -> ShuffleConfig {
         let s_shuffle = meta.complex_selector();
         let s_input = meta.complex_selector();
-        meta.shuffle("shuffle", |meta| {
+        meta.shuffle("two traces are permutation of each other", |meta| {
             let s_input = meta.query_selector(s_input);
             let s_shuffle = meta.query_selector(s_shuffle);
             let input_0 = meta.query_advice(input_0, Rotation::cur());

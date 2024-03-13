@@ -87,7 +87,7 @@ impl<F: Field + PrimeField> IsZeroConfig<F> {
         let one = Expression::Constant(F::ONE);
 
         // temp*temp_inv is equal to 1
-        meta.create_gate("the inverse of val muse be non-zero", |meta| {
+        meta.create_gate("the inverse of val must be non-zero", |meta| {
             let selector = meta.query_fixed(selector, Rotation::cur());
             let temp = meta.query_advice(temp, Rotation::cur());
             let temp_inv = meta.query_advice(temp_inv, Rotation::cur());
@@ -211,8 +211,16 @@ pub(crate) struct GreaterThanConfig<F: Field + PrimeField, const N: usize> {
     pub(crate) difference_inverse: Column<Advice>,
     pub(crate) first_difference_limb: BinaryConfig<F, N>,
 }
+// the idea is to represent address[i]||time_log[i] equal to a vector
+// limb[i]=(limb[i,0], limb[i,2],..., limb[i,39])
+// and let j (depends on i) such that limb[i+1,j]-limb[i,j] is non-zero
+// the constraints for this circuit are:
+// 1) difference[i]=limb[i+1,j]-limb[i,j]
+// 2) difference is non-zero
+// 3) limb[i+1,k]=limb[i,k] for all 0<=k<= j-1
+// 4) difference[i] is in [0,255] for all i
 impl<F: Field + PrimeField, const N: usize> GreaterThanConfig<F, N> {
-    /// Add the constraints for lexicographic ordering
+    /// Add the constraints for checking the ordering
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
         trace_record: TraceRecordWitnessTable<F>,
@@ -235,8 +243,8 @@ impl<F: Field + PrimeField, const N: usize> GreaterThanConfig<F, N> {
             vec![selector * (difference * difference_inverse - one.clone())]
         });
 
-        // limbs before first differences are zero
-        meta.create_gate("limbs before first differences are zero", |meta| {
+        // limb[i+1,k]=limb[i,k] for all 0<=k<= j-1
+        meta.create_gate("limbs before first_difference_limb are zero", |meta| {
             let selector = meta.query_fixed(selector, Rotation::cur());
             let first_difference_limb = first_difference_limb
                 .bits
@@ -256,7 +264,7 @@ impl<F: Field + PrimeField, const N: usize> GreaterThanConfig<F, N> {
             constraints
         });
 
-        // difference equals difference of limbs at index
+        // difference[i]=limb[i+1,j]-limb[i,j]
         meta.create_gate("difference equals difference of limbs at index", |meta| {
             let selector = meta.query_fixed(selector, Rotation::cur());
             let cur = Queries::new(meta, trace_record, Rotation::cur());
@@ -299,7 +307,7 @@ impl<F: Field + PrimeField, const N: usize> GreaterThanConfig<F, N> {
                 },
             );
         }
-        // lookup gate for difference. It must be in [0..256]
+        // difference[i] is in [0,255] for all i
         lookup_tables
             .size256_table
             .range_check(meta, "difference fits in 0..256", |meta| {
