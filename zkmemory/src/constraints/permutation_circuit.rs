@@ -1,5 +1,6 @@
 use crate::{
     base::Base,
+    constraints::common::CircuitExtension,
     machine::{MemoryInstruction, TraceRecord},
 };
 use core::marker::PhantomData;
@@ -30,7 +31,7 @@ extern crate alloc;
 use alloc::{vec, vec::Vec};
 
 /// Define a chip struct that implements our instructions.
-struct ShuffleChip<F: Field + PrimeField> {
+pub struct ShuffleChip<F: Field + PrimeField> {
     config: ShuffleConfig,
     _marker: PhantomData<F>,
 }
@@ -47,15 +48,16 @@ pub struct ShuffleConfig {
 }
 
 impl<F: Field + PrimeField> ShuffleChip<F> {
-    // Construct a permutation chip using the config
-    fn construct(config: ShuffleConfig) -> Self {
+    /// Construct a permutation chip using the config
+    pub fn construct(config: ShuffleConfig) -> Self {
         Self {
             config,
             _marker: PhantomData,
         }
     }
 
-    fn configure(
+    /// Configure the gates
+    pub fn configure(
         meta: &mut ConstraintSystem<F>,
         input_0: Column<Advice>,
         input_1: Column<Fixed>,
@@ -64,7 +66,7 @@ impl<F: Field + PrimeField> ShuffleChip<F> {
     ) -> ShuffleConfig {
         let s_shuffle = meta.complex_selector();
         let s_input = meta.complex_selector();
-        meta.shuffle("shuffle", |meta| {
+        meta.shuffle("two traces are permutation of each other", |meta| {
             let s_input = meta.query_selector(s_input);
             let s_shuffle = meta.query_selector(s_shuffle);
             let input_0 = meta.query_advice(input_0, Rotation::cur());
@@ -92,15 +94,74 @@ impl<F: Field + PrimeField> ShuffleChip<F> {
 #[derive(Default, Clone, Debug)]
 pub struct PermutationCircuit<F: Field + PrimeField> {
     // input_idx: an array of indexes of the unpermuted array
-    input_idx: Vec<Value<F>>,
+    pub(crate) input_idx: Vec<Value<F>>,
     // input: an unpermuted array
-    input: Vec<F>,
+    pub(crate) input: Vec<F>,
     // shuffle_idx: an array of indexes after permuting input
-    shuffle_idx: Vec<Value<F>>,
+    pub(crate) shuffle_idx: Vec<Value<F>>,
     // shuffle: permuted array from input
-    shuffle: Vec<Value<F>>,
+    pub(crate) shuffle: Vec<Value<F>>,
 }
 
+/// Implement the circuit extension trait for the permutation circuit
+impl<F: Field + PrimeField> CircuitExtension<F> for PermutationCircuit<F> {
+    fn synthesize_with_layouter(
+        &self,
+        config: Self::Config,
+        layouter: &mut impl Layouter<F>,
+    ) -> Result<(), Error> {
+        let shuffle_chip = ShuffleChip::<F>::construct(config);
+        layouter.assign_region(
+            || "load inputs",
+            |mut region| {
+                for (i, (input_idx, input)) in
+                    self.input_idx.iter().zip(self.input.iter()).enumerate()
+                {
+                    region.assign_advice(
+                        || "input_idx",
+                        shuffle_chip.config.input_0,
+                        i,
+                        || *input_idx,
+                    )?;
+                    region.assign_fixed(
+                        || "input",
+                        shuffle_chip.config.input_1,
+                        i,
+                        || Value::known(*input),
+                    )?;
+                    shuffle_chip.config.s_input.enable(&mut region, i)?;
+                }
+                Ok(())
+            },
+        )?;
+        layouter.assign_region(
+            || "load shuffles",
+            |mut region| {
+                for (i, (shuffle_idx, shuffle)) in
+                    self.shuffle_idx.iter().zip(self.shuffle.iter()).enumerate()
+                {
+                    region.assign_advice(
+                        || "shuffle_index",
+                        shuffle_chip.config.shuffle_0,
+                        i,
+                        || *shuffle_idx,
+                    )?;
+                    region.assign_advice(
+                        || "shuffle_value",
+                        shuffle_chip.config.shuffle_1,
+                        i,
+                        || *shuffle,
+                    )?;
+                    shuffle_chip.config.s_shuffle.enable(&mut region, i)?;
+                }
+                Ok(())
+            },
+        )?;
+        Ok(())
+    }
+}
+
+/// Implement the circuit trait for the permutation circuit
 impl<F: Field + PrimeField> Circuit<F> for PermutationCircuit<F> {
     // Reuse the config
     type Config = ShuffleConfig;
@@ -328,11 +389,13 @@ pub fn successive_powers<F: Field + PrimeField>(size: u64) -> Vec<F> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
 
     use crate::{
         base::{Base, B256},
-        constraints::permutation::{PermutationCircuit, PermutationProver},
+        constraints::permutation_circuit::{
+            successive_powers, PermutationCircuit, PermutationProver,
+        },
         machine::{AbstractTraceRecord, MemoryInstruction, TraceRecord},
     };
     use ff::Field;
@@ -342,8 +405,6 @@ mod test {
     use rand::{seq::SliceRandom, Rng};
     extern crate alloc;
     use alloc::vec::Vec;
-
-    use super::successive_powers;
 
     // Randomly create a vector of 2-tuple of trace elements and an index value (for testing)
     fn random_trace<
@@ -365,7 +426,7 @@ mod test {
     fn random_trace_record<K: Base<S>, V: Base<T>, const S: usize, const T: usize>(
     ) -> TraceRecord<K, V, S, T> {
         let mut rng = rand::thread_rng();
-        let instruction = if rng.gen() {
+        let instruction = if rng.gen_range(0..2) == 1 {
             MemoryInstruction::Write
         } else {
             MemoryInstruction::Read
@@ -436,23 +497,26 @@ mod test {
 
     #[test]
     fn check_trace_record_mapping() {
-        let mut record = random_trace_record::<B256, B256, 32, 32>();
-        let (time_log, stack_depth, instruction, address, value) = record.get_tuple();
-        let instruction = match instruction {
-            MemoryInstruction::Write => Fp::ONE,
-            MemoryInstruction::Read => Fp::ZERO,
-        };
-        // Generate a random seed of type [u64; 5]
-        let mut rng = rand::thread_rng();
-        let mut seeds = [0u64; 5];
-        rng.fill(&mut seeds);
-        // Dot product between the trace record and the seed.
-        let dot_product = Fp::from(time_log) * Fp::from(seeds[0])
-            + Fp::from(stack_depth) * Fp::from(seeds[1])
-            + instruction * Fp::from(seeds[2])
-            + Fp::from(address) * Fp::from(seeds[3])
-            + Fp::from(value) * Fp::from(seeds[4]);
-        assert_eq!(dot_product, record.compress(seeds));
+        // Test 10 times so that the trace will always have Read and Write instructions
+        for _ in 0..10 {
+            let mut record = random_trace_record::<B256, B256, 32, 32>();
+            let (time_log, stack_depth, instruction, address, value) = record.get_tuple();
+            let instruction = match instruction {
+                MemoryInstruction::Write => Fp::ONE,
+                MemoryInstruction::Read => Fp::ZERO,
+            };
+            // Generate a random seed of type [u64; 5]
+            let mut rng = rand::thread_rng();
+            let mut seeds = [0u64; 5];
+            rng.fill(&mut seeds);
+            // Dot product between the trace record and the seed.
+            let dot_product = Fp::from(time_log) * Fp::from(seeds[0])
+                + Fp::from(stack_depth) * Fp::from(seeds[1])
+                + instruction * Fp::from(seeds[2])
+                + Fp::from(address) * Fp::from(seeds[3])
+                + Fp::from(value) * Fp::from(seeds[4]);
+            assert_eq!(dot_product, record.compress(seeds));
+        }
     }
 
     #[test]
@@ -477,5 +541,27 @@ mod test {
         let mut ipa_prover = PermutationProver::<EqAffine>::new(K, circuit, true);
         let proof = ipa_prover.create_proof();
         assert!(ipa_prover.verify(proof));
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_inequal_lengths() {
+        const K: u32 = 6;
+        // Number of trace elements in a trace, min = 2^K.
+        let trace_size = 50;
+        let mut rng = rand::thread_rng();
+        let mut trace_buffer = random_trace::<B256, B256, 32, 32, Fp>(trace_size);
+        let input_trace = trace_buffer.clone();
+        trace_buffer.shuffle(&mut rng);
+        let mut shuffle_trace = trace_buffer.clone();
+
+        // Remove one trace element
+        shuffle_trace.pop();
+
+        let circuit = PermutationCircuit::<Fp>::new(input_trace, shuffle_trace);
+        // Test with IPA prover
+        let mut ipa_prover = PermutationProver::<EqAffine>::new(K, circuit, true);
+        let proof = ipa_prover.create_proof();
+        assert!(!ipa_prover.verify(proof));
     }
 }

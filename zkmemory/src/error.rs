@@ -33,3 +33,37 @@ impl core::fmt::Display for Error {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::error::Error;
+    extern crate alloc;
+
+    use alloc::format;
+
+    #[test]
+    fn test_error_print() {
+        assert_eq!(
+            format!("{}", Error::MemoryAccessDeinied),
+            "Memory access denied"
+        );
+        assert_eq!(
+            format!("{}", Error::MemoryInvalidInteraction),
+            "Memory invalid interaction"
+        );
+        assert_eq!(
+            format!("{}", Error::RegisterUnableToRead),
+            "Register unable to read"
+        );
+        assert_eq!(
+            format!("{}", Error::RegisterUnableToWrite),
+            "Register unable to write"
+        );
+        assert_eq!(
+            format!("{}", Error::RegisterUnableToAssign),
+            "Register unable to assign"
+        );
+        assert_eq!(format!("{}", Error::StackOverflow), "Stack overflow");
+        assert_eq!(format!("{}", Error::StackUnderflow), "Stack underflow");
+    }
+}

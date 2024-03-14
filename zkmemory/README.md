@@ -11,7 +11,8 @@ cargo test
 And also check the code coverage with:
 
 ```text
-cargo llvm-cov --html --open
+$ cargo install cargo-llvm-cov
+$ cargo llvm-cov --html --open
 ```
 
 Right now, our code coverage is `80%`:
