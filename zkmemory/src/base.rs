@@ -45,15 +45,15 @@ pub trait Base<const S: usize, T = Self>:
     fn fixed_le_bytes(&self) -> [u8; 32];
 }
 
-/// Convert from/to [usize](core::usize)
+/// Convert from/to [`core::usize`]
 pub trait UIntConvertible {
-    /// Convert from [usize](core::usize)
+    /// Convert from [`core::usize`]
     fn from_usize(value: usize) -> Self;
-    /// Convert to [usize](core::usize)
+    /// Convert to [`core::usize`]
     fn to_usize(&self) -> usize;
 }
 
-/// Uint256 is a wrapper of [U256](ethnum::U256) to implement [Base](crate::base::Base)
+/// Uint256 is a wrapper of [U256] to implement [Base]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Uint<T>(pub(crate) T);
 
@@ -262,13 +262,13 @@ new_base!(u64, 8);
 new_base!(u32, 4);
 new_base!(u16, 2);
 
-/// Uint256 is a wrapper of [U256](ethnum::U256) to implement [Base](crate::base::Base)
+/// Uint256 is a wrapper of [U256] to implement [Base]
 pub type B256 = Uint<U256>;
-/// Uint128 is a wrapper of [u128](core::u128) to implement [Base](crate::base::Base)
+/// Uint128 is a wrapper of [u128](core::u128) to implement [Base]
 pub type B128 = Uint<u128>;
-/// Uint64 is a wrapper of [u64](core::u64) to implement [Base](crate::base::Base)
+/// Uint64 is a wrapper of [u64](core::u64) to implement [Base]
 pub type B64 = Uint<u64>;
-/// Uint32 is a wrapper of [u32](core::u32) to implement [Base](crate::base::Base)
+/// Uint32 is a wrapper of [u32](core::u32) to implement [Base]
 pub type B32 = Uint<u32>;
-/// Uint16 is a wrapper of [u16](core::u16) to implement [Base](crate::base::Base)
+/// Uint16 is a wrapper of [u16](core::u16) to implement [Base]
 pub type B16 = Uint<u16>;

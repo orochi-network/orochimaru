@@ -13,7 +13,7 @@ pub enum MemoryInstruction {
     Read,
 }
 
-/// Trace record struct of [AbstractTraceRecord](crate::machine::AbstractTraceRecord)
+/// Trace record struct of [AbstractTraceRecord]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TraceRecord<K, V, const S: usize, const T: usize>
 where
