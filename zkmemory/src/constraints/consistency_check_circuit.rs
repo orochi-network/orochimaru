@@ -73,7 +73,7 @@ impl<F: Field + PrimeField> ConsistencyConfig<F> {
 
 /// Define the memory consistency circuit
 #[derive(Default, Clone, Debug)]
-pub(crate) struct MemoryConsistencyCircuit<F: Field + PrimeField + From<B256> + From<B256>> {
+pub(crate) struct MemoryConsistencyCircuit<F: Field + PrimeField + From<B256>> {
     /// input_trace: Array of trace records before sorting (sorted by time_log) along with its indexes
     pub(crate) input: Vec<(F, TraceRecord<B256, B256, 32, 32>)>,
     /// shuffle_trace: Array after permutations (sorted by address and time_log)
@@ -81,9 +81,7 @@ pub(crate) struct MemoryConsistencyCircuit<F: Field + PrimeField + From<B256> + 
 }
 
 /// Implement the circuit extension for memory consistency circuit
-impl<F: Field + PrimeField + From<B256> + From<B256>> CircuitExtension<F>
-    for MemoryConsistencyCircuit<F>
-{
+impl<F: Field + PrimeField + From<B256>> CircuitExtension<F> for MemoryConsistencyCircuit<F> {
     fn synthesize_with_layouter(
         &self,
         config: Self::Config,
@@ -117,7 +115,7 @@ impl<F: Field + PrimeField + From<B256> + From<B256>> CircuitExtension<F>
     }
 }
 
-impl<F: Field + PrimeField + From<B256> + From<B256>> Circuit<F> for MemoryConsistencyCircuit<F> {
+impl<F: Field + PrimeField + From<B256>> Circuit<F> for MemoryConsistencyCircuit<F> {
     type Config = ConsistencyConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
 

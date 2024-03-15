@@ -1,9 +1,10 @@
+use rand::Rng;
 use rbtree::RBTree;
 use std::{marker::PhantomData, println};
 use zkmemory::{
     base::{Base, B256},
     config::{AllocatedSection, Config, ConfigArgs, DefaultConfig},
-    constraints::test::build_and_test_circuit,
+    constraints::helper::build_and_test_circuit,
     error::Error,
     impl_register_machine, impl_stack_machine, impl_state_machine,
     machine::{
@@ -334,19 +335,45 @@ fn main() {
     let base = machine.base_address();
     println!("{}", base);
 
+    let mut randomize = rand::thread_rng();
+    randomize.gen_range(u64::MAX / 2..u64::MAX);
     // Define your desired program
     let program = vec![
-        Instruction::Write(base + B256::from(16), B256::from(1025)),
-        Instruction::Write(base + B256::from(48), B256::from(1111)),
-        Instruction::Write(base + B256::from(80), B256::from(1000)),
-        Instruction::Write(base + B256::from(112), B256::from(9999)),
-        Instruction::Write(base + B256::from(320), B256::from(134123)),
+        Instruction::Write(
+            base + B256::from(16),
+            B256::from(randomize.gen_range(u64::MAX / 2..u64::MAX)),
+        ),
+        Instruction::Write(
+            base + B256::from(48),
+            B256::from(randomize.gen_range(u64::MAX / 2..u64::MAX)),
+        ),
+        Instruction::Write(
+            base + B256::from(80),
+            B256::from(randomize.gen_range(u64::MAX / 2..u64::MAX)),
+        ),
+        Instruction::Write(
+            base + B256::from(112),
+            B256::from(randomize.gen_range(u64::MAX / 2..u64::MAX)),
+        ),
+        Instruction::Write(
+            base + B256::from(320),
+            B256::from(randomize.gen_range(u64::MAX / 2..u64::MAX)),
+        ),
         Instruction::Read(base + B256::from(16)),
-        Instruction::Write(base + B256::from(10000), B256::from(1212)),
+        Instruction::Write(
+            base + B256::from(10000),
+            B256::from(randomize.gen_range(u64::MAX / 2..u64::MAX)),
+        ),
         Instruction::Read(base + B256::from(48)),
         Instruction::Read(base + B256::from(320)),
-        Instruction::Write(base + B256::from(10016), B256::from(54342)),
-        Instruction::Write(base + B256::from(10032), B256::from(2341312)),
+        Instruction::Write(
+            base + B256::from(10016),
+            B256::from(randomize.gen_range(u64::MAX / 2..u64::MAX)),
+        ),
+        Instruction::Write(
+            base + B256::from(10032),
+            B256::from(randomize.gen_range(u64::MAX / 2..u64::MAX)),
+        ),
         Instruction::Read(base + B256::from(16)),
         Instruction::Read(base + B256::from(48)),
     ];
