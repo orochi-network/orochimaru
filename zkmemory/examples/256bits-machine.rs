@@ -360,7 +360,7 @@ fn main() {
     }
 
     println!("Verifying memory consistency...");
-    // If the build_and_test_circuit does not panic, then
+    // If the build_and_test_circuit does not panic, then the trace is valid.
     build_and_test_circuit(trace_record, 10);
     println!("Memory consistency check done. The execution trace is valid.");
 }
