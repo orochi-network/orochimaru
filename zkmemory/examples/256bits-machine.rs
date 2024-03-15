@@ -3,6 +3,7 @@ use std::{marker::PhantomData, println};
 use zkmemory::{
     base::{Base, B256},
     config::{AllocatedSection, Config, ConfigArgs, DefaultConfig},
+    constraints::test::build_and_test_circuit,
     error::Error,
     impl_register_machine, impl_stack_machine, impl_state_machine,
     machine::{
@@ -182,6 +183,7 @@ where
                 };
             }
             MyInstruction::Save(address, reg) => {
+                println!("saving...");
                 match machine.get(*reg).expect("Unable to access register") {
                     CellInteraction::SingleCell(_, _, value) => {
                         machine
@@ -340,19 +342,25 @@ fn main() {
         Instruction::Write(base + B256::from(80), B256::from(1000)),
         Instruction::Write(base + B256::from(112), B256::from(9999)),
         Instruction::Load(machine.r0, base + B256::from(16)),
-        Instruction::Push(B256::from(3735013596u64)),
+        //   Instruction::Push(B256::from(3735013596u64)),
+        Instruction::Push(B256::from(12345)),
         Instruction::Swap(machine.r1),
         Instruction::Add(machine.r0, machine.r1),
-        Instruction::Save(base + B256::from(24), machine.r0),
+        //  Instruction::Save(base + B256::from(24), machine.r0),
     ];
-
+    let mut trace_record = vec![];
     // Execute the program
     for instruction in program {
         machine.exec(&instruction);
     }
-
     // Print the trace record (prettified), sorted by ascending address by default
     for x in machine.trace().into_iter() {
         println!("{:?}", x);
+        trace_record.push(x);
     }
+
+    println!("Verifying memory consistency...");
+    // If the build_and_test_circuit does not panic, then
+    build_and_test_circuit(trace_record, 10);
+    println!("Memory consistency check done. The execution trace is valid.");
 }

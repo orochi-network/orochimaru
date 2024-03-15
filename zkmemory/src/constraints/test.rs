@@ -1,72 +1,74 @@
+use crate::{
+    base::{Base, B256},
+    constraints::{
+        consistency_check_circuit::MemoryConsistencyCircuit, permutation_circuit::successive_powers,
+    },
+    machine::{AbstractTraceRecord, TraceRecord},
+};
+extern crate alloc;
+use alloc::{vec, vec::Vec};
+use ff::{Field, PrimeField};
+use halo2_proofs::dev::MockProver;
+use halo2curves::pasta::Fp;
+
+// Sort the trace by address -> time_log as keys
+fn sort_trace<K, V, const S: usize, const T: usize, F>(
+    trace: Vec<(F, TraceRecord<K, V, S, T>)>,
+) -> Vec<(F, TraceRecord<K, V, S, T>)>
+where
+    K: Base<S>,
+    V: Base<T>,
+    F: Field + PrimeField,
+{
+    let mut buffer = trace;
+    buffer.sort_by(|a, b| {
+        if a.1.address() == b.1.address() {
+            a.1.time_log().cmp(&b.1.time_log())
+        } else {
+            a.1.address().cmp(&b.1.address())
+        }
+    });
+    buffer
+}
+
+// Outputs the trace with their respective indexes
+fn trace_with_index<
+    K: Base<S>,
+    V: Base<T>,
+    const S: usize,
+    const T: usize,
+    F: Field + PrimeField,
+>(
+    trace: Vec<TraceRecord<K, V, S, T>>,
+) -> Vec<(F, TraceRecord<K, V, S, T>)> {
+    let indexes = successive_powers::<F>(trace.len() as u64);
+    indexes
+        .into_iter()
+        .zip(trace)
+        .collect::<Vec<(F, TraceRecord<K, V, S, T>)>>()
+}
+
+/// Common test function to build and check the consistency circuit
+pub fn build_and_test_circuit(trace: Vec<TraceRecord<B256, B256, 32, 32>>, k: u32) {
+    // Initially, the trace is sorted by time_log
+    let trace = trace_with_index::<B256, B256, 32, 32, Fp>(trace);
+
+    // Sort this trace in address and time_log
+    let sorted_trace = sort_trace::<B256, B256, 32, 32, Fp>(trace.clone());
+
+    let circuit = MemoryConsistencyCircuit::<Fp> {
+        input: trace.clone(),
+        shuffle: sorted_trace.clone(),
+    };
+
+    let prover = MockProver::run(k, &circuit, vec![]).expect("Cannot run the circuit");
+    assert_eq!(prover.verify(), Ok(()));
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::{
-        base::{Base, B256},
-        constraints::{
-            consistency_check_circuit::MemoryConsistencyCircuit,
-            permutation_circuit::successive_powers,
-        },
-        machine::{AbstractTraceRecord, MemoryInstruction, TraceRecord},
-    };
-    extern crate alloc;
-    use alloc::{vec, vec::Vec};
-    use ff::{Field, PrimeField};
-    use halo2_proofs::dev::MockProver;
-    use halo2curves::pasta::Fp;
-
-    // Sort the trace by address -> time_log as keys
-    fn sort_trace<K, V, const S: usize, const T: usize, F>(
-        trace: Vec<(F, TraceRecord<K, V, S, T>)>,
-    ) -> Vec<(F, TraceRecord<K, V, S, T>)>
-    where
-        K: Base<S>,
-        V: Base<T>,
-        F: Field + PrimeField,
-    {
-        let mut buffer = trace;
-        buffer.sort_by(|a, b| {
-            if a.1.address() == b.1.address() {
-                a.1.time_log().cmp(&b.1.time_log())
-            } else {
-                a.1.address().cmp(&b.1.address())
-            }
-        });
-        buffer
-    }
-
-    // Outputs the trace with their respective indexes
-    fn trace_with_index<
-        K: Base<S>,
-        V: Base<T>,
-        const S: usize,
-        const T: usize,
-        F: Field + PrimeField,
-    >(
-        trace: Vec<TraceRecord<K, V, S, T>>,
-    ) -> Vec<(F, TraceRecord<K, V, S, T>)> {
-        let indexes = successive_powers::<F>(trace.len() as u64);
-        indexes
-            .into_iter()
-            .zip(trace)
-            .collect::<Vec<(F, TraceRecord<K, V, S, T>)>>()
-    }
-
-    // Common test function to build and check the consistency circuit
-    fn build_and_test_circuit(trace: Vec<TraceRecord<B256, B256, 32, 32>>, k: u32) {
-        // Initially, the trace is sorted by time_log
-        let trace = trace_with_index::<B256, B256, 32, 32, Fp>(trace);
-
-        // Sort this trace in address and time_log
-        let sorted_trace = sort_trace::<B256, B256, 32, 32, Fp>(trace.clone());
-
-        let circuit = MemoryConsistencyCircuit::<Fp> {
-            input: trace.clone(),
-            shuffle: sorted_trace.clone(),
-        };
-
-        let prover = MockProver::run(k, &circuit, vec![]).expect("Cannot run the circuit");
-        assert_eq!(prover.verify(), Ok(()));
-    }
+    use super::*;
+    use crate::machine::MemoryInstruction;
 
     #[test]
     #[should_panic]
