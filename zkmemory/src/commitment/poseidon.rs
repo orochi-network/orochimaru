@@ -969,13 +969,13 @@ fn poseidon_sponge<
 }
 
 #[derive(Debug)]
-struct Pow5State<F: Field, const WIDTH: usize>([StateWord<F>; WIDTH]);
+struct Pow5State<F: Field, const W: usize>([StateWord<F>; W]);
 
-impl<F: Field + PrimeField, const WIDTH: usize> Pow5State<F, WIDTH> {
-    fn full_round<const RATE: usize>(
+impl<F: Field + PrimeField, const W: usize> Pow5State<F, W> {
+    fn full_round<const R: usize>(
         self,
         region: &mut Region<'_, F>,
-        config: &PoseidonConfig<F, WIDTH, RATE>,
+        config: &PoseidonConfig<F, W, R>,
         round: usize,
         offset: usize,
     ) -> Result<Self, Error> {
@@ -999,10 +999,10 @@ impl<F: Field + PrimeField, const WIDTH: usize> Pow5State<F, WIDTH> {
         })
     }
 
-    fn partial_round<const RATE: usize>(
+    fn partial_round<const R: usize>(
         self,
         region: &mut Region<'_, F>,
-        config: &PoseidonConfig<F, WIDTH, RATE>,
+        config: &PoseidonConfig<F, W, R>,
         round: usize,
         offset: usize,
     ) -> Result<Self, Error> {
@@ -1046,7 +1046,7 @@ impl<F: Field + PrimeField, const WIDTH: usize> Pow5State<F, WIDTH> {
                     || Value::known(config.round_constants[round + 1][i]),
                 )
             };
-            for i in 0..WIDTH {
+            for i in 0..W {
                 load_round_constant(i)?;
             }
 
@@ -1074,10 +1074,10 @@ impl<F: Field + PrimeField, const WIDTH: usize> Pow5State<F, WIDTH> {
         })
     }
 
-    fn load<const RATE: usize>(
+    fn load<const R: usize>(
         region: &mut Region<'_, F>,
-        config: &PoseidonConfig<F, WIDTH, RATE>,
-        initial_state: &State<StateWord<F>, WIDTH>,
+        config: &PoseidonConfig<F, W, R>,
+        initial_state: &State<StateWord<F>, W>,
     ) -> Result<Self, Error> {
         let load_state_word = |i: usize| {
             initial_state[i]
@@ -1086,17 +1086,17 @@ impl<F: Field + PrimeField, const WIDTH: usize> Pow5State<F, WIDTH> {
                 .map(StateWord)
         };
 
-        let state: Result<Vec<_>, _> = (0..WIDTH).map(load_state_word).collect();
+        let state: Result<Vec<_>, _> = (0..W).map(load_state_word).collect();
         state.map(|state| Pow5State(state.try_into().unwrap()))
     }
 
-    fn round<const RATE: usize>(
+    fn round<const R: usize>(
         region: &mut Region<'_, F>,
-        config: &PoseidonConfig<F, WIDTH, RATE>,
+        config: &PoseidonConfig<F, W, R>,
         round: usize,
         offset: usize,
         round_gate: Selector,
-        round_fn: impl FnOnce(&mut Region<'_, F>) -> Result<(usize, [Value<F>; WIDTH]), Error>,
+        round_fn: impl FnOnce(&mut Region<'_, F>) -> Result<(usize, [Value<F>; W]), Error>,
     ) -> Result<Self, Error> {
         // Enable the required gate.
         round_gate.enable(region, offset)?;
@@ -1110,7 +1110,7 @@ impl<F: Field + PrimeField, const WIDTH: usize> Pow5State<F, WIDTH> {
                 || Value::known(config.round_constants[round][i]),
             )
         };
-        for i in 0..WIDTH {
+        for i in 0..W {
             load_round_constant(i)?;
         }
 
@@ -1128,7 +1128,38 @@ impl<F: Field + PrimeField, const WIDTH: usize> Pow5State<F, WIDTH> {
             Ok(StateWord(var))
         };
 
-        let next_state: Result<Vec<_>, _> = (0..WIDTH).map(next_state_word).collect();
+        let next_state: Result<Vec<_>, _> = (0..W).map(next_state_word).collect();
         next_state.map(|next_state| Pow5State(next_state.try_into().unwrap()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use core::marker::PhantomData;
+    extern crate alloc;
+    use crate::commitment::poseidon::{self, ConstantLength, HashCircuit};
+    use alloc::vec;
+    use ff::Field;
+    use halo2_proofs::{circuit::Value, dev::MockProver};
+    use halo2curves::pasta::Fp;
+    use rand_core::OsRng;
+
+    pub struct OrchardNullifier;
+
+    #[test]
+    fn poseidon_hash() {
+        let rng = OsRng;
+
+        let message = [Fp::random(rng), Fp::random(rng)];
+        let output =
+            poseidon::Hash::<Fp, OrchardNullifier, ConstantLength<2>, 3, 2>::init().hash(message);
+
+        let k = 6;
+        let circuit = HashCircuit::<OrchardNullifier, 3, 2, 2> {
+            message: Value::known(message),
+            output: Value::known(output),
+        };
+        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+        assert_eq!(prover.verify(), Ok(()))
     }
 }
