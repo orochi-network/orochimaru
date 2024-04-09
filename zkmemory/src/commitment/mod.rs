@@ -6,5 +6,7 @@ pub mod kzg;
 pub mod merkle_tree;
 ///
 pub mod poseidon;
+///
+pub mod poseidon_constants;
 /// Commitment scheme using Verkle Tree
 pub mod verkle_tree;
