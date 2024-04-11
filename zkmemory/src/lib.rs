@@ -25,7 +25,8 @@ pub mod constraints;
 pub mod error;
 /// Definition of abstract machine (instruction, trace and context)
 pub mod machine;
-
+///
+pub mod poseidon;
 #[cfg(test)]
 mod tests {
     extern crate alloc;
