@@ -432,8 +432,6 @@ impl<
 
 #[cfg(test)]
 mod tests {
-    use core::iter;
-    use core::marker::PhantomData;
     extern crate alloc;
     use super::*;
     use crate::poseidon::poseidon_constants::*;
