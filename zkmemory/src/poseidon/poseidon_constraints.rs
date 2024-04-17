@@ -46,10 +46,12 @@ pub struct Pow5Chip<F: Field + PrimeField, const W: usize, const R: usize> {
 
 impl<F: Field + PrimeField, const W: usize, const R: usize> Pow5Chip<F, W, R> {
     ///
-    pub fn configure<S: Spec<F, W, R>>(meta: &mut ConstraintSystem<F>) -> PoseidonConfig<F, W, R> {
+    pub fn configure<S: Spec<F, W, R>>(
+        meta: &mut ConstraintSystem<F>,
+        state: [Column<Advice>; W],
+    ) -> PoseidonConfig<F, W, R> {
         let (round_constants, m_reg, m_inv) = S::constants();
         assert_eq!(R, W - 1);
-        let state = [0; W].map(|_| meta.advice_column());
         let sbox = meta.advice_column();
         let rc_a = [0; W].map(|_| meta.fixed_column());
         let rc_b = [0; W].map(|_| meta.fixed_column());
@@ -378,7 +380,8 @@ impl<S: Spec<F, W, R>, F: Field + PrimeField, const W: usize, const R: usize, co
     }
 
     fn configure(meta: &mut ConstraintSystem<F>) -> PoseidonConfig<F, W, R> {
-        Pow5Chip::configure::<S>(meta)
+        let state = [0; W].map(|_| meta.advice_column());
+        Pow5Chip::configure::<S>(meta, state)
     }
 
     fn synthesize(

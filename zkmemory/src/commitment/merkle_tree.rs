@@ -14,7 +14,10 @@ use halo2_proofs::{
 };
 use poseidon::poseidon_constraints::*;
 
-use crate::poseidon::{self, poseidon::Spec};
+use crate::poseidon::{
+    self,
+    poseidon::{ConstantLength, Spec},
+};
 extern crate std;
 
 #[derive(Clone, Debug)]
@@ -24,7 +27,7 @@ pub struct MerkleTreeConfig<S: Spec<F, W, R>, F: Field + PrimeField, const W: us
     poseidon_config: PoseidonConfig<F, W, R>,
     advice: [Column<Advice>; 3],
     // the selectors
-    selector: Column<Fixed>,
+    selector_swap: Selector,
     selector_root: Selector,
     _marker: PhantomData<S>,
 }
@@ -32,34 +35,132 @@ pub struct MerkleTreeConfig<S: Spec<F, W, R>, F: Field + PrimeField, const W: us
 impl<S: Spec<F, W, R>, F: Field + PrimeField, const W: usize, const R: usize>
     MerkleTreeConfig<S, F, W, R>
 {
-    fn configure(meta: &mut ConstraintSystem<F>) -> Self {
+    fn configure(meta: &mut ConstraintSystem<F>, hash_inputs: [Column<Advice>; W]) -> Self {
         let selector = meta.fixed_column();
         let root = meta.instance_column();
-        let path = meta.advice_column();
-        let sibling = meta.advice_column();
         let selector_root = meta.selector();
         let advice = [0; 3].map(|_| meta.advice_column());
         meta.enable_equality(root);
+        let selector_swap = meta.selector();
+
+        let col_a = advice[0];
+        let col_b = advice[1];
+        let col_c = advice[2];
+
+        meta.enable_equality(col_a);
+        meta.enable_equality(col_b);
+        meta.enable_equality(col_c);
 
         // checking if the final value is equal to the root of the tree
         meta.create_gate("public instance", |meta| {
-            let path = meta.query_advice(path, Rotation::cur());
+            let advice = meta.query_advice(advice[2], Rotation::cur());
             let root = meta.query_instance(root, Rotation::cur());
             let selector_root = meta.query_selector(selector_root);
-            vec![selector_root * (path - root)]
+            vec![selector_root * (advice - root)]
+        });
+
+        // Enforces that if the swap bit (c) is on, l=b and r=a. Otherwise, l=a and r=b.
+        // s * (c * 2 * (b - a) - (l - a) - (b - r)) = 0
+        // This applies only when the swap selector is enabled
+        meta.create_gate("swap constraint", |meta| {
+            let s = meta.query_selector(selector_swap);
+            let a = meta.query_advice(col_a, Rotation::cur());
+            let b = meta.query_advice(col_b, Rotation::cur());
+            let c = meta.query_advice(col_c, Rotation::cur());
+            let l = meta.query_advice(col_a, Rotation::next());
+            let r = meta.query_advice(col_b, Rotation::next());
+            vec![
+                s * (c * Expression::Constant(F::from(2)) * (b.clone() - a.clone())
+                    - (l - a)
+                    - (b - r)),
+            ]
         });
 
         // poseidon constraints
         // TODO: Write Poseidon constraints
-        let poseidon_config = Pow5Chip::<F, W, R>::configure::<S>(meta);
+        let poseidon_config = Pow5Chip::<F, W, R>::configure::<S>(meta, hash_inputs);
 
         MerkleTreeConfig {
             poseidon_config,
             advice,
-            selector,
+            selector_swap,
             selector_root,
             _marker: PhantomData,
         }
+    }
+
+    pub fn assing_leaf(
+        &self,
+        mut layouter: impl Layouter<F>,
+        leaf: Value<F>,
+    ) -> Result<AssignedCell<F, F>, Error> {
+        let node_cell = layouter.assign_region(
+            || "assign leaf",
+            |mut region| region.assign_advice(|| "assign leaf", self.advice[0], 0, || leaf),
+        )?;
+
+        Ok(node_cell)
+    }
+
+    pub fn merkle_prove_layer(
+        &self,
+        mut layouter: impl Layouter<F>,
+        node_cell: &AssignedCell<F, F>,
+        path_element: Value<F>,
+        index: Value<F>,
+    ) -> Result<AssignedCell<F, F>, Error> {
+        let (left, right) = layouter.assign_region(
+            || "merkle prove layer",
+            |mut region| {
+                // Row 0
+
+                node_cell.copy_advice(
+                    || "copy node cell from previous prove layer",
+                    &mut region,
+                    self.advice[0],
+                    0,
+                )?;
+                region.assign_advice(|| "assign element", self.advice[1], 0, || path_element)?;
+                region.assign_advice(|| "assign index", self.advice[2], 0, || index)?;
+
+                // Row 1
+                let node_cell_value = node_cell.value().map(|x| *x);
+                let (mut l, mut r) = (node_cell_value, path_element);
+                index.map(|x| {
+                    (l, r) = if x == F::ZERO { (l, r) } else { (r, l) };
+                });
+
+                // We need to perform the assignment of the row below in order to perform the swap check
+                let left =
+                    region.assign_advice(|| "assign left to be hashed", self.advice[0], 1, || l)?;
+                let right = region.assign_advice(
+                    || "assign right to be hashed",
+                    self.advice[1],
+                    1,
+                    || r,
+                )?;
+
+                Ok((left, right))
+            },
+        )?;
+
+        let digest = self.hash(layouter.namespace(|| "hash row constaint"), [left, right])?;
+        Ok(digest)
+    }
+
+    pub fn hash(
+        &self,
+        mut layouter: impl Layouter<F>,
+        input_cells: [AssignedCell<F, F>; 2],
+    ) -> Result<AssignedCell<F, F>, Error> {
+        let pow5_chip = Pow5Chip::construct(self.poseidon_config.clone());
+
+        // initialize the hasher
+        let hasher = Hash::<_, _, S, ConstantLength<2>, W, R>::init(
+            pow5_chip,
+            layouter.namespace(|| "hasher"),
+        )?;
+        hasher.hash(layouter.namespace(|| "hash"), input_cells)
     }
 }
 
