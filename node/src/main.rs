@@ -130,6 +130,13 @@ async fn orand(
                 }
             };
 
+            log::debug!(
+                "Request: {} {} {} ",
+                &header.method,
+                header.uri.path(),
+                &json_string,
+            );
+
             let keyring = context.postgres().table_keyring();
             let receiver = context.postgres().table_receiver();
 
