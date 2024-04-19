@@ -23,8 +23,8 @@ fn decode_address(val: String) -> String {
     }
 }
 
-fn decode_name(val: String) -> String {
-    let regex_name = Regex::new(r#"^[a-zA-Z0-9]{3,40}$"#).expect("Unable to init Regex");
+pub fn decode_name(val: String) -> String {
+    let regex_name = Regex::new(r#"^[a-z][a-z0-9\_]{3,40}$"#).expect("Unable to init Regex");
     match regex_name.is_match(val.as_str().as_ref()) {
         true => val.clone(),
         false => panic!("Invalid input name value"),
