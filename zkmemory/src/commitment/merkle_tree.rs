@@ -22,20 +22,22 @@ extern crate std;
 
 #[derive(Clone, Debug)]
 /// Merkle tree config
-pub struct MerkleTreeConfig<S: Spec<F, W, R>, F: Field + PrimeField, const W: usize, const R: usize>
-{
+pub struct MerkleTreeConfig<F: Field + PrimeField, const W: usize, const R: usize> {
     poseidon_config: PoseidonConfig<F, W, R>,
     advice: [Column<Advice>; 3],
+    pub instance: Column<Instance>,
     // the selectors
     selector_swap: Selector,
-    selector_root: Selector,
-    _marker: PhantomData<S>,
 }
 
 impl<S: Spec<F, W, R>, F: Field + PrimeField, const W: usize, const R: usize>
-    MerkleTreeConfig<S, F, W, R>
+    MerkleTreeConfig<F, W, R>
 {
-    fn configure(meta: &mut ConstraintSystem<F>, hash_inputs: [Column<Advice>; W]) -> Self {
+    fn configure(
+        meta: &mut ConstraintSystem<F>,
+        hash_inputs: [Column<Advice>; W],
+        instance: Column<Instance>,
+    ) -> Self {
         let selector = meta.fixed_column();
         let root = meta.instance_column();
         let selector_root = meta.selector();
@@ -50,14 +52,6 @@ impl<S: Spec<F, W, R>, F: Field + PrimeField, const W: usize, const R: usize>
         meta.enable_equality(col_a);
         meta.enable_equality(col_b);
         meta.enable_equality(col_c);
-
-        // checking if the final value is equal to the root of the tree
-        meta.create_gate("public instance", |meta| {
-            let advice = meta.query_advice(advice[2], Rotation::cur());
-            let root = meta.query_instance(root, Rotation::cur());
-            let selector_root = meta.query_selector(selector_root);
-            vec![selector_root * (advice - root)]
-        });
 
         // Enforces that if the swap bit (c) is on, l=b and r=a. Otherwise, l=a and r=b.
         // s * (c * 2 * (b - a) - (l - a) - (b - r)) = 0
@@ -83,9 +77,8 @@ impl<S: Spec<F, W, R>, F: Field + PrimeField, const W: usize, const R: usize>
         MerkleTreeConfig {
             poseidon_config,
             advice,
+            instance,
             selector_swap,
-            selector_root,
-            _marker: PhantomData,
         }
     }
 
@@ -156,7 +149,7 @@ impl<S: Spec<F, W, R>, F: Field + PrimeField, const W: usize, const R: usize>
         let pow5_chip = Pow5Chip::construct(self.poseidon_config.clone());
 
         // initialize the hasher
-        let hasher = Hash::<_, _, S, ConstantLength<2>, W, R>::init(
+        let hasher = Hash::<F, Pow5Chip<F, W, R>, S, ConstantLength<2>, W, R>::init(
             pow5_chip,
             layouter.namespace(|| "hasher"),
         )?;
@@ -166,21 +159,15 @@ impl<S: Spec<F, W, R>, F: Field + PrimeField, const W: usize, const R: usize>
 
 #[derive(Clone, Default)]
 /// circuit for verifying the correctness of the opening
-pub struct MemoryTreeCircuit<
-    S: Spec<F, W, R>,
-    F: Field + PrimeField,
-    const W: usize,
-    const R: usize,
-> {
-    root: F,
-    path: Vec<F>,
-    sibling: Vec<F>,
-    _marker: PhantomData<S>,
+pub struct MemoryTreeCircuit<F: Field + PrimeField, const W: usize, const R: usize> {
+    leaf: Value<F>,
+    elements: Vec<Value<F>>,
+    indices: Vec<Value<F>>,
 }
-impl<S: Spec<F, W, R>, F: Field + PrimeField, const W: usize, const R: usize> Circuit<F>
-    for MemoryTreeCircuit<S, F, W, R>
+impl<F: Field + PrimeField, const W: usize, const R: usize> Circuit<F>
+    for MemoryTreeCircuit<F, W, R>
 {
-    type Config = MerkleTreeConfig<S, F, W, R>;
+    type Config = MerkleTreeConfig<F, W, R>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -188,7 +175,9 @@ impl<S: Spec<F, W, R>, F: Field + PrimeField, const W: usize, const R: usize> Ci
     }
 
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-        MerkleTreeConfig::<S, F, W, R>::configure(meta)
+        let hash_inputs = [0; W].map(|_| meta.advice_column());
+        let instance = meta.instance_column();
+        MerkleTreeConfig::<F, W, R>::configure(meta, hash_inputs, instance)
     }
 
     fn synthesize(
@@ -196,21 +185,28 @@ impl<S: Spec<F, W, R>, F: Field + PrimeField, const W: usize, const R: usize> Ci
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        let size = self.path.len() - 1;
+        let leaf_cell = config.assing_leaf(layouter.namespace(|| "assign leaf"), self.leaf)?;
+        let mut digest = config.merkle_prove_layer(
+            layouter.namespace(|| "merkle_prove"),
+            &leaf_cell,
+            self.elements[0],
+            self.indices[0],
+        )?;
 
+        for i in 1..self.elements.len() {
+            digest = config.merkle_prove_layer(
+                layouter.namespace(|| "next level"),
+                &digest,
+                self.elements[i],
+                self.indices[i],
+            )?;
+        }
+
+        layouter.constrain_instance(leaf_cell.cell(), config.instance, 0);
+        layouter.constrain_instance(digest.cell(), config.instance, 1);
         Ok(())
     }
 }
 
-impl<S: Spec<F, W, R>, F: Field + PrimeField, const W: usize, const R: usize>
-    MemoryTreeCircuit<S, F, W, R>
-{
-    fn assign(
-        &self,
-        config: MerkleTreeConfig<S, F, W, R>,
-        region: &mut Region<'_, F>,
-        offset: usize,
-    ) -> Result<(), Error> {
-        Ok(())
-    }
-}
+#[cfg(test)]
+mod tests {}
