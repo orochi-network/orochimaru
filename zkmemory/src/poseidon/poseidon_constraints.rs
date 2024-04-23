@@ -359,8 +359,6 @@ struct HashCircuit<
     const L: usize,
 > {
     message: Value<[F; L]>,
-    // For the purpose of this test, witness the result.
-    // TODO: Move this into an instance column.
     output: Value<F>,
     _marker: PhantomData<S>,
 }

@@ -471,7 +471,7 @@ mod tests {
 
         let (round_constants, mds, _) = OrchardNullifier::constants();
 
-        let hasher = HashTest::<_, OrchardNullifier, ConstantLength<2>, 3, 2>::init();
+        let hasher = HashTest::<Fp, OrchardNullifier, ConstantLength<2>, 3, 2>::init();
         let result = hasher.hash(message);
 
         // The result should be equivalent to just directly applying the permutation and
