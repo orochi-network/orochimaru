@@ -1,7 +1,6 @@
 extern crate alloc;
 extern crate std;
 use crate::poseidon::{
-    self,
     poseidon::{ConstantLength, HashTest, Spec},
 };
 use alloc::{vec, vec::Vec};
@@ -9,14 +8,12 @@ use core::fmt::Debug;
 use core::marker::PhantomData;
 use ff::{Field, PrimeField};
 use halo2_proofs::{
-    circuit::{AssignedCell, Layouter, Region, SimpleFloorPlanner, Value},
+    circuit::{Layouter, Region, SimpleFloorPlanner, Value},
     plonk::{
         Advice, Circuit, Column, ConstraintSystem, Error, Expression, Fixed, Instance, Selector,
     },
     poly::Rotation,
 };
-use poseidon::poseidon_constraints::*;
-use rand::thread_rng;
 use std::println;
 
 #[derive(Clone, Copy, Debug)]
