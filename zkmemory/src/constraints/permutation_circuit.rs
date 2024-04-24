@@ -145,11 +145,9 @@ impl<F: Field + PrimeField> Circuit<F> for PermutationCircuit<F> {
 
     // Method: configure: this step is easily implemented by using shuffle API
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-        let input_idx = meta.advice_column();
         let input = meta.fixed_column();
-        let shuffle_idx = meta.advice_column();
         let shuffle = meta.advice_column();
-        ShuffleChip::configure(meta, input_idx, input, shuffle_idx, shuffle)
+        ShuffleChip::configure(meta, input, shuffle)
     }
 
     // Method: synthesize
@@ -162,15 +160,7 @@ impl<F: Field + PrimeField> Circuit<F> for PermutationCircuit<F> {
         layouter.assign_region(
             || "load inputs",
             |mut region| {
-                for (i, (input_idx, input)) in
-                    self.input_idx.iter().zip(self.input.iter()).enumerate()
-                {
-                    region.assign_advice(
-                        || "input_idx",
-                        shuffle_chip.config.input_0,
-                        i,
-                        || *input_idx,
-                    )?;
+                for (i, input) in self.input.iter().enumerate() {
                     region.assign_fixed(
                         || "input",
                         shuffle_chip.config.input_1,
@@ -185,15 +175,7 @@ impl<F: Field + PrimeField> Circuit<F> for PermutationCircuit<F> {
         layouter.assign_region(
             || "load shuffles",
             |mut region| {
-                for (i, (shuffle_idx, shuffle)) in
-                    self.shuffle_idx.iter().zip(self.shuffle.iter()).enumerate()
-                {
-                    region.assign_advice(
-                        || "shuffle_index",
-                        shuffle_chip.config.shuffle_0,
-                        i,
-                        || *shuffle_idx,
-                    )?;
+                for (i, shuffle) in shuffle.iter().enumerate() {
                     region.assign_advice(
                         || "shuffle_value",
                         shuffle_chip.config.shuffle_1,
