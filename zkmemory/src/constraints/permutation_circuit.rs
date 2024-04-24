@@ -175,7 +175,7 @@ impl<F: Field + PrimeField> Circuit<F> for PermutationCircuit<F> {
         layouter.assign_region(
             || "load shuffles",
             |mut region| {
-                for (i, shuffle) in shuffle.iter().enumerate() {
+                for (i, shuffle) in self.shuffle.iter().enumerate() {
                     region.assign_advice(
                         || "shuffle_value",
                         shuffle_chip.config.shuffle_1,
@@ -263,8 +263,8 @@ where
 impl<F: Field + PrimeField> PermutationCircuit<F> {
     /// Create a new permutation circuit with two traces and a random seed
     pub fn new<K, V, const S: usize, const T: usize>(
-        input_trace: Vec<(F, TraceRecord<K, V, S, T>)>,
-        shuffle_trace: Vec<(F, TraceRecord<K, V, S, T>)>,
+        input_trace: Vec<TraceRecord<K, V, S, T>>,
+        shuffle_trace: Vec<TraceRecord<K, V, S, T>>,
     ) -> Self
     where
         K: Base<S>,
@@ -282,25 +282,15 @@ impl<F: Field + PrimeField> PermutationCircuit<F> {
         rng.fill(&mut seeds);
 
         Self {
-            input_idx: input_trace
-                .clone()
-                .into_iter()
-                .map(|(x, _)| Value::known(x))
-                .collect(),
             input: input_trace
                 .clone()
                 .into_iter()
-                .map(|(_, mut x)| x.compress(seeds))
-                .collect(),
-            shuffle_idx: shuffle_trace
-                .clone()
-                .into_iter()
-                .map(|(x, _)| Value::known(x))
+                .map(|mut x| x.compress(seeds))
                 .collect(),
             shuffle: shuffle_trace
                 .clone()
                 .into_iter()
-                .map(|(_, mut x)| Value::known(x.compress(seeds)))
+                .map(|mut x| Value::known(x.compress(seeds)))
                 .collect(),
         }
     }
@@ -328,25 +318,12 @@ where
     }
 }
 
-/// Generate an array of successive powers of group generators as indexes
-pub fn successive_powers<F: Field + PrimeField>(size: u64) -> Vec<F> {
-    let mut curr_power = F::from(1);
-    let mut result = vec![];
-    for _ in 0..size {
-        result.push(curr_power);
-        curr_power *= F::MULTIPLICATIVE_GENERATOR;
-    }
-    result
-}
-
 #[cfg(test)]
 mod tests {
 
     use crate::{
         base::{Base, B256},
-        constraints::permutation_circuit::{
-            successive_powers, PermutationCircuit, PermutationProver,
-        },
+        constraints::permutation_circuit::{PermutationCircuit, PermutationProver},
         machine::{AbstractTraceRecord, MemoryInstruction, TraceRecord},
     };
     use ff::Field;
@@ -366,10 +343,9 @@ mod tests {
         F: Field + PrimeField,
     >(
         size: u64,
-    ) -> Vec<(F, TraceRecord<K, V, S, T>)> {
-        successive_powers::<F>(size)
-            .into_iter()
-            .map(|i| (i, random_trace_record::<K, V, S, T>()))
+    ) -> Vec<TraceRecord<K, V, S, T>> {
+        (0..size)
+            .map(|_| random_trace_record::<K, V, S, T>())
             .collect()
     }
 
@@ -403,21 +379,14 @@ mod tests {
         let mut arr: Vec<(Fp, Fp)> = (1..30)
             .map(|x| (Fp::from(x), Fp::from(rng.gen_range(0..u64::MAX))))
             .collect();
-        let input_idx: Vec<Value<Fp>> = arr.iter().map(|&(x, _)| Value::known(x)).collect();
         let input: Vec<Fp> = arr.iter().map(|&(_, x)| x).collect();
 
         // Random shuffle
         arr.shuffle(&mut rng);
 
-        let shuffle_idx: Vec<Value<Fp>> = arr.iter().map(|&(x, _)| Value::known(x)).collect();
         let shuffle: Vec<Value<Fp>> = arr.iter().map(|&(_, x)| Value::known(x)).collect();
 
-        let circuit = PermutationCircuit {
-            input_idx,
-            input,
-            shuffle_idx,
-            shuffle,
-        };
+        let circuit = PermutationCircuit { input, shuffle };
 
         // Test with IPA prover
         let mut ipa_prover = PermutationProver::<EqAffine>::new(K, circuit, true);
@@ -484,7 +453,7 @@ mod tests {
         let mut shuffle_trace = trace_buffer.clone();
 
         // Tamper shuffle_trace
-        shuffle_trace[1].1 = random_trace_record::<B256, B256, 32, 32>();
+        shuffle_trace[1] = random_trace_record::<B256, B256, 32, 32>();
 
         let circuit = PermutationCircuit::<Fp>::new(input_trace, shuffle_trace);
 
