@@ -1,59 +1,15 @@
-extern crate alloc;
+// The implelemtation of Poseidon hash, with most details from
+// https://github.com/zcash/halo2/blob/main/halo2_gadgets/src/poseidon/primitives.rs
+// The hash function is used in some circuits for verifying the correctness of
+// Merkle tree and Verkle tree opening proofs.
 
+extern crate alloc;
 use alloc::{fmt, format, string::String, vec::Vec};
 use core::{fmt::Debug, iter, marker::PhantomData};
 use ff::{Field, PrimeField};
-use halo2_proofs::{
-    circuit::{AssignedCell, Cell, Chip, Layouter, Value},
-    plonk::Error,
-};
 
-extern crate std;
-
-/// Trait for a variable in the circuit.
-pub trait Var<F: Field>: Clone + Debug + From<AssignedCell<F, F>> {
-    /// The cell at which this variable was allocated.
-    fn cell(&self) -> Cell;
-
-    /// The value allocated to this variable.
-    fn value(&self) -> Value<F>;
-}
-
-impl<F: Field> Var<F> for AssignedCell<F, F> {
-    fn cell(&self) -> Cell {
-        self.cell()
-    }
-
-    fn value(&self) -> Value<F> {
-        self.value().cloned()
-    }
-}
-
-/// A word in the Poseidon state.
-#[derive(Clone, Debug)]
-pub struct StateWord<F: Field + PrimeField>(pub AssignedCell<F, F>);
-
-impl<F: Field + PrimeField> From<StateWord<F>> for AssignedCell<F, F> {
-    fn from(state_word: StateWord<F>) -> AssignedCell<F, F> {
-        state_word.0
-    }
-}
-
-impl<F: Field + PrimeField> From<AssignedCell<F, F>> for StateWord<F> {
-    fn from(cell_value: AssignedCell<F, F>) -> StateWord<F> {
-        StateWord(cell_value)
-    }
-}
-
-impl<F: Field + PrimeField> Var<F> for StateWord<F> {
-    fn cell(&self) -> Cell {
-        self.0.cell()
-    }
-
-    fn value(&self) -> Value<F> {
-        self.0.value().cloned()
-    }
-}
+/// The type of a square matrix of size T
+pub(crate) type Mtrx<F, const T: usize> = [[F; T]; T];
 
 pub trait Spec<F: Field + PrimeField, const T: usize, const R: usize>: fmt::Debug {
     /// The number of full rounds for this specification.
@@ -75,7 +31,7 @@ pub trait Spec<F: Field + PrimeField, const T: usize, const R: usize>: fmt::Debu
     fn secure_mds() -> usize;
 
     /// Generates `(round_constants, mds, mds^-1)` corresponding to this specification.
-    fn constants() -> (Vec<[F; T]>, [[F; T]; T], [[F; T]; T]);
+    fn constants() -> (Vec<[F; T]>, Mtrx<F, T>, Mtrx<F, T>);
 }
 
 pub trait Domain<F: Field + PrimeField, const R: usize> {
@@ -130,7 +86,7 @@ impl<F: fmt::Debug, const R: usize> Absorbing<F, R> {
                 .chain((1..R).map(|_| None))
                 .collect::<Vec<_>>()
                 .try_into()
-                .unwrap(),
+                .expect("cannot init"),
         )
     }
 }
@@ -149,68 +105,13 @@ pub(crate) type State<F, const T: usize> = [F; T];
 /// The type used to hold sponge rate.
 pub(crate) type SpongeRate<F, const R: usize> = [Option<F>; R];
 
-/// A word from the padded input to a Poseidon sponge.
-#[derive(Clone, Debug)]
-pub enum PaddedWord<F: Field + PrimeField> {
-    /// A message word provided by the prover.
-    Message(AssignedCell<F, F>),
-    /// A padding word, that will be fixed in the circuit parameters.
-    Padding(F),
-}
-
-/// The set of circuit instructions required to use the Poseidon permutation.
-pub trait PoseidonInstructions<
-    F: Field + PrimeField,
-    S: Spec<F, T, R>,
-    const T: usize,
-    const R: usize,
->: Chip<F>
-{
-    /// Variable representing the word over which the Poseidon permutation operates.
-    type Word: Clone + fmt::Debug + From<AssignedCell<F, F>> + Into<AssignedCell<F, F>>;
-
-    /// Applies the Poseidon permutation to the given state.
-    fn permute(
-        &self,
-        layouter: &mut impl Layouter<F>,
-        initial_state: &State<Self::Word, T>,
-    ) -> Result<State<Self::Word, T>, Error>;
-}
-
-/// The set of circuit instructions required to use the [`Sponge`] and [`Hash`] gadgets.
-///
-/// [`Hash`]: self::Hash
-pub trait PoseidonSpongeInstructions<
-    F: Field + PrimeField,
-    S: Spec<F, T, R>,
-    D: Domain<F, R>,
-    const T: usize,
-    const R: usize,
->: PoseidonInstructions<F, S, T, R>
-{
-    /// Returns the initial empty state for the given domain.
-    fn initial_state(&self, layouter: &mut impl Layouter<F>)
-        -> Result<State<Self::Word, T>, Error>;
-
-    /// Adds the given input to the state.
-    fn add_input(
-        &self,
-        layouter: &mut impl Layouter<F>,
-        initial_state: &State<Self::Word, T>,
-        input: &Absorbing<PaddedWord<F>, R>,
-    ) -> Result<State<Self::Word, T>, Error>;
-
-    /// Extracts sponge output from the given state.
-    fn get_output(state: &State<Self::Word, T>) -> Squeezing<Self::Word, R>;
-}
-
 /// A Poseidon sponge.
 pub(crate) struct Sponge<
     F: Field + PrimeField,
-    S: Spec<F, T, RATE>,
+    S: Spec<F, T, R>,
     M: SpongeMode,
     const T: usize,
-    const RATE: usize,
+    const R: usize,
 > {
     mode: M,
     state: State<F, T>,
@@ -219,23 +120,23 @@ pub(crate) struct Sponge<
     _marker: PhantomData<S>,
 }
 
-impl<F: Field + PrimeField, S: Spec<F, T, RATE>, const T: usize, const RATE: usize>
-    Sponge<F, S, Absorbing<F, RATE>, T, RATE>
+impl<F: Field + PrimeField, S: Spec<F, T, R>, const T: usize, const R: usize>
+    Sponge<F, S, Absorbing<F, R>, T, R>
 {
     /// Constructs a new sponge for the given Poseidon specification.
     pub(crate) fn new(initial_capacity_element: F) -> Self {
         let (round_constants, mds_matrix, _) = S::constants();
 
-        let mode = Absorbing([None; RATE]);
+        let mode = Absorbing([None; R]);
         let mut state = [F::ZERO; T];
-        state[RATE] = initial_capacity_element;
+        state[R] = initial_capacity_element;
 
         Sponge {
             mode,
             state,
             mds_matrix,
             round_constants,
-            _marker: PhantomData::default(),
+            _marker: PhantomData,
         }
     }
 
@@ -249,7 +150,7 @@ impl<F: Field + PrimeField, S: Spec<F, T, RATE>, const T: usize, const RATE: usi
         }
 
         // We've already absorbed as many elements as we can
-        let _ = poseidon_sponge::<F, S, T, RATE>(
+        let _ = poseidon_sponge::<F, S, T, R>(
             &mut self.state,
             Some(&self.mode),
             &self.mds_matrix,
@@ -259,8 +160,8 @@ impl<F: Field + PrimeField, S: Spec<F, T, RATE>, const T: usize, const RATE: usi
     }
 
     /// Transitions the sponge into its squeezing state.
-    pub(crate) fn finish_absorbing(mut self) -> Sponge<F, S, Squeezing<F, RATE>, T, RATE> {
-        let mode = poseidon_sponge::<F, S, T, RATE>(
+    pub(crate) fn finish_absorbing(mut self) -> Sponge<F, S, Squeezing<F, R>, T, R> {
+        let mode = poseidon_sponge::<F, S, T, R>(
             &mut self.state,
             Some(&self.mode),
             &self.mds_matrix,
@@ -272,22 +173,17 @@ impl<F: Field + PrimeField, S: Spec<F, T, RATE>, const T: usize, const RATE: usi
             state: self.state,
             mds_matrix: self.mds_matrix,
             round_constants: self.round_constants,
-            _marker: PhantomData::default(),
+            _marker: PhantomData,
         }
     }
 }
 
-fn poseidon_sponge<
-    F: Field + PrimeField,
-    S: Spec<F, T, RATE>,
-    const T: usize,
-    const RATE: usize,
->(
+fn poseidon_sponge<F: Field + PrimeField, S: Spec<F, T, R>, const T: usize, const R: usize>(
     state: &mut State<F, T>,
-    input: Option<&Absorbing<F, RATE>>,
+    input: Option<&Absorbing<F, R>>,
     mds_matrix: &[[F; T]; T],
     round_constants: &[[F; T]],
-) -> Squeezing<F, RATE> {
+) -> Squeezing<F, R> {
     if let Some(Absorbing(input)) = input {
         // `Iterator::zip` short-circuits when one iterator completes, so this will only
         // mutate the rate portion of the state.
@@ -296,9 +192,9 @@ fn poseidon_sponge<
         }
     }
 
-    permute::<F, S, T, RATE>(state, mds_matrix, round_constants);
+    permute::<F, S, T, R>(state, mds_matrix, round_constants);
 
-    let mut output = [None; RATE];
+    let mut output = [None; R];
     for (word, value) in output.iter_mut().zip(state.iter()) {
         *word = Some(*value);
     }
@@ -306,12 +202,7 @@ fn poseidon_sponge<
 }
 
 /// Runs the Poseidon permutation on the given state.
-pub(crate) fn permute<
-    F: Field + PrimeField,
-    S: Spec<F, T, RATE>,
-    const T: usize,
-    const RATE: usize,
->(
+pub(crate) fn permute<F: Field + PrimeField, S: Spec<F, T, R>, const T: usize, const R: usize>(
     state: &mut State<F, T>,
     mds: &[[F; T]; T],
     round_constants: &[[F; T]],
@@ -358,8 +249,8 @@ pub(crate) fn permute<
         });
 }
 
-impl<F: Field + PrimeField, S: Spec<F, T, RATE>, const T: usize, const RATE: usize>
-    Sponge<F, S, Squeezing<F, RATE>, T, RATE>
+impl<F: Field + PrimeField, S: Spec<F, T, R>, const T: usize, const R: usize>
+    Sponge<F, S, Squeezing<F, R>, T, R>
 {
     /// Squeezes an element from the sponge.
     pub(crate) fn squeeze(&mut self) -> F {
@@ -371,7 +262,7 @@ impl<F: Field + PrimeField, S: Spec<F, T, RATE>, const T: usize, const RATE: usi
             }
 
             // We've already squeezed out all available elements
-            self.mode = poseidon_sponge::<F, S, T, RATE>(
+            self.mode = poseidon_sponge::<F, S, T, R>(
                 &mut self.state,
                 None,
                 &self.mds_matrix,
@@ -384,45 +275,35 @@ impl<F: Field + PrimeField, S: Spec<F, T, RATE>, const T: usize, const RATE: usi
 /// A Poseidon hash function, built around a sponge.
 pub struct HashTest<
     F: Field + PrimeField,
-    S: Spec<F, T, RATE>,
-    D: Domain<F, RATE>,
+    S: Spec<F, T, R>,
+    D: Domain<F, R>,
     const T: usize,
-    const RATE: usize,
+    const R: usize,
 > {
-    sponge: Sponge<F, S, Absorbing<F, RATE>, T, RATE>,
+    sponge: Sponge<F, S, Absorbing<F, R>, T, R>,
     _domain: PhantomData<D>,
 }
 
-impl<
-        F: Field + PrimeField,
-        S: Spec<F, T, RATE>,
-        D: Domain<F, RATE>,
-        const T: usize,
-        const RATE: usize,
-    > HashTest<F, S, D, T, RATE>
+impl<F: Field + PrimeField, S: Spec<F, T, R>, D: Domain<F, R>, const T: usize, const R: usize>
+    HashTest<F, S, D, T, R>
 {
     /// Initializes a new hasher.
     pub fn init() -> Self {
         HashTest {
             sponge: Sponge::new(D::initial_capacity_element()),
-            _domain: PhantomData::default(),
+            _domain: PhantomData,
         }
     }
 }
 
-impl<
-        F: Field + PrimeField,
-        S: Spec<F, T, RATE>,
-        const T: usize,
-        const RATE: usize,
-        const L: usize,
-    > HashTest<F, S, ConstantLength<L>, T, RATE>
+impl<F: Field + PrimeField, S: Spec<F, T, R>, const T: usize, const R: usize, const L: usize>
+    HashTest<F, S, ConstantLength<L>, T, R>
 {
     /// Hashes the given input.
     pub fn hash(mut self, message: [F; L]) -> F {
         for value in message
             .into_iter()
-            .chain(<ConstantLength<L> as Domain<F, RATE>>::padding(L))
+            .chain(<ConstantLength<L> as Domain<F, R>>::padding(L))
         {
             self.sponge.absorb(value);
         }
@@ -430,39 +311,38 @@ impl<
     }
 }
 
+// Implelemt Spec<3,2> for generating specific constants for testing
+use crate::poseidon::poseidon_constants::{MDS, MDS_INV, ROUND_CONSTANTS};
+use halo2curves::pasta::Fp;
+///
+#[derive(Clone, Debug)]
+pub struct OrchardNullifier;
+
+impl Spec<Fp, 3, 2> for OrchardNullifier {
+    fn full_rounds() -> usize {
+        8
+    }
+
+    fn partial_rounds() -> usize {
+        56
+    }
+
+    fn sbox(val: Fp) -> Fp {
+        val.pow_vartime([5])
+    }
+
+    fn secure_mds() -> usize {
+        unimplemented!()
+    }
+    fn constants() -> (Vec<[Fp; 3]>, Mtrx<Fp, 3>, Mtrx<Fp, 3>) {
+        (ROUND_CONSTANTS[..].to_vec(), MDS, MDS_INV)
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    extern crate alloc;
     use super::*;
-    use crate::poseidon::poseidon_constants::*;
-    use alloc::vec::Vec;
-    use ff::{Field, PrimeField};
-    use halo2curves::pasta::Fp;
-
-    ///
-    #[derive(Debug)]
-    pub struct OrchardNullifier;
-
-    impl Spec<Fp, 3, 2> for OrchardNullifier {
-        fn full_rounds() -> usize {
-            8
-        }
-
-        fn partial_rounds() -> usize {
-            56
-        }
-
-        fn sbox(val: Fp) -> Fp {
-            val.pow_vartime([5])
-        }
-
-        fn secure_mds() -> usize {
-            unimplemented!()
-        }
-        fn constants() -> (Vec<[Fp; 3]>, [[Fp; 3]; 3], [[Fp; 3]; 3]) {
-            (ROUND_CONSTANTS[..].to_vec(), MDS, MDS_INV)
-        }
-    }
+    use ff::PrimeField;
 
     use halo2curves::pasta::pallas::Base;
     #[test]

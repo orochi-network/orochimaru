@@ -1,20 +1,15 @@
 extern crate alloc;
 extern crate std;
-use crate::poseidon::{
-    poseidon::{ConstantLength, HashTest, Spec},
-};
+use crate::poseidon::poseidon_hash::{ConstantLength, HashTest, Spec};
 use alloc::{vec, vec::Vec};
 use core::fmt::Debug;
 use core::marker::PhantomData;
 use ff::{Field, PrimeField};
 use halo2_proofs::{
     circuit::{Layouter, Region, SimpleFloorPlanner, Value},
-    plonk::{
-        Advice, Circuit, Column, ConstraintSystem, Error, Expression, Fixed, Instance, Selector,
-    },
+    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Expression, Fixed, Instance},
     poly::Rotation,
 };
-use std::println;
 
 #[derive(Clone, Copy, Debug)]
 /// Merkle tree config
@@ -32,8 +27,8 @@ impl<F: Field + PrimeField> MerkleTreeConfig<F> {
         let advice = [0; 3].map(|_| meta.advice_column());
         let indices = meta.advice_column();
         let selector = meta.fixed_column();
-        for i in 0..3 {
-            meta.enable_equality(advice[i]);
+        for i in advice {
+            meta.enable_equality(i);
         }
         let one = Expression::Constant(F::ONE);
         meta.create_gate("xxxx", |meta| {
@@ -43,9 +38,16 @@ impl<F: Field + PrimeField> MerkleTreeConfig<F> {
             let selector = meta.query_fixed(selector, Rotation::cur());
             vec![
                 selector
-                    * ((one - indices.clone()) * (advice_cur[0].clone() - advice_prev[2].clone())
+                    * ((one.clone() - indices.clone())
+                        * (advice_cur[0].clone() - advice_prev[2].clone())
                         + indices * (advice_cur[1].clone() - advice_prev[2].clone())),
             ]
+        });
+
+        meta.create_gate("indices must be 0 or 1", |meta| {
+            let indices = meta.query_advice(indices, Rotation::cur());
+            let selector = meta.query_fixed(selector, Rotation::cur());
+            vec![selector * indices.clone() * (one - indices)]
         });
 
         MerkleTreeConfig {
@@ -107,8 +109,6 @@ impl<S: Spec<F, W, R> + Clone, F: Field + PrimeField, const W: usize, const R: u
                     let digest = self.assign(v[i], &mut region, config, i);
                     v.push(digest.unwrap());
                 }
-
-                println!("{:?}", v[self.indices.len()]);
                 Ok(())
             },
         )?;
@@ -137,8 +137,8 @@ impl<S: Spec<F, W, R> + Clone, F: Field + PrimeField, const W: usize, const R: u
             },
         )?;
 
-        layouter.constrain_instance(leaf_cell.cell(), config.clone().instance, 0)?;
-        layouter.constrain_instance(digest.cell(), config.clone().instance, 1)?;
+        layouter.constrain_instance(leaf_cell.cell(), config.instance, 0)?;
+        layouter.constrain_instance(digest.cell(), config.instance, 1)?;
         Ok(())
     }
 }
@@ -210,43 +210,12 @@ impl<S: Spec<F, W, R> + Clone, F: Field + PrimeField, const W: usize, const R: u
 #[cfg(test)]
 mod tests {
     extern crate alloc;
-    extern crate std;
-    use core::marker::PhantomData;
-    use std::println;
-
-    use crate::poseidon::poseidon::*;
-    use crate::poseidon::poseidon_constants::*;
+    use super::MemoryTreeCircuit;
+    use crate::poseidon::poseidon_hash::*;
     use alloc::vec;
     use alloc::vec::Vec;
-    use ff::Field;
+    use core::marker::PhantomData;
     use halo2_proofs::{dev::MockProver, halo2curves::pasta::Fp};
-
-    use super::MemoryTreeCircuit;
-
-    ///
-    #[derive(Clone, Debug)]
-    pub struct OrchardNullifier;
-
-    impl Spec<Fp, 3, 2> for OrchardNullifier {
-        fn full_rounds() -> usize {
-            8
-        }
-
-        fn partial_rounds() -> usize {
-            56
-        }
-
-        fn sbox(val: Fp) -> Fp {
-            val.pow_vartime([5])
-        }
-
-        fn secure_mds() -> usize {
-            unimplemented!()
-        }
-        fn constants() -> (Vec<[Fp; 3]>, [[Fp; 3]; 3], [[Fp; 3]; 3]) {
-            (ROUND_CONSTANTS[..].to_vec(), MDS, MDS_INV)
-        }
-    }
 
     fn compute_merkle_root(leaf: &u64, elements: &Vec<u64>, indices: &Vec<u64>) -> Fp {
         let k = elements.len();
@@ -268,8 +237,8 @@ mod tests {
     fn test_correct_merkle_proof() {
         let leaf = 0u64;
         let k = 10;
-        let indices = vec![0u64, 0u64];
-        let elements = vec![3u64, 4u64];
+        let indices = vec![0u64, 0u64, 0u64, 0u64];
+        let elements = vec![3u64, 4u64, 5u64, 6u64];
         let root = compute_merkle_root(&leaf, &elements, &indices);
         let leaf_fp = Fp::from(leaf);
         let indices = indices.iter().map(|x| Fp::from(*x)).collect();
@@ -283,5 +252,47 @@ mod tests {
         let prover = MockProver::run(k, &circuit, vec![vec![Fp::from(leaf), root]])
             .expect("Cannot run the circuit");
         assert_eq!(prover.verify(), Ok(()));
+    }
+
+    #[test]
+    fn test_correct_merkle_proof_part2() {
+        let leaf = 0u64;
+        let k = 10;
+        let indices = vec![0u64, 0u64, 1u64, 1u64];
+        let elements = vec![3u64, 4u64, 5u64, 6u64];
+        let root = compute_merkle_root(&leaf, &elements, &indices);
+        let leaf_fp = Fp::from(leaf);
+        let indices = indices.iter().map(|x| Fp::from(*x)).collect();
+        let elements = elements.iter().map(|x| Fp::from(*x)).collect();
+        let circuit = MemoryTreeCircuit::<OrchardNullifier, Fp, 3, 2> {
+            leaf: leaf_fp,
+            indices,
+            elements,
+            _marker: PhantomData,
+        };
+        let prover = MockProver::run(k, &circuit, vec![vec![Fp::from(leaf), root]])
+            .expect("Cannot run the circuit");
+        assert_eq!(prover.verify(), Ok(()));
+    }
+
+    #[test]
+    fn test_wrong_merkle_proof() {
+        let leaf = 0u64;
+        let k = 10;
+        let indices = vec![0u64, 0u64, 1u64, 1u64];
+        let elements = vec![3u64, 4u64, 5u64, 6u64];
+        let root = Fp::from(0);
+        let leaf_fp = Fp::from(leaf);
+        let indices = indices.iter().map(|x| Fp::from(*x)).collect();
+        let elements = elements.iter().map(|x| Fp::from(*x)).collect();
+        let circuit = MemoryTreeCircuit::<OrchardNullifier, Fp, 3, 2> {
+            leaf: leaf_fp,
+            indices,
+            elements,
+            _marker: PhantomData,
+        };
+        let prover = MockProver::run(k, &circuit, vec![vec![Fp::from(leaf), root]])
+            .expect("Cannot run the circuit");
+        assert_ne!(prover.verify(), Ok(()));
     }
 }
