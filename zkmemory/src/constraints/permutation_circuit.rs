@@ -327,7 +327,6 @@ mod tests {
         machine::{AbstractTraceRecord, MemoryInstruction, TraceRecord},
     };
     use ff::Field;
-    use group::ff::PrimeField;
     use halo2_proofs::circuit::Value;
     use halo2curves::pasta::{EqAffine, Fp};
     use rand::{seq::SliceRandom, Rng};
@@ -335,13 +334,7 @@ mod tests {
     use alloc::vec::Vec;
 
     // Randomly create a vector of 2-tuple of trace elements and an index value (for testing)
-    fn random_trace<
-        K: Base<S>,
-        V: Base<T>,
-        const S: usize,
-        const T: usize,
-        F: Field + PrimeField,
-    >(
+    fn random_trace<K: Base<S>, V: Base<T>, const S: usize, const T: usize>(
         size: u64,
     ) -> Vec<TraceRecord<K, V, S, T>> {
         (0..size)
@@ -401,7 +394,7 @@ mod tests {
         // Number of trace elements in a trace, min = 2^K.
         let trace_size = 50;
         let mut rng = rand::thread_rng();
-        let mut trace_buffer = random_trace::<B256, B256, 32, 32, Fp>(trace_size);
+        let mut trace_buffer = random_trace::<B256, B256, 32, 32>(trace_size);
 
         let input_trace = trace_buffer.clone();
         trace_buffer.shuffle(&mut rng);
@@ -446,7 +439,7 @@ mod tests {
         // Number of trace elements in a trace, min = 2^K.
         let trace_size = 50;
         let mut rng = rand::thread_rng();
-        let mut trace_buffer = random_trace::<B256, B256, 32, 32, Fp>(trace_size);
+        let mut trace_buffer = random_trace::<B256, B256, 32, 32>(trace_size);
 
         let input_trace = trace_buffer.clone();
         trace_buffer.shuffle(&mut rng);
@@ -470,7 +463,7 @@ mod tests {
         // Number of trace elements in a trace, min = 2^K.
         let trace_size = 50;
         let mut rng = rand::thread_rng();
-        let mut trace_buffer = random_trace::<B256, B256, 32, 32, Fp>(trace_size);
+        let mut trace_buffer = random_trace::<B256, B256, 32, 32>(trace_size);
         let input_trace = trace_buffer.clone();
         trace_buffer.shuffle(&mut rng);
         let mut shuffle_trace = trace_buffer.clone();
