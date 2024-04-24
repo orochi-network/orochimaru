@@ -68,7 +68,7 @@ pub(crate) struct MemoryConsistencyCircuit<F: Field + PrimeField + From<B256>> {
     /// shuffle_trace: Array after permutations (sorted by address and time_log)
     pub(crate) shuffle: Vec<TraceRecord<B256, B256, 32, 32>>,
     /// A marker since these fields do not use trait F
-    marker: PhantomData<F>,
+    pub(crate) marker: PhantomData<F>,
 }
 
 /// Implement the circuit extension for memory consistency circuit
