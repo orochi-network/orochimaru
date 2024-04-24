@@ -39,9 +39,7 @@ pub struct ShuffleChip<F: Field + PrimeField> {
 /// Define that chip config struct
 #[derive(Debug, Clone)]
 pub struct ShuffleConfig {
-    input_0: Column<Advice>,
     input_1: Column<Fixed>,
-    shuffle_0: Column<Advice>,
     shuffle_1: Column<Advice>,
     s_input: Selector,
     s_shuffle: Selector,
@@ -59,9 +57,7 @@ impl<F: Field + PrimeField> ShuffleChip<F> {
     /// Configure the gates
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
-        input_0: Column<Advice>,
         input_1: Column<Fixed>,
-        shuffle_0: Column<Advice>,
         shuffle_1: Column<Advice>,
     ) -> ShuffleConfig {
         let s_shuffle = meta.complex_selector();
@@ -69,20 +65,13 @@ impl<F: Field + PrimeField> ShuffleChip<F> {
         meta.shuffle("two traces are permutation of each other", |meta| {
             let s_input = meta.query_selector(s_input);
             let s_shuffle = meta.query_selector(s_shuffle);
-            let input_0 = meta.query_advice(input_0, Rotation::cur());
             let input_1 = meta.query_fixed(input_1, Rotation::cur());
-            let shuffle_0 = meta.query_advice(shuffle_0, Rotation::cur());
             let shuffle_1 = meta.query_advice(shuffle_1, Rotation::cur());
-            vec![
-                (s_input.clone() * input_0, s_shuffle.clone() * shuffle_0),
-                (s_input * input_1, s_shuffle * shuffle_1),
-            ]
+            vec![(s_input * input_1, s_shuffle * shuffle_1)]
         });
 
         ShuffleConfig {
-            input_0,
             input_1,
-            shuffle_0,
             shuffle_1,
             s_input,
             s_shuffle,
@@ -93,12 +82,8 @@ impl<F: Field + PrimeField> ShuffleChip<F> {
 /// Define the permutatioin circuit for the project
 #[derive(Default, Clone, Debug)]
 pub struct PermutationCircuit<F: Field + PrimeField> {
-    // input_idx: an array of indexes of the unpermuted array
-    pub(crate) input_idx: Vec<Value<F>>,
     // input: an unpermuted array
     pub(crate) input: Vec<F>,
-    // shuffle_idx: an array of indexes after permuting input
-    pub(crate) shuffle_idx: Vec<Value<F>>,
     // shuffle: permuted array from input
     pub(crate) shuffle: Vec<Value<F>>,
 }
@@ -114,15 +99,7 @@ impl<F: Field + PrimeField> CircuitExtension<F> for PermutationCircuit<F> {
         layouter.assign_region(
             || "load inputs",
             |mut region| {
-                for (i, (input_idx, input)) in
-                    self.input_idx.iter().zip(self.input.iter()).enumerate()
-                {
-                    region.assign_advice(
-                        || "input_idx",
-                        shuffle_chip.config.input_0,
-                        i,
-                        || *input_idx,
-                    )?;
+                for (i, input) in self.input.iter().enumerate() {
                     region.assign_fixed(
                         || "input",
                         shuffle_chip.config.input_1,
@@ -137,15 +114,7 @@ impl<F: Field + PrimeField> CircuitExtension<F> for PermutationCircuit<F> {
         layouter.assign_region(
             || "load shuffles",
             |mut region| {
-                for (i, (shuffle_idx, shuffle)) in
-                    self.shuffle_idx.iter().zip(self.shuffle.iter()).enumerate()
-                {
-                    region.assign_advice(
-                        || "shuffle_index",
-                        shuffle_chip.config.shuffle_0,
-                        i,
-                        || *shuffle_idx,
-                    )?;
+                for (i, shuffle) in self.shuffle.iter().enumerate() {
                     region.assign_advice(
                         || "shuffle_value",
                         shuffle_chip.config.shuffle_1,
