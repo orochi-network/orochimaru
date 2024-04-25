@@ -1,6 +1,6 @@
 extern crate alloc;
 extern crate std;
-use crate::poseidon::poseidon_hash::{ConstantLength, HashTest, Spec};
+use crate::poseidon::poseidon_hash::{ConstantLength, Hash, Spec};
 use alloc::{vec, vec::Vec};
 use core::fmt::Debug;
 use core::marker::PhantomData;
@@ -18,8 +18,7 @@ pub struct MerkleTreeConfig<F: Field + PrimeField> {
     indices: Column<Advice>,
     pub instance: Column<Instance>,
     selector: Column<Fixed>,
-    // the selectors
-    _marker: PhantomData<F>,
+    _marker0: PhantomData<F>,
 }
 
 impl<F: Field + PrimeField> MerkleTreeConfig<F> {
@@ -31,18 +30,21 @@ impl<F: Field + PrimeField> MerkleTreeConfig<F> {
             meta.enable_equality(i);
         }
         let one = Expression::Constant(F::ONE);
-        meta.create_gate("xxxx", |meta| {
-            let advice_cur = advice.map(|x| meta.query_advice(x, Rotation::cur()));
-            let advice_prev = advice.map(|x| meta.query_advice(x, Rotation::prev()));
-            let indices = meta.query_advice(indices, Rotation::cur());
-            let selector = meta.query_fixed(selector, Rotation::cur());
-            vec![
-                selector
-                    * ((one.clone() - indices.clone())
-                        * (advice_cur[0].clone() - advice_prev[2].clone())
-                        + indices * (advice_cur[1].clone() - advice_prev[2].clone())),
-            ]
-        });
+        meta.create_gate(
+            "output of the current layer is equal to the left or right input of the next layer",
+            |meta| {
+                let advice_cur = advice.map(|x| meta.query_advice(x, Rotation::cur()));
+                let advice_prev = advice.map(|x| meta.query_advice(x, Rotation::prev()));
+                let indices = meta.query_advice(indices, Rotation::cur());
+                let selector = meta.query_fixed(selector, Rotation::cur());
+                vec![
+                    selector
+                        * ((one.clone() - indices.clone())
+                            * (advice_cur[0].clone() - advice_prev[2].clone())
+                            + indices * (advice_cur[1].clone() - advice_prev[2].clone())),
+                ]
+            },
+        );
 
         meta.create_gate("indices must be 0 or 1", |meta| {
             let indices = meta.query_advice(indices, Rotation::cur());
@@ -55,7 +57,7 @@ impl<F: Field + PrimeField> MerkleTreeConfig<F> {
             indices,
             instance,
             selector,
-            _marker: PhantomData,
+            _marker0: PhantomData,
         }
     }
 }
@@ -107,7 +109,7 @@ impl<S: Spec<F, W, R> + Clone, F: Field + PrimeField, const W: usize, const R: u
             |mut region| {
                 for i in 0..self.indices.len() {
                     let digest = self.assign(v[i], &mut region, config, i);
-                    v.push(digest.unwrap());
+                    v.push(digest.expect("cannot get digest"));
                 }
                 Ok(())
             },
@@ -129,7 +131,7 @@ impl<S: Spec<F, W, R> + Clone, F: Field + PrimeField, const W: usize, const R: u
             || "assign root",
             |mut region| {
                 region.assign_advice(
-                    || "assign leaf",
+                    || "assign root",
                     config.advice[0],
                     0,
                     || Value::known(v[self.indices.len()]),
@@ -169,6 +171,7 @@ impl<S: Spec<F, W, R> + Clone, F: Field + PrimeField, const W: usize, const R: u
             || Value::known(self.indices[offset]),
         )?;
 
+        // left input
         if self.indices[offset] == F::ZERO {
             region.assign_advice(
                 || "left input",
@@ -176,14 +179,16 @@ impl<S: Spec<F, W, R> + Clone, F: Field + PrimeField, const W: usize, const R: u
                 offset,
                 || Value::known(digest),
             )?;
+            // right input
             region.assign_advice(
                 || "right input",
                 config.advice[1],
                 offset,
                 || Value::known(self.elements[offset]),
             )?;
-            hash = HashTest::<F, S, ConstantLength<2>, W, R>::init()
-                .hash([digest, self.elements[offset]]);
+            // output
+            hash =
+                Hash::<F, S, ConstantLength<2>, W, R>::init().hash([digest, self.elements[offset]]);
 
             region.assign_advice(|| "output", config.advice[2], offset, || Value::known(hash))?;
         } else {
@@ -199,8 +204,8 @@ impl<S: Spec<F, W, R> + Clone, F: Field + PrimeField, const W: usize, const R: u
                 offset,
                 || Value::known(digest),
             )?;
-            hash = HashTest::<F, S, ConstantLength<2>, W, R>::init()
-                .hash([self.elements[offset], digest]);
+            hash =
+                Hash::<F, S, ConstantLength<2>, W, R>::init().hash([self.elements[offset], digest]);
             region.assign_advice(|| "output", config.advice[2], offset, || Value::known(hash))?;
         }
         Ok(hash)
@@ -213,13 +218,12 @@ mod tests {
     use super::MemoryTreeCircuit;
     use crate::poseidon::poseidon_hash::*;
     use alloc::vec;
-    use alloc::vec::Vec;
     use core::marker::PhantomData;
     use halo2_proofs::{dev::MockProver, halo2curves::pasta::Fp};
 
-    fn compute_merkle_root(leaf: &u64, elements: &Vec<u64>, indices: &Vec<u64>) -> Fp {
+    fn compute_merkle_root(leaf: &u64, elements: &[u64], indices: &[u64]) -> Fp {
         let k = elements.len();
-        let mut digest = Fp::from(leaf.clone());
+        let mut digest = Fp::from(*leaf);
         let mut message: [Fp; 2];
         for i in 0..k {
             if indices[i] == 0 {
@@ -227,8 +231,7 @@ mod tests {
             } else {
                 message = [Fp::from(elements[i]), digest];
             }
-            digest =
-                HashTest::<Fp, OrchardNullifier, ConstantLength<2>, 3, 2>::init().hash(message);
+            digest = Hash::<Fp, OrchardNullifier, ConstantLength<2>, 3, 2>::init().hash(message);
         }
         digest
     }
@@ -237,8 +240,8 @@ mod tests {
     fn test_correct_merkle_proof() {
         let leaf = 0u64;
         let k = 10;
-        let indices = vec![0u64, 0u64, 0u64, 0u64];
-        let elements = vec![3u64, 4u64, 5u64, 6u64];
+        let indices = [0u64, 0u64, 0u64, 0u64];
+        let elements = [3u64, 4u64, 5u64, 6u64];
         let root = compute_merkle_root(&leaf, &elements, &indices);
         let leaf_fp = Fp::from(leaf);
         let indices = indices.iter().map(|x| Fp::from(*x)).collect();
@@ -258,8 +261,8 @@ mod tests {
     fn test_correct_merkle_proof_part2() {
         let leaf = 0u64;
         let k = 10;
-        let indices = vec![0u64, 0u64, 1u64, 1u64];
-        let elements = vec![3u64, 4u64, 5u64, 6u64];
+        let indices = [0u64, 0u64, 1u64, 1u64];
+        let elements = [3u64, 4u64, 5u64, 6u64];
         let root = compute_merkle_root(&leaf, &elements, &indices);
         let leaf_fp = Fp::from(leaf);
         let indices = indices.iter().map(|x| Fp::from(*x)).collect();
@@ -279,8 +282,8 @@ mod tests {
     fn test_wrong_merkle_proof() {
         let leaf = 0u64;
         let k = 10;
-        let indices = vec![0u64, 0u64, 1u64, 1u64];
-        let elements = vec![3u64, 4u64, 5u64, 6u64];
+        let indices = [0u64, 0u64, 1u64, 1u64];
+        let elements = [3u64, 4u64, 5u64, 6u64];
         let root = Fp::from(0);
         let leaf_fp = Fp::from(leaf);
         let indices = indices.iter().map(|x| Fp::from(*x)).collect();
@@ -288,6 +291,28 @@ mod tests {
         let circuit = MemoryTreeCircuit::<OrchardNullifier, Fp, 3, 2> {
             leaf: leaf_fp,
             indices,
+            elements,
+            _marker: PhantomData,
+        };
+        let prover = MockProver::run(k, &circuit, vec![vec![Fp::from(leaf), root]])
+            .expect("Cannot run the circuit");
+        assert_ne!(prover.verify(), Ok(()));
+    }
+
+    #[test]
+    fn test_wrong_merkle_part2() {
+        let leaf = 0u64;
+        let k = 10;
+        let indices = [0u64, 0u64, 1u64, 1u64];
+        let elements = [3u64, 4u64, 5u64, 6u64];
+        let root = compute_merkle_root(&leaf, &elements, &indices);
+        let false_indices = [1u64, 0u64, 1u64, 1u64];
+        let leaf_fp = Fp::from(leaf);
+        let false_indices = false_indices.iter().map(|x| Fp::from(*x)).collect();
+        let elements = elements.iter().map(|x| Fp::from(*x)).collect();
+        let circuit = MemoryTreeCircuit::<OrchardNullifier, Fp, 3, 2> {
+            leaf: leaf_fp,
+            indices: false_indices,
             elements,
             _marker: PhantomData,
         };
