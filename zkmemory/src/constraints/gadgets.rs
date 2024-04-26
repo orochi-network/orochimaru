@@ -1,4 +1,6 @@
 //! The helper configs for memory consistency
+//! The BinaryConfig struct is based on the implementation in [PSE's binary number struct](https://github.com/privacy-scaling-explorations/zkevm-circuits/blob/main/gadgets/src/binary_number.rs)
+//! and the GreaterThanConfig is based on the implementation in [PSE's lexicographic ordering struct](https://github.com/privacy-scaling-explorations/zkevm-circuits/blob/main/zkevm-circuits/src/state_circuit/lexicographic_ordering.rs)
 extern crate alloc;
 use crate::{
     base::{Base, B256},

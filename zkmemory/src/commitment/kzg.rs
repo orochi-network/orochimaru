@@ -1,4 +1,6 @@
 //! Commit to the trace record using KZG commitment scheme.
+//! We convert the trace into a polynomial and apply the algorithms in
+//! [PSE 's KZG implementation](https://github.com/privacy-scaling-explorations/halo2/tree/main/halo2_backend/src/poly/kzg) to commit, open and verify the polynomial
 
 extern crate alloc;
 use crate::{base::Base, machine::MemoryInstruction, machine::TraceRecord};
