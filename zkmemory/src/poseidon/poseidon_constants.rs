@@ -1,3 +1,5 @@
+//! This file consists of specific hash parameters.
+
 use halo2curves::pasta::pallas::Base;
 
 pub(crate) const MDS: [[Base; 3]; 3] = [

@@ -1,5 +1,6 @@
+//! Circuit for proving the correctness of the Merkle tree commitment.
+
 extern crate alloc;
-extern crate std;
 use crate::poseidon::poseidon_hash::{ConstantLength, Hash, Spec};
 use alloc::{vec, vec::Vec};
 use core::fmt::Debug;
@@ -83,16 +84,19 @@ impl<F: Field + PrimeField> MerkleTreeConfig<F> {
 }
 
 #[derive(Default)]
-/// circuit for verifying the correctness of the opening
-pub struct MemoryTreeCircuit<
+/// Merkle tree circuit
+pub(crate) struct MemoryTreeCircuit<
     S: Spec<F, W, R>,
     F: Field + PrimeField,
     const W: usize,
     const R: usize,
 > {
-    leaf: F,
-    elements: Vec<F>,
-    indices: Vec<F>,
+    // the leaf node we would like to open
+    pub(crate) leaf: F,
+    // the values of the sibling nodes
+    pub(crate) elements: Vec<F>,
+    // the index of the path
+    pub(crate) indices: Vec<F>,
     _marker: PhantomData<S>,
 }
 impl<S: Spec<F, W, R> + Clone, F: Field + PrimeField, const W: usize, const R: usize> Circuit<F>
@@ -168,8 +172,8 @@ impl<S: Spec<F, W, R> + Clone, F: Field + PrimeField, const W: usize, const R: u
 impl<S: Spec<F, W, R> + Clone, F: Field + PrimeField, const W: usize, const R: usize>
     MemoryTreeCircuit<S, F, W, R>
 {
-    /// assign the elements in the path into the witness table
-    pub fn assign(
+    // Assign the elements in the path into the witness table
+    fn assign(
         &self,
         digest: F,
         region: &mut Region<'_, F>,
@@ -193,7 +197,7 @@ impl<S: Spec<F, W, R> + Clone, F: Field + PrimeField, const W: usize, const R: u
             || Value::known(self.indices[offset]),
         )?;
 
-        // left input
+        // assign the left input of the hash
         if self.indices[offset] == F::ZERO {
             region.assign_advice(
                 || "left input",
@@ -201,14 +205,14 @@ impl<S: Spec<F, W, R> + Clone, F: Field + PrimeField, const W: usize, const R: u
                 offset,
                 || Value::known(digest),
             )?;
-            // right input
+            // assign the right input of the hash
             region.assign_advice(
                 || "right input",
                 config.advice[1],
                 offset,
                 || Value::known(self.elements[offset]),
             )?;
-            // output
+            // assign the output of the hash
             hash =
                 Hash::<F, S, ConstantLength<2>, W, R>::init().hash([digest, self.elements[offset]]);
 
@@ -245,7 +249,8 @@ mod tests {
     use rand::{thread_rng, Rng};
     use rand_core::RngCore;
 
-    fn compute_merkle_root(leaf: &u64, elements: &[u64], indices: &[u64]) -> Fp {
+    /// Compute the root of a merkle tree given the path and the sibling nodes
+    pub fn merkle_tree_commit(leaf: &u64, elements: &[u64], indices: &[u64]) -> Fp {
         let k = elements.len();
         let mut digest = Fp::from(*leaf);
         let mut message: [Fp; 2];
@@ -266,7 +271,7 @@ mod tests {
         let k = 10;
         let indices = [0u64, 0u64, 1u64, 1u64];
         let elements = [3u64, 4u64, 5u64, 6u64];
-        let root = compute_merkle_root(&leaf, &elements, &indices);
+        let root = merkle_tree_commit(&leaf, &elements, &indices);
         let leaf_fp = Fp::from(leaf);
         let indices = indices.iter().map(|x| Fp::from(*x)).collect();
         let elements = elements.iter().map(|x| Fp::from(*x)).collect();
@@ -300,7 +305,7 @@ mod tests {
             rng.next_u64(),
             rng.next_u64(),
         ];
-        let root = compute_merkle_root(&leaf, &elements, &indices);
+        let root = merkle_tree_commit(&leaf, &elements, &indices);
         let leaf_fp = Fp::from(leaf);
         let indices = indices.iter().map(|x| Fp::from(*x)).collect();
         let elements = elements.iter().map(|x| Fp::from(*x)).collect();
@@ -342,7 +347,7 @@ mod tests {
         let k = 10;
         let indices = [0u64, 0u64, 1u64, 1u64];
         let elements = [3u64, 4u64, 5u64, 6u64];
-        let root = compute_merkle_root(&leaf, &elements, &indices);
+        let root = merkle_tree_commit(&leaf, &elements, &indices);
         let false_indices = [1u64, 0u64, 1u64, 1u64];
         let leaf_fp = Fp::from(leaf);
         let false_indices = false_indices.iter().map(|x| Fp::from(*x)).collect();

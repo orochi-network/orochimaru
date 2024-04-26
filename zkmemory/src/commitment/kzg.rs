@@ -1,3 +1,5 @@
+//! Commit to the trace record using KZG commitment scheme.
+
 extern crate alloc;
 use crate::{base::Base, machine::MemoryInstruction, machine::TraceRecord};
 use alloc::vec;
@@ -81,7 +83,9 @@ where
     }
 
     /// Commit a trace record in an execution trace
+    ///
     /// This function, given input a trace record,
+    ///
     /// outputs the commitment of the trace
     pub fn commit(&mut self, trace: TraceRecord<K, V, S, T>) -> G1Affine {
         self.kzg_params
@@ -256,7 +260,9 @@ where
     }
 
     /// Open all fields from the trace record
+    ///
     /// The function, given input a trace record and its commitment,
+    ///
     /// outputs a proof of correct opening
     pub fn prove_trace_record(
         &self,
@@ -289,8 +295,11 @@ where
     }
 
     /// Verify the correctness of the trace record
+    ///
     /// This function, given input a trace record,
+    ///
     /// it commitment and the proof of correctness opening,
+    ///
     /// returns True or False to determine the correctness of the opening
     pub fn verify_trace_record(
         &self,

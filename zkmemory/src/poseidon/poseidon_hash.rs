@@ -1,11 +1,11 @@
-// The implelemtation of Poseidon hash, with most details from
-// https://github.com/zcash/halo2/blob/main/halo2_gadgets/src/poseidon/primitives.rs
-// We originally wanted to import the implementation from Zcash's library
-// however, since we are using the Halo2 version from PSE, we need to
-// clone many functions and fix many details so that the implementation
-// will be compatible with our implementation
-// The hash function is used in some circuits for verifying the correctness of
-// Merkle tree and Verkle tree opening proofs.
+//! The implelemtation of Poseidon hash, with most details from
+//! https://github.com/zcash/halo2/blob/main/halo2_gadgets/src/poseidon/primitives.rs
+//! We originally wanted to import the implementation from Zcash's library
+//! however, since we are using the Halo2 version from PSE, we need to
+//! clone many functions and fix many details so that the implementation
+//! will be compatible with our implementation
+//! The hash function is used in some circuits for verifying the correctness of
+//! Merkle tree and Verkle tree opening proofs.
 
 extern crate alloc;
 use alloc::{fmt, vec::Vec};
@@ -15,7 +15,7 @@ use ff::{Field, PrimeField};
 /// The type of a square matrix of size T
 pub(crate) type Mtrx<F, const T: usize> = [[F; T]; T];
 
-/// trait for specifying the hash parameters
+/// The trait for specifying the hash parameters
 pub trait Spec<F: Field + PrimeField, const T: usize, const R: usize>: fmt::Debug {
     /// The number of full rounds for this specification.
     ///
@@ -32,7 +32,7 @@ pub trait Spec<F: Field + PrimeField, const T: usize, const R: usize>: fmt::Debu
     fn constants() -> (Vec<[F; T]>, Mtrx<F, T>, Mtrx<F, T>);
 }
 
-/// the trait for specifying the domain of messages
+/// The trait for specifying the domain of messages
 pub trait Domain<F: Field + PrimeField, const R: usize> {
     /// Iterator that outputs padding field elements.
     type Padding: IntoIterator<Item = F>;
@@ -185,7 +185,11 @@ fn poseidon_sponge<F: Field + PrimeField, S: Spec<F, T, R>, const T: usize, cons
     Squeezing(output)
 }
 
-/// Runs the Poseidon permutation on the given state.
+/// Runs the Poseidon permutation on the given state. Given inputs a state,
+///
+/// a MDS matrix and a list of round_constants, this function transform the
+///
+/// state into a new state.
 pub(crate) fn permute<F: Field + PrimeField, S: Spec<F, T, R>, const T: usize, const R: usize>(
     state: &mut State<F, T>,
     mds: &[[F; T]; T],
@@ -302,10 +306,9 @@ impl<F: Field + PrimeField, S: Spec<F, T, R>, const T: usize, const R: usize, co
     }
 }
 
-// Implelemt Spec<3,2> for generating specific constants for testing
 use crate::poseidon::poseidon_constants::{MDS, MDS_INV, ROUND_CONSTANTS};
 use halo2curves::pasta::Fp;
-///
+/// Generate specific constants for testing the poseidon hash
 #[derive(Clone, Debug)]
 pub struct OrchardNullifier;
 
