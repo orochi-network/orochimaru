@@ -39,8 +39,8 @@ pub struct ShuffleChip<F: Field + PrimeField> {
 /// Define that chip config struct
 #[derive(Debug, Clone)]
 pub struct ShuffleConfig {
-    input_1: Column<Fixed>,
-    shuffle_1: Column<Advice>,
+    input: Column<Fixed>,
+    shuffle: Column<Advice>,
     s_input: Selector,
     s_shuffle: Selector,
 }
@@ -57,22 +57,22 @@ impl<F: Field + PrimeField> ShuffleChip<F> {
     /// Configure the gates
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
-        input_1: Column<Fixed>,
-        shuffle_1: Column<Advice>,
+        input: Column<Fixed>,
+        shuffle: Column<Advice>,
     ) -> ShuffleConfig {
         let s_shuffle = meta.complex_selector();
         let s_input = meta.complex_selector();
         meta.shuffle("two traces are permutation of each other", |meta| {
             let s_input = meta.query_selector(s_input);
             let s_shuffle = meta.query_selector(s_shuffle);
-            let input_1 = meta.query_fixed(input_1, Rotation::cur());
-            let shuffle_1 = meta.query_advice(shuffle_1, Rotation::cur());
-            vec![(s_input * input_1, s_shuffle * shuffle_1)]
+            let input = meta.query_fixed(input, Rotation::cur());
+            let shuffle = meta.query_advice(shuffle, Rotation::cur());
+            vec![(s_input * input, s_shuffle * shuffle)]
         });
 
         ShuffleConfig {
-            input_1,
-            shuffle_1,
+            input,
+            shuffle,
             s_input,
             s_shuffle,
         }
@@ -102,7 +102,7 @@ impl<F: Field + PrimeField> CircuitExtension<F> for PermutationCircuit<F> {
                 for (i, input) in self.input.iter().enumerate() {
                     region.assign_fixed(
                         || "input",
-                        shuffle_chip.config.input_1,
+                        shuffle_chip.config.input,
                         i,
                         || Value::known(*input),
                     )?;
@@ -117,7 +117,7 @@ impl<F: Field + PrimeField> CircuitExtension<F> for PermutationCircuit<F> {
                 for (i, shuffle) in self.shuffle.iter().enumerate() {
                     region.assign_advice(
                         || "shuffle_value",
-                        shuffle_chip.config.shuffle_1,
+                        shuffle_chip.config.shuffle,
                         i,
                         || *shuffle,
                     )?;
@@ -163,7 +163,7 @@ impl<F: Field + PrimeField> Circuit<F> for PermutationCircuit<F> {
                 for (i, input) in self.input.iter().enumerate() {
                     region.assign_fixed(
                         || "input",
-                        shuffle_chip.config.input_1,
+                        shuffle_chip.config.input,
                         i,
                         || Value::known(*input),
                     )?;
@@ -178,7 +178,7 @@ impl<F: Field + PrimeField> Circuit<F> for PermutationCircuit<F> {
                 for (i, shuffle) in self.shuffle.iter().enumerate() {
                     region.assign_advice(
                         || "shuffle_value",
-                        shuffle_chip.config.shuffle_1,
+                        shuffle_chip.config.shuffle,
                         i,
                         || *shuffle,
                     )?;
