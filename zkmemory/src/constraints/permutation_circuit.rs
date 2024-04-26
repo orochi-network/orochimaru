@@ -1,3 +1,8 @@
+//! This module implements the Permutation Circuit which checks whether two arrays
+//! are permutations of each other without leaking information about the elements
+//! in these arrays and the permutation that links them.
+//! This implementation references the [PSE `shuffle` API](https://github.com/privacy-scaling-explorations/halo2/blob/bd385c36253cd1611785dd4ef10199234e2c64bc/halo2_proofs/examples/shuffle_api.rs)
+//! with modifications to suit the project's requirements.
 use crate::{
     base::Base,
     constraints::common::CircuitExtension,
@@ -36,7 +41,7 @@ pub struct ShuffleChip<F: Field + PrimeField> {
     _marker: PhantomData<F>,
 }
 
-/// Define that chip config struct
+/// Define the configuration for the shuffle chip.
 #[derive(Debug, Clone)]
 pub struct ShuffleConfig {
     input: Column<Fixed>,
