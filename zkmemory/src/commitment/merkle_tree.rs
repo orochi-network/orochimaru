@@ -7,7 +7,9 @@ use core::marker::PhantomData;
 use ff::{Field, PrimeField};
 use halo2_proofs::{
     circuit::{Layouter, Region, SimpleFloorPlanner, Value},
-    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Expression, Fixed, Instance},
+    plonk::{
+        Advice, Circuit, Column, ConstraintSystem, Error, Expression, Fixed, Instance, Selector,
+    },
     poly::Rotation,
 };
 
@@ -19,6 +21,7 @@ pub struct MerkleTreeConfig<F: Field + PrimeField> {
     /// the instance of the config
     pub instance: Column<Instance>,
     selector: Column<Fixed>,
+    selector_zero: Selector,
     _marker0: PhantomData<F>,
 }
 
@@ -27,10 +30,31 @@ impl<F: Field + PrimeField> MerkleTreeConfig<F> {
         let advice = [0; 3].map(|_| meta.advice_column());
         let indices = meta.advice_column();
         let selector = meta.fixed_column();
+        let selector_zero = meta.selector();
         for i in advice {
             meta.enable_equality(i);
         }
+
         let one = Expression::Constant(F::ONE);
+
+        // for i=0 indices[i] is equal to zero or one
+        // we handle i=0 seperately with selector_zero, since we are using
+        // a common selector for the other gates.
+        meta.create_gate("indices must be 0 or 1", |meta| {
+            let selector_zero = meta.query_selector(selector_zero);
+            let indices = meta.query_advice(indices, Rotation::cur());
+            vec![selector_zero * indices.clone() * (one.clone() - indices)]
+        });
+
+        // for all i>=1 indices[i] is equal to zero or one
+        meta.create_gate("indices must be 0 or 1", |meta| {
+            let indices = meta.query_advice(indices, Rotation::cur());
+            let selector = meta.query_fixed(selector, Rotation::cur());
+            vec![selector * indices.clone() * (one.clone() - indices)]
+        });
+
+        // if indices[i]=0 then advice_cur[i][0]=advice_cur[i-1][2]
+        // otherwise advice_cur[i][1]=advice_cur[i-1][2]
         meta.create_gate(
             "output of the current layer is equal to the left or right input of the next layer",
             |meta| {
@@ -40,24 +64,19 @@ impl<F: Field + PrimeField> MerkleTreeConfig<F> {
                 let selector = meta.query_fixed(selector, Rotation::cur());
                 vec![
                     selector
-                        * ((one.clone() - indices.clone())
+                        * ((one - indices.clone())
                             * (advice_cur[0].clone() - advice_prev[2].clone())
                             + indices * (advice_cur[1].clone() - advice_prev[2].clone())),
                 ]
             },
         );
 
-        meta.create_gate("indices must be 0 or 1", |meta| {
-            let indices = meta.query_advice(indices, Rotation::cur());
-            let selector = meta.query_fixed(selector, Rotation::cur());
-            vec![selector * indices.clone() * (one - indices)]
-        });
-
         MerkleTreeConfig {
             advice,
             indices,
             instance,
             selector,
+            selector_zero,
             _marker0: PhantomData,
         }
     }
@@ -164,6 +183,7 @@ impl<S: Spec<F, W, R> + Clone, F: Field + PrimeField, const W: usize, const R: u
                 offset,
                 || Value::known(F::ONE),
             )?;
+            config.selector_zero.enable(region, offset)?;
         }
         let hash: F;
         region.assign_advice(
@@ -222,6 +242,8 @@ mod tests {
     use alloc::vec;
     use core::marker::PhantomData;
     use halo2_proofs::{dev::MockProver, halo2curves::pasta::Fp};
+    use rand::{thread_rng, Rng};
+    use rand_core::RngCore;
 
     fn compute_merkle_root(leaf: &u64, elements: &[u64], indices: &[u64]) -> Fp {
         let k = elements.len();
@@ -242,7 +264,7 @@ mod tests {
     fn test_correct_merkle_proof() {
         let leaf = 0u64;
         let k = 10;
-        let indices = [0u64, 0u64, 0u64, 0u64];
+        let indices = [0u64, 0u64, 1u64, 1u64];
         let elements = [3u64, 4u64, 5u64, 6u64];
         let root = compute_merkle_root(&leaf, &elements, &indices);
         let leaf_fp = Fp::from(leaf);
@@ -261,10 +283,23 @@ mod tests {
 
     #[test]
     fn test_correct_merkle_proof_part2() {
-        let leaf = 0u64;
+        let mut rng = thread_rng();
+        let leaf = rng.next_u64();
         let k = 10;
-        let indices = [0u64, 0u64, 1u64, 1u64];
-        let elements = [3u64, 4u64, 5u64, 6u64];
+        let indices = [
+            rng.gen_range(0..2),
+            rng.gen_range(0..2),
+            rng.gen_range(0..2),
+            rng.gen_range(0..2),
+            rng.gen_range(0..2),
+        ];
+        let elements = [
+            rng.next_u64(),
+            rng.next_u64(),
+            rng.next_u64(),
+            rng.next_u64(),
+            rng.next_u64(),
+        ];
         let root = compute_merkle_root(&leaf, &elements, &indices);
         let leaf_fp = Fp::from(leaf);
         let indices = indices.iter().map(|x| Fp::from(*x)).collect();
@@ -315,6 +350,48 @@ mod tests {
         let circuit = MemoryTreeCircuit::<OrchardNullifier, Fp, 3, 2> {
             leaf: leaf_fp,
             indices: false_indices,
+            elements,
+            _marker: PhantomData,
+        };
+        let prover = MockProver::run(k, &circuit, vec![vec![Fp::from(leaf), root]])
+            .expect("Cannot run the circuit");
+        assert_ne!(prover.verify(), Ok(()));
+    }
+
+    #[test]
+    fn test_invalid_indices() {
+        let leaf = 0u64;
+        let k = 10;
+        let indices = [0u64, 0u64, 2u64, 1u64];
+        let elements = [3u64, 4u64, 5u64, 6u64];
+        let root = Fp::from(0);
+        let leaf_fp = Fp::from(leaf);
+        let indices = indices.iter().map(|x| Fp::from(*x)).collect();
+        let elements = elements.iter().map(|x| Fp::from(*x)).collect();
+        let circuit = MemoryTreeCircuit::<OrchardNullifier, Fp, 3, 2> {
+            leaf: leaf_fp,
+            indices,
+            elements,
+            _marker: PhantomData,
+        };
+        let prover = MockProver::run(k, &circuit, vec![vec![Fp::from(leaf), root]])
+            .expect("Cannot run the circuit");
+        assert_ne!(prover.verify(), Ok(()));
+    }
+
+    #[test]
+    fn test_invalid_indices_part2() {
+        let leaf = 0u64;
+        let k = 10;
+        let indices = [2u64, 1u64, 3u64, 4u64];
+        let elements = [3u64, 4u64, 5u64, 6u64];
+        let root = Fp::from(0);
+        let leaf_fp = Fp::from(leaf);
+        let indices = indices.iter().map(|x| Fp::from(*x)).collect();
+        let elements = elements.iter().map(|x| Fp::from(*x)).collect();
+        let circuit = MemoryTreeCircuit::<OrchardNullifier, Fp, 3, 2> {
+            leaf: leaf_fp,
+            indices,
             elements,
             _marker: PhantomData,
         };
