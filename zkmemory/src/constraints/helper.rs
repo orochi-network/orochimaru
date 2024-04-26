@@ -260,7 +260,7 @@ mod tests {
             shuffle: sorted_trace.clone(),
         };
 
-        let prover = MockProver::run(9, &circuit, vec![]).unwrap();
+        let prover = MockProver::run(10, &circuit, vec![]).unwrap();
         assert_eq!(prover.verify(), Ok(()));
     }
 

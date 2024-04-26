@@ -15,6 +15,7 @@ use ff::{Field, PrimeField};
 /// The type of a square matrix of size T
 pub(crate) type Mtrx<F, const T: usize> = [[F; T]; T];
 
+/// trait for specifying the hash parameters
 pub trait Spec<F: Field + PrimeField, const T: usize, const R: usize>: fmt::Debug {
     /// The number of full rounds for this specification.
     ///
@@ -31,6 +32,7 @@ pub trait Spec<F: Field + PrimeField, const T: usize, const R: usize>: fmt::Debu
     fn constants() -> (Vec<[F; T]>, Mtrx<F, T>, Mtrx<F, T>);
 }
 
+/// the trait for specifying the domain of messages
 pub trait Domain<F: Field + PrimeField, const R: usize> {
     /// Iterator that outputs padding field elements.
     type Padding: IntoIterator<Item = F>;
@@ -42,6 +44,7 @@ pub trait Domain<F: Field + PrimeField, const R: usize> {
     fn padding(input_len: usize) -> Self::Padding;
 }
 
+/// the number of messages to be hashed
 pub struct ConstantLength<const L: usize>;
 
 impl<F: PrimeField, const R: usize, const L: usize> Domain<F, R> for ConstantLength<L> {
