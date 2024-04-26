@@ -1,5 +1,5 @@
 //! The implelemtation of Poseidon hash, with most details from
-//! https://github.com/zcash/halo2/blob/main/halo2_gadgets/src/poseidon/primitives.rs
+//! [Zcash implementation](https://github.com/zcash/halo2/blob/main/halo2_gadgets/src/poseidon/primitives.rs)
 //! We originally wanted to import the implementation from Zcash's library
 //! however, since we are using the Halo2 version from PSE, we need to
 //! clone many functions and fix many details so that the implementation
