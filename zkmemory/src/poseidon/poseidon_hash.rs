@@ -330,7 +330,6 @@ impl Spec<Fp, 3, 2> for OrchardNullifier {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ff::PrimeField;
     use halo2curves::pasta::pallas::Base;
     #[test]
     fn poseidon_hash() {
