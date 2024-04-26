@@ -1,3 +1,4 @@
+//! Circuit for checking the constraints of the original memory trace record
 extern crate alloc;
 use crate::constraints::{
     common::CircuitExtension,
@@ -18,15 +19,16 @@ use rand::thread_rng;
 #[derive(Clone, Copy, Debug)]
 /// Config for trace record that is sorted by time_log
 pub(crate) struct OriginalMemoryConfig<F: Field + PrimeField> {
-    // The original trace circuit
+    /// The original trace circuit
     pub(crate) trace_record: TraceRecordWitnessTable<F>,
-    // The selectors
+    /// The selectors
     pub(crate) selector: Column<Fixed>,
     pub(crate) selector_zero: Selector,
-    // The config for checking the current time log is bigger than the
-    // previous one
+    /// The config for checking the current time log is bigger than the
+    ///
+    /// previous one
     pub(crate) greater_than: GreaterThanConfig<F, 3>,
-    // The lookup table
+    /// The lookup table
     pub(crate) lookup_tables: LookUpTables,
 }
 // Current constraints in this configure are:
@@ -75,7 +77,7 @@ impl<F: Field + PrimeField> OriginalMemoryConfig<F> {
 /// Circuit for original trace record
 #[derive(Default)]
 pub(crate) struct OriginalMemoryCircuit<F: Field + PrimeField> {
-    // The original memory trace record
+    /// The original memory trace record
     pub(crate) original_trace_record: Vec<ConvertedTraceRecord<F>>,
     pub(crate) _marker: PhantomData<F>,
 }

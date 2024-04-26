@@ -1,3 +1,4 @@
+//! The helper configs for memory consistency
 extern crate alloc;
 use crate::{
     base::{Base, B256},
@@ -63,10 +64,10 @@ impl<const N: usize> Table<N> {
     }
 }
 
-/// check if a value val is zero or not
+/// Config for checking if a value val is zero or not
 #[derive(Clone, Copy, Debug)]
 pub struct IsZeroConfig<F: Field + PrimeField> {
-    /// the value
+    /// the value needed to check
     pub val: Column<Advice>,
     /// the inverse of value. It is any non-zero value if val=0
     pub temp: Column<Advice>,
@@ -133,7 +134,7 @@ impl<F: Field + PrimeField, const N: usize> BinaryConfig<F, N> {
         }
     }
 
-    /// map a value to its corresponding binary witness for the config
+    /// Map a value to its corresponding binary witness for the config
     pub fn assign(
         &self,
         region: &mut Region<'_, F>,
@@ -341,7 +342,7 @@ fn rlc_limb_differences<F: Field + PrimeField>(
     result
 }
 
-/// The lookup tables. We have 3 tables of size 256,40 and 2
+/// The lookup tables. We have 3 tables of size 256, 40 and 2
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct LookUpTables {
     pub(crate) size256_table: Table<256>,
@@ -359,7 +360,7 @@ pub(crate) struct Queries<F: Field + PrimeField> {
 }
 
 impl<F: Field + PrimeField> Queries<F> {
-    /// converts the attributes of a trace record to type Expression<F>
+    /// Converts the attributes of a trace record to type Expression<F>
     pub fn new(
         meta: &mut VirtualCells<'_, F>,
         trace_record: TraceRecordWitnessTable<F>,

@@ -1,3 +1,4 @@
+//! Circuit for checking if two arrays are permutation of each other
 use crate::{
     base::Base,
     constraints::common::CircuitExtension,
@@ -93,13 +94,13 @@ impl<F: Field + PrimeField> ShuffleChip<F> {
 /// Define the permutatioin circuit for the project
 #[derive(Default, Clone, Debug)]
 pub struct PermutationCircuit<F: Field + PrimeField> {
-    // input_idx: an array of indexes of the unpermuted array
+    /// input_idx: an array of indexes of the unpermuted array
     pub(crate) input_idx: Vec<Value<F>>,
-    // input: an unpermuted array
+    /// input: an unpermuted array
     pub(crate) input: Vec<F>,
-    // shuffle_idx: an array of indexes after permuting input
+    /// shuffle_idx: an array of indexes after permuting input
     pub(crate) shuffle_idx: Vec<Value<F>>,
-    // shuffle: permuted array from input
+    /// shuffle: permuted array from input
     pub(crate) shuffle: Vec<Value<F>>,
 }
 

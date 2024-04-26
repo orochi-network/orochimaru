@@ -1,3 +1,4 @@
+//! Circuit for checking the constraints of the sorted memory trace record
 extern crate alloc;
 use crate::constraints::{
     common::CircuitExtension,
@@ -19,19 +20,20 @@ use rand::thread_rng;
 #[derive(Clone, Copy, Debug)]
 /// Define the columns for the constraint
 pub(crate) struct SortedMemoryConfig<F: Field + PrimeField> {
-    // The fields of an execution trace
+    /// The fields of an execution trace
     pub(crate) trace_record: TraceRecordWitnessTable<F>,
-    // The difference between the current and the previous address
+    /// The difference between the current and the previous address
     pub(crate) addr_cur_prev: IsZeroConfig<F>,
-    // The config for checking the current address||time_log is bigger
-    // than the previous one
+    /// The config for checking the current address||time_log is bigger
+    ///
+    /// than the previous one
     pub(crate) greater_than: GreaterThanConfig<F, 6>,
-    // The selectors
+    /// The selectors
     pub(crate) selector: Column<Fixed>,
     pub(crate) selector_zero: Selector,
-    // The lookup table
+    /// The lookup table
     pub(crate) lookup_tables: LookUpTables,
-    // Just the phantom data
+    /// Just the phantom data
     pub(crate) _marker: PhantomData<F>,
 }
 // Current constraints in this configure:
@@ -151,7 +153,7 @@ fn limbs_to_expression<F: Field + PrimeField>(limb: [Expression<F>; 32]) -> Expr
 /// Circuit for sorted trace record
 #[derive(Default)]
 pub(crate) struct SortedMemoryCircuit<F: PrimeField> {
-    // The sorted memory trace record
+    /// The sorted memory trace record
     pub(crate) sorted_trace_record: Vec<ConvertedTraceRecord<F>>,
     pub(crate) _marker: PhantomData<F>,
 }

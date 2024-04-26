@@ -46,9 +46,11 @@ where
     K: Base<S>,
     V: Base<T>,
 {
-    // Params: generators, crs, etc
+    /// Params: consists of the tuple (g,g^s,g^(s^2),...,g^(s^d)) where
+    ///
+    /// g is the generatorr and s is a secret value
     kzg_params: ParamsKZG<Bn256>,
-    // Domain used for creating polynomials
+    /// Domain used for creating polynomials
     domain: EvaluationDomain<Fr>,
     phantom_data: PhantomData<(K, V)>,
 }

@@ -1,3 +1,4 @@
+//! The grand circuit for checking memory consistency
 extern crate alloc;
 use crate::{
     base::B256,
@@ -22,11 +23,11 @@ use rand::thread_rng;
 /// Config for consistency check circuit
 #[derive(Debug, Clone)]
 pub(crate) struct ConsistencyConfig<F: Field + PrimeField> {
-    // the config of the original memory
+    /// the config of the original memory
     pub(crate) original_memory_config: OriginalMemoryConfig<F>,
-    // the config of the sorted memory
+    /// the config of the sorted memory
     pub(crate) sorted_memory_config: SortedMemoryConfig<F>,
-    // the config of permutation check
+    /// the config of permutation check
     pub(crate) permutation_config: ShuffleConfig,
     _marker: PhantomData<F>,
 }

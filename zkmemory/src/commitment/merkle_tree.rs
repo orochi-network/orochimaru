@@ -17,10 +17,18 @@ use halo2_proofs::{
 #[derive(Clone, Copy, Debug)]
 /// Merkle tree config
 pub struct MerkleTreeConfig<F: Field + PrimeField> {
+    /// advice has 3 columns, the first column is the left input of the hash,
+    ///
+    /// the right column is the right input of the hash, and the last column
+    ///
+    /// is the output of the hash
     advice: [Column<Advice>; 3],
     indices: Column<Advice>,
-    /// the instance of the config
+    /// the instance of the config, consisting of the leaf we would like to
+    ///
+    /// open, and the merkle root.
     pub instance: Column<Instance>,
+    /// the selectors
     selector: Column<Fixed>,
     selector_zero: Selector,
     _marker0: PhantomData<F>,
@@ -91,11 +99,11 @@ pub(crate) struct MemoryTreeCircuit<
     const W: usize,
     const R: usize,
 > {
-    // the leaf node we would like to open
+    /// the leaf node we would like to open
     pub(crate) leaf: F,
-    // the values of the sibling nodes
+    /// the values of the sibling nodes in the path
     pub(crate) elements: Vec<F>,
-    // the index of the path
+    /// the index of the path from the leaf to the merkle root
     pub(crate) indices: Vec<F>,
     _marker: PhantomData<S>,
 }
