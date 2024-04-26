@@ -226,13 +226,21 @@ mod tests {
             B256::from(5),
         );
 
+        let trace_3 = TraceRecord::<B256, B256, 32, 32>::new(
+            3,
+            0,
+            MemoryInstruction::Write,
+            B256::from(0x20),
+            B256::from(5),
+        );
+
         // Initially, the trace is sorted by time_log
         let trace = vec![trace_0, trace_1, trace_2];
 
         // Sort this trace in address and time_log
         let mut sorted_trace = sort_trace::<B256, B256, 32, 32>(trace.clone());
         // Tamper the permutation
-        sorted_trace.swap(0, 1);
+        sorted_trace[2] = trace_3;
 
         let circuit = MemoryConsistencyCircuit::<Fp> {
             input: trace.clone(),
@@ -240,7 +248,7 @@ mod tests {
             marker: PhantomData,
         };
 
-        let prover = MockProver::run(9, &circuit, vec![]).unwrap();
+        let prover = MockProver::run(10, &circuit, vec![]).unwrap();
         assert_eq!(prover.verify(), Ok(()));
     }
 
