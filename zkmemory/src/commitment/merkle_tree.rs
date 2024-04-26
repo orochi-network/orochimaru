@@ -16,6 +16,7 @@ use halo2_proofs::{
 pub struct MerkleTreeConfig<F: Field + PrimeField> {
     advice: [Column<Advice>; 3],
     indices: Column<Advice>,
+    /// the instance of the config
     pub instance: Column<Instance>,
     selector: Column<Fixed>,
     _marker0: PhantomData<F>,
@@ -148,6 +149,7 @@ impl<S: Spec<F, W, R> + Clone, F: Field + PrimeField, const W: usize, const R: u
 impl<S: Spec<F, W, R> + Clone, F: Field + PrimeField, const W: usize, const R: usize>
     MemoryTreeCircuit<S, F, W, R>
 {
+    /// assign the elements in the path into the witness table
     pub fn assign(
         &self,
         digest: F,
