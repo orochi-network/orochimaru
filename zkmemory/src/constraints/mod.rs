@@ -8,7 +8,7 @@ pub mod gadgets;
 pub mod helper;
 /// Check the correctness of the original memory
 pub mod original_memory_circuit;
-/// Permutation circuit for trace record permutation check
+/// Permutation circuit for trace record permutation check.
 pub mod permutation_circuit;
 /// Check the correctness of memory sorting
 pub mod sorted_memory_circuit;

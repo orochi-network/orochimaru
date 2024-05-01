@@ -1,3 +1,8 @@
+//! This module implements the Permutation Circuit which checks whether two arrays
+//! are permutations of each other without leaking information about the elements
+//! in these arrays and the permutation that links them.
+//! This implementation references the [PSE `shuffle` API](https://github.com/privacy-scaling-explorations/halo2/blob/bd385c36253cd1611785dd4ef10199234e2c64bc/halo2_proofs/examples/shuffle_api.rs)
+//! with modifications to suit the project's requirements.
 use crate::{
     base::Base,
     constraints::common::CircuitExtension,
@@ -36,13 +41,11 @@ pub struct ShuffleChip<F: Field + PrimeField> {
     _marker: PhantomData<F>,
 }
 
-/// Define that chip config struct
+/// Define the configuration for the shuffle chip.
 #[derive(Debug, Clone)]
 pub struct ShuffleConfig {
-    input_0: Column<Advice>,
-    input_1: Column<Fixed>,
-    shuffle_0: Column<Advice>,
-    shuffle_1: Column<Advice>,
+    input: Column<Fixed>,
+    shuffle: Column<Advice>,
     s_input: Selector,
     s_shuffle: Selector,
 }
@@ -59,31 +62,22 @@ impl<F: Field + PrimeField> ShuffleChip<F> {
     /// Configure the gates
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
-        input_0: Column<Advice>,
-        input_1: Column<Fixed>,
-        shuffle_0: Column<Advice>,
-        shuffle_1: Column<Advice>,
+        input: Column<Fixed>,
+        shuffle: Column<Advice>,
     ) -> ShuffleConfig {
         let s_shuffle = meta.complex_selector();
         let s_input = meta.complex_selector();
         meta.shuffle("two traces are permutation of each other", |meta| {
             let s_input = meta.query_selector(s_input);
             let s_shuffle = meta.query_selector(s_shuffle);
-            let input_0 = meta.query_advice(input_0, Rotation::cur());
-            let input_1 = meta.query_fixed(input_1, Rotation::cur());
-            let shuffle_0 = meta.query_advice(shuffle_0, Rotation::cur());
-            let shuffle_1 = meta.query_advice(shuffle_1, Rotation::cur());
-            vec![
-                (s_input.clone() * input_0, s_shuffle.clone() * shuffle_0),
-                (s_input * input_1, s_shuffle * shuffle_1),
-            ]
+            let input = meta.query_fixed(input, Rotation::cur());
+            let shuffle = meta.query_advice(shuffle, Rotation::cur());
+            vec![(s_input * input, s_shuffle * shuffle)]
         });
 
         ShuffleConfig {
-            input_0,
-            input_1,
-            shuffle_0,
-            shuffle_1,
+            input,
+            shuffle,
             s_input,
             s_shuffle,
         }
@@ -93,12 +87,8 @@ impl<F: Field + PrimeField> ShuffleChip<F> {
 /// Define the permutatioin circuit for the project
 #[derive(Default, Clone, Debug)]
 pub struct PermutationCircuit<F: Field + PrimeField> {
-    // input_idx: an array of indexes of the unpermuted array
-    pub(crate) input_idx: Vec<Value<F>>,
     // input: an unpermuted array
     pub(crate) input: Vec<F>,
-    // shuffle_idx: an array of indexes after permuting input
-    pub(crate) shuffle_idx: Vec<Value<F>>,
     // shuffle: permuted array from input
     pub(crate) shuffle: Vec<Value<F>>,
 }
@@ -114,18 +104,10 @@ impl<F: Field + PrimeField> CircuitExtension<F> for PermutationCircuit<F> {
         layouter.assign_region(
             || "load inputs",
             |mut region| {
-                for (i, (input_idx, input)) in
-                    self.input_idx.iter().zip(self.input.iter()).enumerate()
-                {
-                    region.assign_advice(
-                        || "input_idx",
-                        shuffle_chip.config.input_0,
-                        i,
-                        || *input_idx,
-                    )?;
+                for (i, input) in self.input.iter().enumerate() {
                     region.assign_fixed(
                         || "input",
-                        shuffle_chip.config.input_1,
+                        shuffle_chip.config.input,
                         i,
                         || Value::known(*input),
                     )?;
@@ -137,18 +119,10 @@ impl<F: Field + PrimeField> CircuitExtension<F> for PermutationCircuit<F> {
         layouter.assign_region(
             || "load shuffles",
             |mut region| {
-                for (i, (shuffle_idx, shuffle)) in
-                    self.shuffle_idx.iter().zip(self.shuffle.iter()).enumerate()
-                {
-                    region.assign_advice(
-                        || "shuffle_index",
-                        shuffle_chip.config.shuffle_0,
-                        i,
-                        || *shuffle_idx,
-                    )?;
+                for (i, shuffle) in self.shuffle.iter().enumerate() {
                     region.assign_advice(
                         || "shuffle_value",
-                        shuffle_chip.config.shuffle_1,
+                        shuffle_chip.config.shuffle,
                         i,
                         || *shuffle,
                     )?;
@@ -176,11 +150,9 @@ impl<F: Field + PrimeField> Circuit<F> for PermutationCircuit<F> {
 
     // Method: configure: this step is easily implemented by using shuffle API
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-        let input_idx = meta.advice_column();
         let input = meta.fixed_column();
-        let shuffle_idx = meta.advice_column();
         let shuffle = meta.advice_column();
-        ShuffleChip::configure(meta, input_idx, input, shuffle_idx, shuffle)
+        ShuffleChip::configure(meta, input, shuffle)
     }
 
     // Method: synthesize
@@ -193,18 +165,10 @@ impl<F: Field + PrimeField> Circuit<F> for PermutationCircuit<F> {
         layouter.assign_region(
             || "load inputs",
             |mut region| {
-                for (i, (input_idx, input)) in
-                    self.input_idx.iter().zip(self.input.iter()).enumerate()
-                {
-                    region.assign_advice(
-                        || "input_idx",
-                        shuffle_chip.config.input_0,
-                        i,
-                        || *input_idx,
-                    )?;
+                for (i, input) in self.input.iter().enumerate() {
                     region.assign_fixed(
                         || "input",
-                        shuffle_chip.config.input_1,
+                        shuffle_chip.config.input,
                         i,
                         || Value::known(*input),
                     )?;
@@ -216,18 +180,10 @@ impl<F: Field + PrimeField> Circuit<F> for PermutationCircuit<F> {
         layouter.assign_region(
             || "load shuffles",
             |mut region| {
-                for (i, (shuffle_idx, shuffle)) in
-                    self.shuffle_idx.iter().zip(self.shuffle.iter()).enumerate()
-                {
-                    region.assign_advice(
-                        || "shuffle_index",
-                        shuffle_chip.config.shuffle_0,
-                        i,
-                        || *shuffle_idx,
-                    )?;
+                for (i, shuffle) in self.shuffle.iter().enumerate() {
                     region.assign_advice(
                         || "shuffle_value",
-                        shuffle_chip.config.shuffle_1,
+                        shuffle_chip.config.shuffle,
                         i,
                         || *shuffle,
                     )?;
@@ -312,8 +268,8 @@ where
 impl<F: Field + PrimeField> PermutationCircuit<F> {
     /// Create a new permutation circuit with two traces and a random seed
     pub fn new<K, V, const S: usize, const T: usize>(
-        input_trace: Vec<(F, TraceRecord<K, V, S, T>)>,
-        shuffle_trace: Vec<(F, TraceRecord<K, V, S, T>)>,
+        input_trace: Vec<TraceRecord<K, V, S, T>>,
+        shuffle_trace: Vec<TraceRecord<K, V, S, T>>,
     ) -> Self
     where
         K: Base<S>,
@@ -331,25 +287,15 @@ impl<F: Field + PrimeField> PermutationCircuit<F> {
         rng.fill(&mut seeds);
 
         Self {
-            input_idx: input_trace
-                .clone()
-                .into_iter()
-                .map(|(x, _)| Value::known(x))
-                .collect(),
             input: input_trace
                 .clone()
                 .into_iter()
-                .map(|(_, mut x)| x.compress(seeds))
-                .collect(),
-            shuffle_idx: shuffle_trace
-                .clone()
-                .into_iter()
-                .map(|(x, _)| Value::known(x))
+                .map(|mut x| x.compress(seeds))
                 .collect(),
             shuffle: shuffle_trace
                 .clone()
                 .into_iter()
-                .map(|(_, mut x)| Value::known(x.compress(seeds)))
+                .map(|mut x| Value::known(x.compress(seeds)))
                 .collect(),
         }
     }
@@ -377,29 +323,15 @@ where
     }
 }
 
-/// Generate an array of successive powers of group generators as indexes
-pub fn successive_powers<F: Field + PrimeField>(size: u64) -> Vec<F> {
-    let mut curr_power = F::from(1);
-    let mut result = vec![];
-    for _ in 0..size {
-        result.push(curr_power);
-        curr_power *= F::MULTIPLICATIVE_GENERATOR;
-    }
-    result
-}
-
 #[cfg(test)]
 mod tests {
 
     use crate::{
         base::{Base, B256},
-        constraints::permutation_circuit::{
-            successive_powers, PermutationCircuit, PermutationProver,
-        },
+        constraints::permutation_circuit::{PermutationCircuit, PermutationProver},
         machine::{AbstractTraceRecord, MemoryInstruction, TraceRecord},
     };
     use ff::Field;
-    use group::ff::PrimeField;
     use halo2_proofs::circuit::Value;
     use halo2curves::pasta::{EqAffine, Fp};
     use rand::{seq::SliceRandom, Rng};
@@ -407,18 +339,11 @@ mod tests {
     use alloc::vec::Vec;
 
     // Randomly create a vector of 2-tuple of trace elements and an index value (for testing)
-    fn random_trace<
-        K: Base<S>,
-        V: Base<T>,
-        const S: usize,
-        const T: usize,
-        F: Field + PrimeField,
-    >(
+    fn random_trace<K: Base<S>, V: Base<T>, const S: usize, const T: usize>(
         size: u64,
-    ) -> Vec<(F, TraceRecord<K, V, S, T>)> {
-        successive_powers::<F>(size)
-            .into_iter()
-            .map(|i| (i, random_trace_record::<K, V, S, T>()))
+    ) -> Vec<TraceRecord<K, V, S, T>> {
+        (0..size)
+            .map(|_| random_trace_record::<K, V, S, T>())
             .collect()
     }
 
@@ -452,21 +377,14 @@ mod tests {
         let mut arr: Vec<(Fp, Fp)> = (1..30)
             .map(|x| (Fp::from(x), Fp::from(rng.gen_range(0..u64::MAX))))
             .collect();
-        let input_idx: Vec<Value<Fp>> = arr.iter().map(|&(x, _)| Value::known(x)).collect();
         let input: Vec<Fp> = arr.iter().map(|&(_, x)| x).collect();
 
         // Random shuffle
         arr.shuffle(&mut rng);
 
-        let shuffle_idx: Vec<Value<Fp>> = arr.iter().map(|&(x, _)| Value::known(x)).collect();
         let shuffle: Vec<Value<Fp>> = arr.iter().map(|&(_, x)| Value::known(x)).collect();
 
-        let circuit = PermutationCircuit {
-            input_idx,
-            input,
-            shuffle_idx,
-            shuffle,
-        };
+        let circuit = PermutationCircuit { input, shuffle };
 
         // Test with IPA prover
         let mut ipa_prover = PermutationProver::<EqAffine>::new(K, circuit, true);
@@ -481,7 +399,7 @@ mod tests {
         // Number of trace elements in a trace, min = 2^K.
         let trace_size = 50;
         let mut rng = rand::thread_rng();
-        let mut trace_buffer = random_trace::<B256, B256, 32, 32, Fp>(trace_size);
+        let mut trace_buffer = random_trace::<B256, B256, 32, 32>(trace_size);
 
         let input_trace = trace_buffer.clone();
         trace_buffer.shuffle(&mut rng);
@@ -526,14 +444,14 @@ mod tests {
         // Number of trace elements in a trace, min = 2^K.
         let trace_size = 50;
         let mut rng = rand::thread_rng();
-        let mut trace_buffer = random_trace::<B256, B256, 32, 32, Fp>(trace_size);
+        let mut trace_buffer = random_trace::<B256, B256, 32, 32>(trace_size);
 
         let input_trace = trace_buffer.clone();
         trace_buffer.shuffle(&mut rng);
         let mut shuffle_trace = trace_buffer.clone();
 
         // Tamper shuffle_trace
-        shuffle_trace[1].1 = random_trace_record::<B256, B256, 32, 32>();
+        shuffle_trace[1] = random_trace_record::<B256, B256, 32, 32>();
 
         let circuit = PermutationCircuit::<Fp>::new(input_trace, shuffle_trace);
 
@@ -550,7 +468,7 @@ mod tests {
         // Number of trace elements in a trace, min = 2^K.
         let trace_size = 50;
         let mut rng = rand::thread_rng();
-        let mut trace_buffer = random_trace::<B256, B256, 32, 32, Fp>(trace_size);
+        let mut trace_buffer = random_trace::<B256, B256, 32, 32>(trace_size);
         let input_trace = trace_buffer.clone();
         trace_buffer.shuffle(&mut rng);
         let mut shuffle_trace = trace_buffer.clone();

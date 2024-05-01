@@ -34,12 +34,7 @@ pub(crate) struct ConsistencyConfig<F: Field + PrimeField> {
 impl<F: Field + PrimeField> ConsistencyConfig<F> {
     fn configure(
         meta: &mut ConstraintSystem<F>,
-        shuffle_input: (
-            Column<Advice>,
-            Column<Fixed>,
-            Column<Advice>,
-            Column<Advice>,
-        ),
+        shuffle_input: (Column<Fixed>, Column<Advice>),
         original_trace_record: TraceRecordWitnessTable<F>,
         sorted_trace_record: TraceRecordWitnessTable<F>,
         lookup_tables: LookUpTables,
@@ -59,13 +54,7 @@ impl<F: Field + PrimeField> ConsistencyConfig<F> {
                 lookup_tables,
                 alpha_power,
             ),
-            permutation_config: ShuffleChip::<F>::configure(
-                meta,
-                shuffle_input.0,
-                shuffle_input.1,
-                shuffle_input.2,
-                shuffle_input.3,
-            ),
+            permutation_config: ShuffleChip::<F>::configure(meta, shuffle_input.0, shuffle_input.1),
             _marker: PhantomData,
         }
     }
@@ -74,10 +63,12 @@ impl<F: Field + PrimeField> ConsistencyConfig<F> {
 /// Define the memory consistency circuit
 #[derive(Default, Clone, Debug)]
 pub(crate) struct MemoryConsistencyCircuit<F: Field + PrimeField + From<B256>> {
-    /// input_trace: Array of trace records before sorting (sorted by time_log) along with its indexes
-    pub(crate) input: Vec<(F, TraceRecord<B256, B256, 32, 32>)>,
+    /// input_trace: Array of trace records before sorting (sorted by time_log)
+    pub(crate) input: Vec<TraceRecord<B256, B256, 32, 32>>,
     /// shuffle_trace: Array after permutations (sorted by address and time_log)
-    pub(crate) shuffle: Vec<(F, TraceRecord<B256, B256, 32, 32>)>,
+    pub(crate) shuffle: Vec<TraceRecord<B256, B256, 32, 32>>,
+    /// A marker since these fields do not use trait F
+    pub(crate) marker: PhantomData<F>,
 }
 
 /// Implement the circuit extension for memory consistency circuit
@@ -93,11 +84,11 @@ impl<F: Field + PrimeField + From<B256>> CircuitExtension<F> for MemoryConsisten
         );
         permutation_circuit.synthesize_with_layouter(config.permutation_config, layouter)?;
         let mut sorted_trace_record = vec![];
-        for (_, trace) in self.shuffle.clone() {
+        for trace in self.shuffle.clone() {
             sorted_trace_record.push(ConvertedTraceRecord::<F>::from(trace));
         }
         let mut original_trace_record = vec![];
-        for (_, trace) in self.input.clone() {
+        for trace in self.input.clone() {
             original_trace_record.push(ConvertedTraceRecord::<F>::from(trace));
         }
         let original_memory_circuit = OriginalMemoryCircuit {
@@ -145,13 +136,11 @@ impl<F: Field + PrimeField + From<B256>> Circuit<F> for MemoryConsistencyCircuit
             tmp = tmp * alpha.clone();
             alpha_power.push(tmp.clone());
         }
-        let input_idx = meta.advice_column();
         let input = meta.fixed_column();
-        let shuffle_idx = meta.advice_column();
         let shuffle = meta.advice_column();
         Self::Config::configure(
             meta,
-            (input_idx, input, shuffle_idx, shuffle),
+            (input, shuffle),
             original_trace_record,
             sorted_trace_record,
             lookup_tables,
