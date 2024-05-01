@@ -80,17 +80,14 @@ impl<F: fmt::Debug, const R: usize> Absorbing<F, R> {
 
 /// The absorbing state of the `Sponge`.
 #[derive(Debug)]
-pub struct Absorbing<F, const R: usize>(pub(crate) SpongeRate<F, R>);
+pub struct Absorbing<F, const R: usize>(pub(crate) [Option<F>; R]);
 
 /// The squeezing state of the `Sponge`.
 #[derive(Debug)]
-pub struct Squeezing<F, const R: usize>(pub(crate) SpongeRate<F, R>);
+pub struct Squeezing<F, const R: usize>(pub(crate) [Option<F>; R]);
 
 /// The type used to hold permutation state.
 pub(crate) type State<F, const T: usize> = [F; T];
-
-/// The type used to hold sponge rate.
-pub(crate) type SpongeRate<F, const R: usize> = [Option<F>; R];
 
 /// A Poseidon sponge.
 pub(crate) struct Sponge<
@@ -195,11 +192,12 @@ pub(crate) fn permute<F: Field + PrimeField, S: Spec<F, T, R>, const T: usize, c
     mds: &[[F; T]; T],
     round_constants: &[[F; T]],
 ) {
+    // The number of full rounds and partial rounds, respectively
     let r_f = S::full_rounds() / 2;
     let r_p = S::partial_rounds();
 
     // Multiply the state by  mds
-    let apply_mds = |state: &mut State<F, T>| {
+    let mix_layer = |state: &mut State<F, T>| {
         let mut new_state = [F::ZERO; T];
         for i in 0..T {
             for (j, k) in mds[i].iter().zip(state.iter()).take(T) {
@@ -219,7 +217,7 @@ pub(crate) fn permute<F: Field + PrimeField, S: Spec<F, T, R>, const T: usize, c
             *word = S::sbox(*word);
         }
         // multiply by mds
-        apply_mds(state);
+        mix_layer(state);
     };
 
     let part_round = |state: &mut State<F, T>, rcs: &[F; T]| {
@@ -230,7 +228,7 @@ pub(crate) fn permute<F: Field + PrimeField, S: Spec<F, T, R>, const T: usize, c
         // In a partial round, the S-box is only applied to the first state word.
         state[0] = S::sbox(state[0]);
         // multiply by mds
-        apply_mds(state);
+        mix_layer(state);
     };
 
     for i in round_constants.iter().take(r_f) {
