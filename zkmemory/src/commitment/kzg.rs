@@ -49,7 +49,6 @@ where
     V: Base<T>,
 {
     /// Params: consists of the tuple (g,g^s,g^(s^2),...,g^(s^d)) where
-    ///
     /// g is the generatorr and s is a secret value
     kzg_params: ParamsKZG<Bn256>,
     /// Domain used for creating polynomials
@@ -87,9 +86,7 @@ where
     }
 
     /// Commit a trace record in an execution trace
-    ///
     /// This function, given input a trace record,
-    ///
     /// outputs the commitment of the trace
     pub fn commit(&mut self, trace: TraceRecord<K, V, S, T>) -> G1Affine {
         self.kzg_params
@@ -264,9 +261,7 @@ where
     }
 
     /// Open all fields from the trace record
-    ///
     /// The function, given input a trace record and its commitment,
-    ///
     /// outputs a proof of correct opening
     pub fn prove_trace_record(
         &self,
@@ -298,12 +293,9 @@ where
         commitment_list)
     }
 
-    /// Verify the correctness of the trace record
-    ///
+    /// Verify the correctness of the trace record.
     /// This function, given input a trace record,
-    ///
     /// it commitment and the proof of correctness opening,
-    ///
     /// returns True or False to determine the correctness of the opening
     pub fn verify_trace_record(
         &self,
@@ -317,10 +309,7 @@ where
         // Create the evaluations p(1),p(omega),...,p(omega^4)
         // for the polynomial p(x) converted from the trace
         let eval = Vec::from(self.trace_to_field(trace));
-
         // Finally, verify the correctness of the trace record
-        // I use the anonymous lifetime parameter '_ here, since currently
-        // I do not know how to add a specific life time parameter in the script.
         self.verify_kzg_proof::<
         KZGCommitmentScheme<Bn256>,
         VerifierSHPLONK<'_,Bn256>,

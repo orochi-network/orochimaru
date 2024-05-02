@@ -1,9 +1,9 @@
-//! The implelemtation of Poseidon hash, with most details from
+//! The implelemtation of Poseidon hash, with most details based from
 //! [Zcash implementation](https://github.com/zcash/halo2/blob/main/halo2_gadgets/src/poseidon/primitives.rs)
-//! We originally wanted to import the implementation from Zcash's library
-//! however, since we are using the Halo2 version from PSE, we need to
-//! clone many functions and fix many details so that the implementation
-//! will be compatible with our implementation
+//! We originally wanted to import the implementation from Zcash's library directly.
+//! However, since we are using the Halo2 version from PSE, we need to
+//! clone many functions and fix some details so that the implementation
+//! will be compatible with our implementation.
 //! The hash function is used in some circuits for verifying the correctness of
 //! Merkle tree and Verkle tree opening proofs.
 
@@ -17,18 +17,16 @@ pub(crate) type Mtrx<F, const T: usize> = [[F; T]; T];
 
 /// The trait for specifying the hash parameters
 pub trait Spec<F: Field + PrimeField, const T: usize, const R: usize>: fmt::Debug {
-    /// The number of full rounds for this specification.
-    ///
-    /// This must be an even number.
+    /// The number of full rounds for Poseidon hash.
     fn full_rounds() -> usize;
 
-    /// The number of partial rounds for this specification.
+    /// The number of partial rounds for Poseidon hash.
     fn partial_rounds() -> usize;
 
-    /// The S-box for this specification.
+    /// The S-box for poseidon hash.
     fn sbox(val: F) -> F;
 
-    /// Generates `(round_constants, mds, mds^-1)` corresponding to this specification.
+    /// Generates `(round_constants, mds, mds^-1)` corresponding to Poseidon hash.
     fn constants() -> (Vec<[F; T]>, Mtrx<F, T>, Mtrx<F, T>);
 }
 
@@ -44,7 +42,7 @@ pub trait Domain<F: Field + PrimeField, const R: usize> {
     fn padding(input_len: usize) -> Self::Padding;
 }
 
-/// the number of messages to be hashed
+/// The number of messages to be hashed
 pub struct ConstantLength<const L: usize>;
 
 impl<F: PrimeField, const R: usize, const L: usize> Domain<F, R> for ConstantLength<L> {
@@ -183,9 +181,7 @@ fn poseidon_sponge<F: Field + PrimeField, S: Spec<F, T, R>, const T: usize, cons
 }
 
 /// Runs the Poseidon permutation on the given state. Given inputs a state,
-///
 /// a MDS matrix and a list of round_constants, this function transform the
-///
 /// state into a new state.
 pub(crate) fn permute<F: Field + PrimeField, S: Spec<F, T, R>, const T: usize, const R: usize>(
     state: &mut State<F, T>,
@@ -196,7 +192,7 @@ pub(crate) fn permute<F: Field + PrimeField, S: Spec<F, T, R>, const T: usize, c
     let r_f = S::full_rounds() / 2;
     let r_p = S::partial_rounds();
 
-    // Multiply the state by  mds
+    // Multiply the state by mds
     let mix_layer = |state: &mut State<F, T>| {
         let mut new_state = [F::ZERO; T];
         for i in 0..T {

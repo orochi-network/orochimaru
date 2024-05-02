@@ -18,14 +18,11 @@ use halo2_proofs::{
 /// Merkle tree config
 pub struct MerkleTreeConfig<F: Field + PrimeField> {
     /// advice has 3 columns, the first column is the left input of the hash,
-    ///
     /// the right column is the right input of the hash, and the last column
-    ///
     /// is the output of the hash
     advice: [Column<Advice>; 3],
     indices: Column<Advice>,
     /// the instance of the config, consisting of the leaf we would like to
-    ///
     /// open, and the merkle root.
     pub instance: Column<Instance>,
     /// the selectors

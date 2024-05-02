@@ -24,9 +24,7 @@ pub(crate) struct OriginalMemoryConfig<F: Field + PrimeField> {
     /// The selectors
     pub(crate) selector: Column<Fixed>,
     pub(crate) selector_zero: Selector,
-    /// The config for checking the current time log is bigger than the
-    ///
-    /// previous one
+    /// The config for checking the current time log is bigger than the previous one
     pub(crate) greater_than: GreaterThanConfig<F, 3>,
     /// The lookup table
     pub(crate) lookup_tables: LookUpTables,

@@ -25,7 +25,7 @@ pub mod constraints;
 pub mod error;
 /// Definition of abstract machine (instruction, trace and context)
 pub mod machine;
-///
+/// The module of Poseidon hash function
 pub mod poseidon;
 #[cfg(test)]
 mod tests {

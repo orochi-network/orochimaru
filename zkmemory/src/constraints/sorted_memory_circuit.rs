@@ -25,7 +25,6 @@ pub(crate) struct SortedMemoryConfig<F: Field + PrimeField> {
     /// The difference between the current and the previous address
     pub(crate) addr_cur_prev: IsZeroConfig<F>,
     /// The config for checking the current address||time_log is bigger
-    ///
     /// than the previous one
     pub(crate) greater_than: GreaterThanConfig<F, 6>,
     /// The selectors

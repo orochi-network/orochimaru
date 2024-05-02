@@ -1,4 +1,4 @@
-/// The public constants for the poseidon hash
+/// The public constants for the Poseidon hash
 pub mod poseidon_constants;
-/// The implelentation of poseidon hash
+/// The implelentation of Poseidon hash
 pub mod poseidon_hash;
