@@ -1,64 +1,43 @@
+use core::marker::PhantomData;
+
 use crate::{
     base::{Base, B256},
-    constraints::{
-        consistency_check_circuit::MemoryConsistencyCircuit, permutation_circuit::successive_powers,
-    },
+    constraints::consistency_check_circuit::MemoryConsistencyCircuit,
     machine::{AbstractTraceRecord, TraceRecord},
 };
 extern crate alloc;
 use alloc::{vec, vec::Vec};
-use ff::{Field, PrimeField};
 use halo2_proofs::dev::MockProver;
 use halo2curves::pasta::Fp;
 
 // Sort the trace by address -> time_log as keys
-fn sort_trace<K, V, const S: usize, const T: usize, F>(
-    trace: Vec<(F, TraceRecord<K, V, S, T>)>,
-) -> Vec<(F, TraceRecord<K, V, S, T>)>
+fn sort_trace<K, V, const S: usize, const T: usize>(
+    trace: Vec<TraceRecord<K, V, S, T>>,
+) -> Vec<TraceRecord<K, V, S, T>>
 where
     K: Base<S>,
     V: Base<T>,
-    F: Field + PrimeField,
 {
     let mut buffer = trace;
     buffer.sort_by(|a, b| {
-        if a.1.address() == b.1.address() {
-            a.1.time_log().cmp(&b.1.time_log())
+        if a.address() == b.address() {
+            a.time_log().cmp(&b.time_log())
         } else {
-            a.1.address().cmp(&b.1.address())
+            a.address().cmp(&b.address())
         }
     });
     buffer
 }
 
-// Outputs the trace with their respective indexes
-fn trace_with_index<
-    K: Base<S>,
-    V: Base<T>,
-    const S: usize,
-    const T: usize,
-    F: Field + PrimeField,
->(
-    trace: Vec<TraceRecord<K, V, S, T>>,
-) -> Vec<(F, TraceRecord<K, V, S, T>)> {
-    let indexes = successive_powers::<F>(trace.len() as u64);
-    indexes
-        .into_iter()
-        .zip(trace)
-        .collect::<Vec<(F, TraceRecord<K, V, S, T>)>>()
-}
-
 /// Common test function to build and check the consistency circuit
 pub fn build_and_test_circuit(trace: Vec<TraceRecord<B256, B256, 32, 32>>, k: u32) {
-    // Initially, the trace is sorted by time_log
-    let trace = trace_with_index::<B256, B256, 32, 32, Fp>(trace);
-
-    // Sort this trace in address and time_log
-    let sorted_trace = sort_trace::<B256, B256, 32, 32, Fp>(trace.clone());
+    // Sort this trace (already sorted by time_log) in address and time_log order
+    let sorted_trace = sort_trace::<B256, B256, 32, 32>(trace.clone());
 
     let circuit = MemoryConsistencyCircuit::<Fp> {
         input: trace.clone(),
         shuffle: sorted_trace.clone(),
+        marker: PhantomData,
     };
 
     let prover = MockProver::run(k, &circuit, vec![]).expect("Cannot run the circuit");
@@ -247,17 +226,26 @@ mod tests {
             B256::from(5),
         );
 
+        let trace_3 = TraceRecord::<B256, B256, 32, 32>::new(
+            3,
+            0,
+            MemoryInstruction::Write,
+            B256::from(0x20),
+            B256::from(5),
+        );
+
         // Initially, the trace is sorted by time_log
-        let trace = trace_with_index::<B256, B256, 32, 32, Fp>(vec![trace_0, trace_1, trace_2]);
+        let trace = vec![trace_0, trace_1, trace_2];
 
         // Sort this trace in address and time_log
-        let mut sorted_trace = sort_trace::<B256, B256, 32, 32, Fp>(trace.clone());
+        let mut sorted_trace = sort_trace::<B256, B256, 32, 32>(trace.clone());
         // Tamper the permutation
-        sorted_trace.swap(0, 1);
+        sorted_trace[2] = trace_3;
 
         let circuit = MemoryConsistencyCircuit::<Fp> {
             input: trace.clone(),
             shuffle: sorted_trace.clone(),
+            marker: PhantomData,
         };
 
         let prover = MockProver::run(10, &circuit, vec![]).unwrap();
