@@ -1,4 +1,5 @@
-//! Circuit for checking if two arrays are permutation of each other
+//! Circuit for checking if two arrays are permutation of each other, based on the implementation 
+//! of [PSE's shuffle argument](https://github.com/privacy-scaling-explorations/halo2/blob/main/halo2_proofs/examples/shuffle.rs)
 use crate::{
     base::Base,
     constraints::common::CircuitExtension,
