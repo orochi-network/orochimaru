@@ -382,7 +382,7 @@ fn main() {
     for instruction in program {
         machine.exec(&instruction);
     }
-    // Print the trace record (prettified), sorted by ascending address by default
+    // Print the trace record (prettified), sorted by ascending time by default
     for x in machine.trace().into_iter() {
         println!("{:?}", x);
         trace_record.push(x);

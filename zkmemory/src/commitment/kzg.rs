@@ -1,3 +1,7 @@
+//! Commit to the trace record using KZG commitment scheme.
+//! We convert the trace into a polynomial and apply the algorithms in
+//! [PSE 's KZG implementation](https://github.com/privacy-scaling-explorations/halo2/tree/main/halo2_backend/src/poly/kzg) to commit, open and verify the polynomial
+
 extern crate alloc;
 use crate::{base::Base, machine::MemoryInstruction, machine::TraceRecord};
 use alloc::vec;
@@ -44,9 +48,10 @@ where
     K: Base<S>,
     V: Base<T>,
 {
-    // Params: generators, crs, etc
+    /// Params: consists of the tuple (g,g^s,g^(s^2),...,g^(s^d)) where
+    /// g is the generatorr and s is a secret value
     kzg_params: ParamsKZG<Bn256>,
-    // Domain used for creating polynomials
+    /// Domain used for creating polynomials
     domain: EvaluationDomain<Fr>,
     phantom_data: PhantomData<(K, V)>,
 }
@@ -288,7 +293,7 @@ where
         commitment_list)
     }
 
-    /// Verify the correctness of the trace record
+    /// Verify the correctness of the trace record.
     /// This function, given input a trace record,
     /// it commitment and the proof of correctness opening,
     /// returns True or False to determine the correctness of the opening
@@ -304,10 +309,7 @@ where
         // Create the evaluations p(1),p(omega),...,p(omega^4)
         // for the polynomial p(x) converted from the trace
         let eval = Vec::from(self.trace_to_field(trace));
-
         // Finally, verify the correctness of the trace record
-        // I use the anonymous lifetime parameter '_ here, since currently
-        // I do not know how to add a specific life time parameter in the script.
         self.verify_kzg_proof::<
         KZGCommitmentScheme<Bn256>,
         VerifierSHPLONK<'_,Bn256>,

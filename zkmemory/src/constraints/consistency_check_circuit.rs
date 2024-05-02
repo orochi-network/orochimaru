@@ -1,3 +1,4 @@
+//! The grand circuit for checking memory consistency
 extern crate alloc;
 use crate::{
     base::B256,
