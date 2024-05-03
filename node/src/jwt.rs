@@ -1,6 +1,6 @@
 use std::time::SystemTime;
 
-use crate::{rpc::decode_name, Error};
+use crate::{rpc::check_name, Error};
 use base64_url;
 use hex;
 use hmac::{Hmac, Mac};
@@ -60,8 +60,11 @@ impl JWT {
             {
                 return Err(Error("EXPIRED_JWT", "JWT is expired"));
             }
-            decode_name(jwt_payload.user.clone());
-						return Ok(jwt_payload);
+            if check_name(jwt_payload.user.clone()) {
+                return Ok(jwt_payload);
+            } else {
+                return Err(Error("INVALID_USERNAME", "Invalid username"));
+            }
         }
         Err(Error("INVALID_JWT", "Invalid JWT format"))
     }
