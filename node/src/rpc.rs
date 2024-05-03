@@ -53,11 +53,15 @@ pub fn decode_address(val: String) -> String {
 }
 
 pub fn decode_name(val: String) -> String {
-    let regex_name = Regex::new(r#"^[a-z][a-z0-9\_]{3,40}$"#).expect("Unable to init Regex");
-    match regex_name.is_match(val.as_str().as_ref()) {
+    match check_name(val.clone()) {
         true => val.clone(),
         false => panic!("Invalid input name value"),
     }
+}
+
+pub fn check_name(val: String) -> bool {
+    let regex_name = Regex::new(r#"^[a-z][a-z0-9\_]{3,40}$"#).expect("Unable to init Regex");
+    regex_name.is_match(val.as_str().as_ref())
 }
 
 impl JSONRPCMethod {
