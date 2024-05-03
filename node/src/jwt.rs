@@ -1,10 +1,9 @@
 use std::time::SystemTime;
 
-use crate::Error;
+use crate::{rpc::decode_name, Error};
 use base64_url;
 use hex;
 use hmac::{Hmac, Mac};
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 
@@ -50,7 +49,6 @@ impl JWT {
                 Ok(payload) => payload,
                 Err(_) => return Err(Error("INVALID_PAYLOAD", "Unable to decode payload")),
             };
-            let regex_name = Regex::new(r#"^[a-zA-Z0-9]{3,40}$"#).expect("Unable to init Regex");
             let jwt_payload: JWTPayload = match serde_json::from_slice(&decoded_payload) {
                 Ok(payload) => payload,
                 Err(_) => return Err(Error("INVALID_PAYLOAD", "Unable to deserialize payload")),
@@ -62,11 +60,8 @@ impl JWT {
             {
                 return Err(Error("EXPIRED_JWT", "JWT is expired"));
             }
-            if regex_name.is_match(&jwt_payload.user) {
-                return Ok(jwt_payload);
-            } else {
-                return Err(Error("INVALID_USERNAME", "Invalid username"));
-            }
+            decode_name(jwt_payload.user.clone());
+						return Ok(jwt_payload);
         }
         Err(Error("INVALID_JWT", "Invalid JWT format"))
     }
