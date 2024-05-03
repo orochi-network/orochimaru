@@ -1,35 +1,12 @@
 use clap::{arg, Command};
-use core::panic;
 use dotenv::dotenv;
 use libecvrf::{helper::random_bytes, KeyPair};
-use node::postgres_sql::Postgres;
-use regex::Regex;
+use node::{
+    postgres_sql::Postgres,
+    rpc::{decode_address, decode_i64, decode_name},
+};
 use serde_json::json;
 use std::env;
-
-fn decode_u32(val: String) -> u32 {
-    let regex_u32 = Regex::new(r#"\d{1,10}"#).expect("Unable to init Regex");
-    match regex_u32.is_match(val.as_str().as_ref()) {
-        true => val.as_str().parse::<u32>().expect("Unable to parse u32"),
-        false => panic!("Invalid input u32 value"),
-    }
-}
-
-fn decode_address(val: String) -> String {
-    let regex_address = Regex::new(r#"^0x[a-fA-F0-9]{40}$"#).expect("Unable to init Regex");
-    match regex_address.is_match(val.as_str().as_ref()) {
-        true => val.clone().to_lowercase(),
-        false => panic!("Invalid input address value"),
-    }
-}
-
-pub fn decode_name(val: String) -> String {
-    let regex_name = Regex::new(r#"^[a-z][a-z0-9\_]{3,40}$"#).expect("Unable to init Regex");
-    match regex_name.is_match(val.as_str().as_ref()) {
-        true => val.clone(),
-        false => panic!("Invalid input name value"),
-    }
-}
 
 fn cli() -> Command {
     Command::new("cli")
@@ -112,7 +89,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
             let name = decode_name(name);
             let address = decode_address(address);
-            let network_id = decode_u32(network_id);
+            let network_id = decode_i64(network_id);
             table_receiver
                 .insert(json!({
                     "name": name,
