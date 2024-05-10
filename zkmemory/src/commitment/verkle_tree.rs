@@ -130,6 +130,26 @@ impl<F: Field + PrimeField, Scheme: CommitmentScheme, const A: usize> Circuit<F>
             },
         )?;
 
+        layouter.assign_region(
+            || "Verkle proof",
+            |mut region| {
+                for i in 0..self.non_leaf_elements.len() {
+                    if i == 0 {
+                        self.assign(self.leaf, self.non_leaf_elements[i], &mut region, config, i)?;
+                    } else {
+                        self.assign(
+                            self.non_leaf_elements[i - 1],
+                            self.non_leaf_elements[i],
+                            &mut region,
+                            config,
+                            i,
+                        )?;
+                    }
+                }
+                Ok(())
+            },
+        )?;
+
         let root = layouter.assign_region(
             || "assign root",
             |mut region| {
@@ -168,7 +188,6 @@ where
         params: &'params Scheme::ParamsProver,
         k: u32,
     ) -> F {
-        let rng = thread_rng();
         let domain = EvaluationDomain::new(1, k);
         let poly = domain.coeff_from_vec(lagrange_interpolate(omega_power, &child));
         let blind = Blind::<Scheme::Scalar>::new(&mut OsRng);
@@ -177,21 +196,30 @@ where
         let x = coordinates.x();
         let y = coordinates.y();
         // TODO: try to convert x,y from Scheme::Curve::Base into Scheme::Scalar type
-        Hash::<Scheme::Scalar, S, ConstantLength<2>, W, R>::init().hash([x, y])
+        F::from(0)
     }
     fn assign(
         &self,
-        value: F,
+        cur_value: F,
+        next_value: F,
         region: &mut Region<'_, F>,
         config: VerkleTreeConfig<F, A>,
         offset: usize,
     ) -> Result<F, Error> {
         region.assign_advice(
-            || "value of the verious node",
+            || "value of the current node",
             config.advice[0],
             offset,
-            || Value::known(value),
+            || Value::known(cur_value),
         )?;
+
+        region.assign_advice(
+            || "value of the next node",
+            config.advice[1],
+            offset,
+            || Value::known(next_value),
+        )?;
+
         region.assign_fixed(
             || "selector",
             config.selector,
