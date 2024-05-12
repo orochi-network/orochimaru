@@ -40,9 +40,16 @@ impl MigrationTrait for Migration {
                     )
                     .index(
                         Index::create()
+                            .name("unique_consumer_address_and_network")
+                            .col(Receiver::Address)
+                            .col(Receiver::Network)
+                            .unique(),
+                    )
+                    .index(
+                        Index::create()
                             .name("index_name")
-                            .unique()
-                            .col(Receiver::Name),
+                            .col(Receiver::Name)
+                            .unique(),
                     )
                     .to_owned(),
             )
