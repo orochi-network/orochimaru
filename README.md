@@ -178,6 +178,12 @@ Migrate database or init database for the first time:
 sea-orm-cli migrate
 ```
 
+## Add unique key
+
+```sql
+ALTER TABLE public.receiver ADD CONSTRAINT address_network_unique UNIQUE (address,network);
+```
+
 ## Docker
 
 ```

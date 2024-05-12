@@ -276,52 +276,52 @@ async fn orand(
                 JSONRPCMethod::AdminAddReceiver(username, receiver_address, network) => {
                     // Only orand could able pair with ZERO_ADDRESS
                     if jwt_payload.user.eq(ORAND_KEYRING_NAME) {
-                        let result = context
+                        let model_keyring = match context
                             .postgres()
                             .table_keyring()
                             .find_by_name(username.clone())
                             .await
-                            .expect("User must existed in the database");
+                            .expect("User must existed in the database")
+                        {
+                            Some(keyring_record) => keyring_record,
+                            None => {
+                                return QuickResponse::err(node::Error(
+                                    "ACCESS_DENIED",
+                                    "User may not exist or database error",
+                                ));
+                            }
+                        };
                         let receiver_check = receiver
                             .find_one(network, &receiver_address)
                             .await
                             .expect("Unable to query receiver from database");
                         // Dummy patch to check if receiver existed
                         if receiver_check.is_some() {
-                            return QuickResponse::err(node::Error(
-                                "RECEIVER_EXISTED",
-                                "Receiver has been existed",
-                            ));
+                            return QuickResponse::res_json(&receiver_check);
                         }
-                        match result {
-                            Some(model_keyring) => {
-                                match receiver
-                                    .insert(json!({
-                                        "keyring_id": model_keyring.id,
-                                        "name": Uuid::new_v4().to_string(),
-                                        "address": receiver_address,
-                                        "network": network,
-                                        "nonce": 0,
-                                    }))
-                                    .await
-                                {
-                                    Ok(model_receiver) => {
-                                        return QuickResponse::res_json(&model_receiver)
-                                    }
-                                    Err(err) => {
-                                        log::error!("Unable to add new receiver {}", err);
-                                        return QuickResponse::err(node::Error(
-                                            "INTERNAL_SERVER_ERROR",
-                                            "Unable to add new receiver",
-                                        ));
-                                    }
-                                }
-                            }
-                            _ => {
+
+                        log::info!(
+                            "Trying insert new receiver address: {} network: {}",
+                            receiver_address,
+                            network
+                        );
+                        match receiver
+                            .insert(json!({
+                                "keyring_id": model_keyring.id,
+                                "name": Uuid::new_v4().to_string(),
+                                "address": receiver_address,
+                                "network": network,
+                                "nonce": 0,
+                            }))
+                            .await
+                        {
+                            Ok(model_receiver) => return QuickResponse::res_json(&model_receiver),
+                            Err(err) => {
+                                log::error!("Unable to add new receiver {}", err);
                                 return QuickResponse::err(node::Error(
-                                    "ACCESS_DENIED",
-                                    "User may not exist or database error",
-                                ))
+                                    "INTERNAL_SERVER_ERROR",
+                                    "Unable to add new receiver",
+                                ));
                             }
                         }
                     }

@@ -16,7 +16,6 @@ use sea_orm::{
     DbErr, EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect, TransactionTrait,
 };
 use serde_json::json;
-use uuid::Uuid;
 
 use super::ReceiverTable;
 
@@ -169,41 +168,10 @@ impl<'a> RandomnessTable<'a> {
             Ok(option_receiver) => match option_receiver {
                 Some(model_receiver) => model_receiver,
                 None => {
-                    // Insert new receiver record if we're on testnet
-                    if context.is_testnet() {
-                        let model_keyring = context
-                            .postgres()
-                            .table_keyring()
-                            .find_by_name(username)
-                            .await?
-                            .expect("Unable to query keyring from database");
-                        match receiver::ActiveModel::from_json(json!({
-                            "keyring_id": model_keyring.id,
-                            "name": Uuid::new_v4(),
-                            "network": network,
-                            "address": address.clone(),
-                            "nonce": 0
-                        })) {
-                            Ok(active_model) => {
-                                match receiver::Entity::insert(active_model)
-                                    .exec_with_returning(&txn)
-                                    .await
-                                {
-                                    Ok(receiver_model) => receiver_model,
-                                    Err(e) => {
-                                        log::error!("Unable to insert new receiver");
-                                        return Err(e);
-                                    }
-                                }
-                            }
-                            Err(e) => return Err(e),
-                        }
-                    } else {
-                        log::error!("There is no receiver record");
-                        return Err(DbErr::RecordNotFound(
-                            "Receiver record not found".to_string(),
-                        ));
-                    }
+                    log::error!("There is no receiver record");
+                    return Err(DbErr::RecordNotFound(
+                        "Receiver record not found".to_string(),
+                    ));
                 }
             },
             Err(e) => return Err(e),

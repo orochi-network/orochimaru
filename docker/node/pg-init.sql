@@ -36,6 +36,7 @@ create table public.receiver (
 	nonce int8 not null,
 	created_date timestamp not null default CURRENT_TIMESTAMP,
 	constraint index_name unique (name),
+	constraint unique_address_and_network (address, network),
 	constraint receiver_pkey primary key (id),
 	constraint link_receiver_to_keyring foreign key (keyring_id) references public.keyring(id)
 );
