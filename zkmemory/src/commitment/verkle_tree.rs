@@ -28,7 +28,6 @@ use halo2curves::pasta::{
     pallas::{Affine, Scalar},
     Fp,
 };
-use rand::thread_rng;
 use rand_core::OsRng;
 use std::println;
 
@@ -41,7 +40,6 @@ pub struct VerkleTreeConfig<F: Field + PrimeField, const A: usize> {
     selector: Column<Fixed>,
     selector_zero: Selector,
     _marker: PhantomData<F>,
-    table: Table<A>,
 }
 impl<F: Field + PrimeField, const A: usize> VerkleTreeConfig<F, A> {
     fn configure(
@@ -75,7 +73,6 @@ impl<F: Field + PrimeField, const A: usize> VerkleTreeConfig<F, A> {
             selector,
             selector_zero,
             _marker: PhantomData,
-            table,
         }
     }
 }
@@ -89,8 +86,13 @@ pub(crate) struct VerkleTreeCircuit<F: Field + PrimeField, Scheme: CommitmentSch
     _marker: PhantomData<Scheme>,
 }
 
-impl<F: Field + PrimeField, Scheme: CommitmentScheme, const A: usize> Circuit<F>
-    for VerkleTreeCircuit<F, Scheme, A>
+impl<
+        F: Field + PrimeField + WithSmallOrderMulGroup<3>,
+        Scheme: CommitmentScheme,
+        const A: usize,
+    > Circuit<F> for VerkleTreeCircuit<F, Scheme, A>
+where
+    Scheme::Scalar: Field + PrimeField + WithSmallOrderMulGroup<3>,
 {
     type Config = VerkleTreeConfig<F, A>;
     type FloorPlanner = SimpleFloorPlanner;
@@ -135,11 +137,19 @@ impl<F: Field + PrimeField, Scheme: CommitmentScheme, const A: usize> Circuit<F>
             |mut region| {
                 for i in 0..self.non_leaf_elements.len() {
                     if i == 0 {
-                        self.assign(self.leaf, self.non_leaf_elements[i], &mut region, config, i)?;
+                        self.assign(
+                            self.leaf,
+                            self.non_leaf_elements[i],
+                            self.indices[i],
+                            &mut region,
+                            config,
+                            i,
+                        )?;
                     } else {
                         self.assign(
                             self.non_leaf_elements[i - 1],
                             self.non_leaf_elements[i],
+                            self.indices[i],
                             &mut region,
                             config,
                             i,
@@ -198,10 +208,12 @@ where
         // TODO: try to convert x,y from Scheme::Curve::Base into Scheme::Scalar type
         F::from(0)
     }
+
     fn assign(
         &self,
         cur_value: F,
         next_value: F,
+        index: F,
         region: &mut Region<'_, F>,
         config: VerkleTreeConfig<F, A>,
         offset: usize,
@@ -220,12 +232,20 @@ where
             || Value::known(next_value),
         )?;
 
+        region.assign_advice(
+            || "the index of the layer",
+            config.indices,
+            offset,
+            || Value::known(index),
+        )?;
+
         region.assign_fixed(
             || "selector",
             config.selector,
             offset,
             || Value::known(F::ONE),
         )?;
+
         config.selector_zero.enable(region, offset)?;
         Ok((F::ZERO))
     }
