@@ -2,9 +2,11 @@
 
 extern crate alloc;
 use core::marker::PhantomData;
+use ethnum::U256;
 use group::Curve;
 extern crate std;
 use crate::{
+    base::{Uint, B256},
     constraints,
     poseidon::poseidon_hash::{ConstantLength, Hash, OrchardNullifier, Spec},
 };
@@ -14,7 +16,8 @@ use ff::{Field, PrimeField, WithSmallOrderMulGroup};
 use halo2_proofs::{
     arithmetic::{eval_polynomial, lagrange_interpolate},
     circuit::{Layouter, Region, SimpleFloorPlanner, Value},
-    halo2curves::{pairing::Engine, CurveAffine},
+    halo2curves::bn256::{Bn256, Fr, G1Affine},
+    halo2curves::{bn256::G2Affine, pairing::Engine, CurveAffine},
     plonk::{
         Advice, Circuit, Column, ConstraintSystem, Error, Expression, Fixed, Instance, Selector,
     },
@@ -24,26 +27,22 @@ use halo2_proofs::{
         EvaluationDomain, Rotation,
     },
 };
-use halo2curves::pasta::{
-    pallas::{Affine, Scalar},
-    Fp,
-};
+use halo2curves::pasta::pallas::{Affine, Scalar};
 use rand_core::OsRng;
 use std::println;
 
 #[derive(Clone, Copy, Debug)]
 /// Verkle tree config
-pub struct VerkleTreeConfig<F: Field + PrimeField, const A: usize> {
+pub struct VerkleTreeConfig<const A: usize> {
     advice: [Column<Advice>; 2],
     pub instance: Column<Instance>,
     indices: Column<Advice>,
     selector: Column<Fixed>,
     selector_zero: Selector,
-    _marker: PhantomData<F>,
 }
-impl<F: Field + PrimeField, const A: usize> VerkleTreeConfig<F, A> {
+impl<const A: usize> VerkleTreeConfig<A> {
     fn configure(
-        meta: &mut ConstraintSystem<F>,
+        meta: &mut ConstraintSystem<Fr>,
         instance: Column<Instance>,
         table: Table<A>,
     ) -> Self {
@@ -72,50 +71,43 @@ impl<F: Field + PrimeField, const A: usize> VerkleTreeConfig<F, A> {
             indices,
             selector,
             selector_zero,
-            _marker: PhantomData,
         }
     }
 }
 ///
 #[derive(Default)]
-pub(crate) struct VerkleTreeCircuit<F: Field + PrimeField, Scheme: CommitmentScheme, const A: usize>
-{
-    pub(crate) leaf: F,
-    pub(crate) non_leaf_elements: Vec<F>,
-    pub(crate) indices: Vec<F>,
-    _marker: PhantomData<Scheme>,
+pub(crate) struct VerkleTreeCircuit<const A: usize> {
+    pub(crate) leaf: Fr,
+    pub(crate) commitment: Vec<G1Affine>,
+    pub(crate) proof: Vec<G1Affine>,
+    pub(crate) non_leaf_elements: Vec<Fr>,
+    pub(crate) indices: Vec<Fr>,
 }
 
-impl<
-        F: Field + PrimeField + WithSmallOrderMulGroup<3>,
-        Scheme: CommitmentScheme,
-        const A: usize,
-    > Circuit<F> for VerkleTreeCircuit<F, Scheme, A>
-where
-    Scheme::Scalar: Field + PrimeField + WithSmallOrderMulGroup<3>,
-{
-    type Config = VerkleTreeConfig<F, A>;
+impl<const A: usize> Circuit<Fr> for VerkleTreeCircuit<A> {
+    type Config = VerkleTreeConfig<A>;
     type FloorPlanner = SimpleFloorPlanner;
     fn without_witnesses(&self) -> Self {
         Self {
-            leaf: F::ZERO,
-            non_leaf_elements: vec![F::ZERO],
-            indices: vec![F::ZERO],
-            _marker: PhantomData,
+            leaf: Fr::ZERO,
+            commitment: vec![G1Affine::generator()],
+            proof: vec![G1Affine::generator()],
+            non_leaf_elements: vec![Fr::ZERO],
+            indices: vec![Fr::ZERO],
         }
     }
 
-    fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
+    fn configure(meta: &mut ConstraintSystem<Fr>) -> Self::Config {
         let instance = meta.instance_column();
         meta.enable_equality(instance);
         let table = Table::<A>::construct(meta);
-        VerkleTreeConfig::<F, A>::configure(meta, instance, table)
+        VerkleTreeConfig::<A>::configure(meta, instance, table)
     }
 
     fn synthesize(
         &self,
         config: Self::Config,
-        mut layouter: impl Layouter<F>,
+        mut layouter: impl Layouter<Fr>,
     ) -> Result<(), Error> {
         assert_eq!(self.indices.len(), self.non_leaf_elements.len());
         let mut v = vec![self.leaf];
@@ -139,6 +131,8 @@ where
                     if i == 0 {
                         self.assign(
                             self.leaf,
+                            self.commitment[i],
+                            self.proof[i],
                             self.non_leaf_elements[i],
                             self.indices[i],
                             &mut region,
@@ -148,6 +142,8 @@ where
                     } else {
                         self.assign(
                             self.non_leaf_elements[i - 1],
+                            self.commitment[i],
+                            self.proof[i],
                             self.non_leaf_elements[i],
                             self.indices[i],
                             &mut region,
@@ -178,46 +174,37 @@ where
     }
 }
 
-impl<
-        'params,
-        F: Field + PrimeField + WithSmallOrderMulGroup<3>,
-        Scheme: CommitmentScheme,
-        const A: usize,
-    > VerkleTreeCircuit<F, Scheme, A>
-where
-    Scheme::Scalar: Field + PrimeField + WithSmallOrderMulGroup<3>,
-{
-    fn vec_commit<
-        S: Spec<Scheme::Scalar, W, R> + Clone,
-        P: Prover<'params, Scheme>,
-        const W: usize,
-        const R: usize,
-    >(
-        child: [Scheme::Scalar; A],
-        omega_power: &[Scheme::Scalar],
-        params: &'params Scheme::ParamsProver,
+impl<const A: usize> VerkleTreeCircuit<A> {
+    fn vec_commit<S: Spec<Fr, W, R> + Clone, const W: usize, const R: usize>(
+        child: [Fr; A],
+        omega_power: &[Fr],
+        params: ParamsKZG<Bn256>,
         k: u32,
-    ) -> F {
+    ) -> Fr {
         let domain = EvaluationDomain::new(1, k);
         let poly = domain.coeff_from_vec(lagrange_interpolate(omega_power, &child));
-        let blind = Blind::<Scheme::Scalar>::new(&mut OsRng);
-        let commit: Scheme::Curve = params.commit(&poly, blind).to_affine();
+        let blind = Blind::<Fr>::new(&mut OsRng);
+        let commit = params.commit(&poly, blind).to_affine();
         let coordinates = commit.coordinates().unwrap();
-        let x = coordinates.x();
-        let y = coordinates.y();
-        // TODO: try to convert x,y from Scheme::Curve::Base into Scheme::Scalar type
-        F::from(0)
+        let x: [u8; 32] = coordinates.x().to_bytes();
+        let y = coordinates.y().to_bytes();
+        let x_fr = Fr::from(B256::from(x));
+        let y_fr = Fr::from(B256::from(y));
+        let hash = Hash::<Fr, S, ConstantLength<2>, W, R>::init().hash([x_fr, y_fr]);
+        hash
     }
 
     fn assign(
         &self,
-        cur_value: F,
-        next_value: F,
-        index: F,
-        region: &mut Region<'_, F>,
-        config: VerkleTreeConfig<F, A>,
+        cur_value: Fr,
+        commitment: G1Affine,
+        proof: G1Affine,
+        next_value: Fr,
+        index: Fr,
+        region: &mut Region<'_, Fr>,
+        config: VerkleTreeConfig<A>,
         offset: usize,
-    ) -> Result<F, Error> {
+    ) -> Result<Fr, Error> {
         region.assign_advice(
             || "value of the current node",
             config.advice[0],
@@ -243,10 +230,14 @@ where
             || "selector",
             config.selector,
             offset,
-            || Value::known(F::ONE),
+            || Value::known(Fr::ONE),
         )?;
 
+        let e1 = Bn256::pairing(&commitment, &G2Affine::generator());
+        let e2 = Bn256::pairing(&proof, &G2Affine::generator());
+        let e3 = Bn256::pairing(&G1Affine::generator(), &G2Affine::generator());
+
         config.selector_zero.enable(region, offset)?;
-        Ok((F::ZERO))
+        Ok((Fr::ZERO))
     }
 }
