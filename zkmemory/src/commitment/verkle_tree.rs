@@ -6,6 +6,10 @@ extern crate std;
 use crate::{
     constraints,
     poseidon::poseidon_hash::{ConstantLength, Hash, Spec},
+    poseidon::{
+        poseidon_constants::{MDS_FR, MDS_INV_FR, ROUND_CONSTANTS_FR},
+        poseidon_hash::Mtrx,
+    },
 };
 use alloc::{vec, vec::Vec};
 use constraints::gadgets::Table;
@@ -36,6 +40,7 @@ use super::kzg::verify_kzg_proof;
 pub struct VerkleTreeConfig<const A: usize> {
     advice: [Column<Advice>; 2],
     check: Column<Advice>,
+    ///
     pub instance: Column<Instance>,
     indices: Column<Advice>,
     selector: Column<Fixed>,
@@ -276,16 +281,32 @@ impl<S: Spec<Fr, W, R>, const W: usize, const R: usize, const A: usize>
     }
 }
 
+#[derive(Clone, Debug)]
+///
+pub struct OrchardNullifier;
+
+impl Spec<Fr, 3, 2> for OrchardNullifier {
+    fn full_rounds() -> usize {
+        8
+    }
+
+    fn partial_rounds() -> usize {
+        56
+    }
+
+    fn sbox(val: Fr) -> Fr {
+        val.pow_vartime([5])
+    }
+
+    fn constants() -> (Vec<[Fr; 3]>, Mtrx<Fr, 3>, Mtrx<Fr, 3>) {
+        (ROUND_CONSTANTS_FR[..].to_vec(), MDS_FR, MDS_INV_FR)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        commitment::kzg::create_kzg_proof,
-        poseidon::{
-            poseidon_constants::{MDS_FR, MDS_INV_FR, ROUND_CONSTANTS_FR},
-            poseidon_hash::*,
-        },
-    };
+    use crate::commitment::kzg::create_kzg_proof;
     use alloc::vec;
     use core::marker::PhantomData;
     use group::Curve;
@@ -298,6 +319,7 @@ mod tests {
         },
         transcript::Blake2bWrite,
     };
+    use rand::thread_rng;
     use rand_core::OsRng;
     ///
     pub struct KZGTest {
@@ -314,6 +336,7 @@ mod tests {
             }
         }
 
+        ///
         pub fn poly_from_evals(&self, evals: [Fr; 4]) -> Polynomial<Fr, Coeff> {
             // Use Lagrange interpolation
             self.domain.coeff_from_vec(lagrange_interpolate(
@@ -322,12 +345,14 @@ mod tests {
             ))
         }
 
+        ///
         pub fn commit(&self, evals: [Fr; 4]) -> G1Affine {
             self.kzg_params
                 .commit(&self.poly_from_evals(evals), Blind(Fr::random(OsRng)))
                 .to_affine()
         }
 
+        ///
         pub fn create_proof(
             &self,
             point: Vec<Fr>,
@@ -342,6 +367,7 @@ mod tests {
             >(&self.kzg_params, point, polynomial, commitment)
         }
 
+        ///
         pub fn group_to_scalar<S: Spec<Fr, W, R>, const W: usize, const R: usize>(
             &self,
             g: G1Affine,
@@ -353,25 +379,39 @@ mod tests {
         }
     }
 
-    #[derive(Clone, Debug)]
-    pub struct OrchardNullifier;
-
-    impl Spec<Fr, 3, 2> for OrchardNullifier {
-        fn full_rounds() -> usize {
-            8
+    fn create_verkle_tree_proof(
+        leaf: Fr,
+        indices: Vec<usize>,
+    ) -> (VerkleTreeCircuit<OrchardNullifier, 3, 2, 4>, Fr) {
+        let rng = thread_rng();
+        let kzg = KZGTest::new(2);
+        let mut commitment: Vec<G1Affine> = vec![];
+        let mut poly: Vec<Polynomial<Fr, Coeff>> = vec![];
+        let mut non_leaf_elements: Vec<Fr> = vec![];
+        let mut temp = leaf;
+        for i in 0..indices.len() {
+            let mut evals = [0; 4].map(|_| Fr::random(rng.clone()));
+            evals[indices[i]] = temp;
+            let p = kzg.poly_from_evals(evals);
+            let c = kzg.commit(evals);
+            poly.push(p);
+            commitment.push(c);
+            temp = kzg.group_to_scalar::<OrchardNullifier, 3, 2>(c);
+            non_leaf_elements.push(temp);
         }
-
-        fn partial_rounds() -> usize {
-            56
-        }
-
-        fn sbox(val: Fr) -> Fr {
-            val.pow_vartime([5])
-        }
-
-        fn constants() -> (Vec<[Fr; 3]>, Mtrx<Fr, 3>, Mtrx<Fr, 3>) {
-            (ROUND_CONSTANTS_FR[..].to_vec(), MDS_FR, MDS_INV_FR)
-        }
+        let root = temp;
+        let indices_fr: Vec<Fr> = indices.iter().map(|x| Fr::from(*x as u64)).collect();
+        let proof = kzg.create_proof(indices_fr.clone(), poly, commitment.clone());
+        let circuit = VerkleTreeCircuit::<OrchardNullifier, 3, 2, 4> {
+            leaf,
+            commitment,
+            proof,
+            non_leaf_elements,
+            indices: indices_fr,
+            params: kzg.kzg_params,
+            _marker: PhantomData,
+        };
+        (circuit, root)
     }
 
     #[test]
@@ -460,7 +500,45 @@ mod tests {
     }
 
     #[test]
+    fn invalid_opening_index_range() {
+        let kzg = KZGTest::new(2);
+        let leaf = Fr::from(1);
+        let indices = vec![Fr::from(4)];
+        let evals = [leaf, Fr::from(0), Fr::from(0), Fr::from(0)];
+        let poly0 = vec![kzg.poly_from_evals(evals)];
+        let commit = kzg.commit(evals);
+        let root = kzg.group_to_scalar::<OrchardNullifier, 3, 2>(commit);
+        let non_leaf_elements = vec![root];
+        let commitment = vec![commit];
+        let proof = kzg.create_proof(vec![Fr::from(0)], poly0, commitment.clone());
+
+        let circuit = VerkleTreeCircuit::<OrchardNullifier, 3, 2, 4> {
+            leaf,
+            commitment,
+            proof,
+            non_leaf_elements,
+            indices,
+            params: kzg.kzg_params,
+            _marker: PhantomData,
+        };
+
+        let prover =
+            MockProver::run(10, &circuit, vec![vec![leaf, root]]).expect("Cannot run the circuit");
+        assert_ne!(prover.verify(), Ok(()));
+    }
+
+    #[test]
     fn valid_verkle_tree_2() {
+        let leaf = Fr::from(4213);
+        let indices = vec![0, 1, 2, 3];
+        let (circuit, root) = create_verkle_tree_proof(leaf, indices);
+        let prover =
+            MockProver::run(10, &circuit, vec![vec![leaf, root]]).expect("Cannot run the circuit");
+        assert_eq!(prover.verify(), Ok(()));
+    }
+
+    #[test]
+    fn wrong_verkle_path() {
         let kzg = KZGTest::new(2);
         let leaf = Fr::from(1);
         let indices = vec![Fr::from(0), Fr::from(1)];
@@ -473,7 +551,7 @@ mod tests {
         let commit_1 = kzg.commit(evals_1);
         let root = kzg.group_to_scalar::<OrchardNullifier, 3, 2>(commit_1);
 
-        let non_leaf_elements = vec![non_leaf_0, root];
+        let non_leaf_elements = vec![Fr::from(0), root];
         let commitment = vec![commit_0, commit_1];
         let proof = kzg.create_proof(
             vec![Fr::from(0), Fr::from(1)],
@@ -491,6 +569,16 @@ mod tests {
             _marker: PhantomData,
         };
 
+        let prover =
+            MockProver::run(10, &circuit, vec![vec![leaf, root]]).expect("Cannot run the circuit");
+        assert_ne!(prover.verify(), Ok(()));
+    }
+
+    #[test]
+    fn valid_verkle_tree_3() {
+        let leaf = Fr::from(34213);
+        let indices = vec![0, 1, 2, 1, 3, 1, 2, 0, 3];
+        let (circuit, root) = create_verkle_tree_proof(leaf, indices);
         let prover =
             MockProver::run(10, &circuit, vec![vec![leaf, root]]).expect("Cannot run the circuit");
         assert_eq!(prover.verify(), Ok(()));
