@@ -62,7 +62,7 @@ impl<F: Field + PrimeField> ConsistencyConfig<F> {
 }
 
 /// Define the memory consistency circuit
-#[derive(Default, Clone)]
+#[derive(Default)]
 pub(crate) struct MemoryConsistencyCircuit<F: Field + PrimeField + From<B256>> {
     /// input_trace: Array of trace records before sorting (sorted by time_log)
     pub(crate) input: Vec<TraceRecord<B256, B256, 32, 32>>,

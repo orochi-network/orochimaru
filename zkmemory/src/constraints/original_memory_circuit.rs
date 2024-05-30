@@ -215,11 +215,8 @@ impl<F: Field + PrimeField> OriginalMemoryCircuit<F> {
                 .zip(&prev_time_log)
                 .find(|((_, a), b)| a != b);
             let zero = F::ZERO;
-            let ((index, cur_limb), prev_limb) = if cfg!(test) {
-                find_result.unwrap_or(((&8, &zero), &zero))
-            } else {
-                find_result.expect("two trace records cannot have equal time log")
-            };
+            let ((index, cur_limb), prev_limb) = find_result.unwrap_or(((&8, &zero), &zero));
+
             let difference = *cur_limb - *prev_limb;
 
             // Assign the selector to be one at the current row

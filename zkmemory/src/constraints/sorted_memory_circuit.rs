@@ -296,11 +296,8 @@ impl<F: Field + PrimeField> SortedMemoryCircuit<F> {
                 .zip(&prev_be_limbs)
                 .find(|((_, a), b)| a != b);
             let zero = F::ZERO;
-            let ((index, cur_limb), prev_limb) = if cfg!(test) {
-                find_result.unwrap_or(((&40, &zero), &zero))
-            } else {
-                find_result.expect("two trace records cannot have the same address then time log")
-            };
+            let ((index, cur_limb), prev_limb) = find_result.unwrap_or(((&40, &zero), &zero));
+
             // Difference of address||time_log
             let difference = *cur_limb - *prev_limb;
 
@@ -524,6 +521,25 @@ mod test {
             address: [Fp::from(0); 32],
             time_log: [Fp::from(1); 8],
             instruction: Fp::from(1),
+            value: [Fp::from(63); 32],
+        };
+        build_and_test_circuit(vec![trace0, trace1], 10);
+    }
+
+    #[test]
+    #[should_panic]
+    fn equal_address_and_time_log() {
+        let trace0 = ConvertedTraceRecord {
+            address: [Fp::from(1); 32],
+            time_log: [Fp::from(0); 8],
+            instruction: Fp::from(1),
+            value: [Fp::from(63); 32],
+        };
+
+        let trace1 = ConvertedTraceRecord {
+            address: [Fp::from(1); 32],
+            time_log: [Fp::from(0); 8],
+            instruction: Fp::from(0),
             value: [Fp::from(63); 32],
         };
         build_and_test_circuit(vec![trace0, trace1], 10);
