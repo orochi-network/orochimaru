@@ -79,7 +79,7 @@ impl<const A: usize> VerkleTreeConfig<A> {
             meta.enable_equality(i);
         }
 
-        table.range_check(meta, "indices must be in 0..k", |meta| {
+        table.range_check(meta, "indices must be in 0..A", |meta| {
             meta.query_advice(indices, Rotation::cur())
         });
 
