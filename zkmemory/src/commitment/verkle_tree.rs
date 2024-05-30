@@ -354,12 +354,12 @@ mod tests {
     use rand::thread_rng;
     use rand_core::OsRng;
     /// A KZG struct for the purpose of testing the correctness of the Verkle tree circuit
-    pub struct KZGforTesting {
+    pub struct KZGStruct {
         kzg_params: ParamsKZG<Bn256>,
         domain: EvaluationDomain<Fr>,
     }
 
-    impl KZGforTesting {
+    impl KZGStruct {
         /// Initialize KZG parameters
         pub fn new(k: u32) -> Self {
             Self {
@@ -417,7 +417,7 @@ mod tests {
         indices: Vec<usize>,
     ) -> (VerkleTreeCircuit<OrchardNullifier, 3, 2, 4>, Fr) {
         let rng = thread_rng();
-        let kzg = KZGforTesting::new(2);
+        let kzg = KZGStruct::new(2);
         let mut commitment_list: Vec<G1Affine> = vec![];
         let mut poly_list: Vec<Polynomial<Fr, Coeff>> = vec![];
         let mut path_elements: Vec<Fr> = vec![];
@@ -487,7 +487,7 @@ mod tests {
 
     #[test]
     fn wrong_proof() {
-        let kzg = KZGforTesting::new(2);
+        let kzg = KZGStruct::new(2);
         let leaf = Fr::from(1);
 
         let indices = vec![Fr::from(0)];
@@ -524,7 +524,7 @@ mod tests {
 
     #[test]
     fn wrong_opening_index() {
-        let kzg = KZGforTesting::new(2);
+        let kzg = KZGStruct::new(2);
         let leaf = Fr::from(1);
 
         // the original index
@@ -558,7 +558,7 @@ mod tests {
 
     #[test]
     fn invalid_opening_index_range() {
-        let kzg = KZGforTesting::new(2);
+        let kzg = KZGStruct::new(2);
         let leaf = Fr::from(1);
         let evals = [leaf, Fr::from(0), Fr::from(0), Fr::from(0)];
         let commitment = kzg.commit(evals);
@@ -600,7 +600,7 @@ mod tests {
 
     #[test]
     fn wrong_verkle_path() {
-        let kzg = KZGforTesting::new(2);
+        let kzg = KZGStruct::new(2);
         let leaf = Fr::from(1);
         // indices
         let indices = vec![Fr::from(0), Fr::from(1)];
