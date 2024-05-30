@@ -3,7 +3,6 @@
 extern crate alloc;
 use crate::poseidon::poseidon_hash::{ConstantLength, Hash, Spec};
 use alloc::{vec, vec::Vec};
-use core::fmt::Debug;
 use core::marker::PhantomData;
 use ff::{Field, PrimeField};
 use halo2_proofs::{
@@ -14,7 +13,7 @@ use halo2_proofs::{
     poly::Rotation,
 };
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 /// Merkle tree config
 pub struct MerkleTreeConfig<F: Field + PrimeField> {
     /// advice has 3 columns, the first column is the left input of the hash,

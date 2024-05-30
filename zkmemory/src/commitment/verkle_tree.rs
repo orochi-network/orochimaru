@@ -45,7 +45,7 @@ const OMEGA_POWER: [Fr; 5] = [
     Fr::from_raw([0x0961, 0, 0, 0]),
 ];
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 /// Verkle tree config
 /// A is the number of children in each parent node
 pub struct VerkleTreeConfig<const A: usize> {
@@ -313,7 +313,7 @@ impl<S: Spec<Fr, W, R>, const W: usize, const R: usize, const A: usize>
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 /// The constants in Fr for Poseidon hash
 pub struct OrchardNullifier;
 

@@ -17,7 +17,7 @@ use halo2_proofs::{
 };
 use rand::thread_rng;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 /// Define the columns for the constraint
 pub(crate) struct SortedMemoryConfig<F: Field + PrimeField> {
     /// The fields of an execution trace

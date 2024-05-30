@@ -42,7 +42,7 @@ pub struct ShuffleChip<F: Field + PrimeField> {
 }
 
 /// Define the configuration for the shuffle chip.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ShuffleConfig {
     input: Column<Fixed>,
     shuffle: Column<Advice>,
