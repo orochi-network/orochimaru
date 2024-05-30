@@ -32,7 +32,7 @@ pub trait Spec<F: Field + PrimeField, const T: usize, const R: usize>: fmt::Debu
 
 /// The trait for specifying the domain of messages
 pub trait Domain<F: Field + PrimeField, const R: usize> {
-    /// Iterator that outputs padding field elements.
+    /// Iterator that outputs padding Field+PrimeField elements.
     type Padding: IntoIterator<Item = F>;
 
     /// The initial capacity element, encoding this domain.
@@ -45,7 +45,7 @@ pub trait Domain<F: Field + PrimeField, const R: usize> {
 /// The number of messages to be hashed
 pub struct ConstantLength<const L: usize>;
 
-impl<F: PrimeField, const R: usize, const L: usize> Domain<F, R> for ConstantLength<L> {
+impl<F: Field + PrimeField, const R: usize, const L: usize> Domain<F, R> for ConstantLength<L> {
     type Padding = iter::Take<iter::Repeat<F>>;
 
     fn initial_capacity_element() -> F {

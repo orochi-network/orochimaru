@@ -1,5 +1,7 @@
 //! Circuit for proving the correctness of the Verkle tree commitment.
-
+//! The label of a parent node is the commitment of the messages in all its children.
+//! We choose KZG as the polynomial commitment scheme for committing the messages in the children.
+//! Right now, the circuit could only support committing messages in the field Fr of Bn256, not in all finite fields.
 extern crate alloc;
 use core::marker::PhantomData;
 extern crate std;
@@ -35,16 +37,31 @@ use halo2_proofs::{
 
 use super::kzg::verify_kzg_proof;
 
+const OMEGA_POWER: [Fr; 5] = [
+    Fr::from_raw([0x01, 0, 0, 0]),
+    Fr::from_raw([0x07, 0, 0, 0]),
+    Fr::from_raw([0x31, 0, 0, 0]),
+    Fr::from_raw([0x0157, 0, 0, 0]),
+    Fr::from_raw([0x0961, 0, 0, 0]),
+];
+
 #[derive(Clone, Copy, Debug)]
 /// Verkle tree config
+/// A is the number of children in each parent node
 pub struct VerkleTreeConfig<const A: usize> {
+    /// advice has 2 columns, the first element is the current node in the opening path,
+    /// and the second element is the direct parent of the current node
     advice: [Column<Advice>; 2],
+    /// the verification result of the opening of the path
     check: Column<Advice>,
-    ///
+    /// the instance of the config, consists of the leaf and root nodes
     pub instance: Column<Instance>,
+    /// the indices in the opening path of the tree
     indices: Column<Advice>,
+    /// the selector
     selector: Column<Fixed>,
     selector_check: Selector,
+    /// the lookup table. indices are required to be in the lookup
     table: Table<A>,
 }
 impl<const A: usize> VerkleTreeConfig<A> {
@@ -90,19 +107,25 @@ impl<const A: usize> VerkleTreeConfig<A> {
         }
     }
 }
-///
 
+/// Verkle tree circuit
 pub(crate) struct VerkleTreeCircuit<
     S: Spec<Fr, W, R>,
     const W: usize,
     const R: usize,
     const A: usize,
 > {
+    /// The leaf element in the opening path
     pub(crate) leaf: Fr,
+    /// The KZG commitment for each parent node
     pub(crate) commitment: Vec<G1Affine>,
+    /// The proof of the valid opening path
     pub(crate) proof: Vec<u8>,
-    pub(crate) non_leaf_elements: Vec<Fr>,
+    /// The other element in the opening paths, including the root and excluding the leaf
+    pub(crate) path_elements: Vec<Fr>,
+    /// The indices of the opening paths
     pub(crate) indices: Vec<Fr>,
+    /// The KZG parameter params
     pub(crate) params: ParamsKZG<Bn256>,
     _marker: PhantomData<S>,
 }
@@ -117,7 +140,7 @@ impl<S: Spec<Fr, W, R>, const W: usize, const R: usize, const A: usize> Circuit<
             leaf: Fr::ZERO,
             commitment: vec![G1Affine::generator()],
             proof: vec![0],
-            non_leaf_elements: vec![Fr::ZERO],
+            path_elements: vec![Fr::ZERO],
             indices: vec![Fr::ZERO],
             params: ParamsKZG::<Bn256>::new(1),
             _marker: PhantomData,
@@ -136,7 +159,7 @@ impl<S: Spec<Fr, W, R>, const W: usize, const R: usize, const A: usize> Circuit<
         config: Self::Config,
         mut layouter: impl Layouter<Fr>,
     ) -> Result<(), Error> {
-        assert_eq!(self.indices.len(), self.non_leaf_elements.len());
+        assert_eq!(self.indices.len(), self.path_elements.len());
 
         let leaf_cell = layouter.assign_region(
             || "assign leaf",
@@ -151,9 +174,9 @@ impl<S: Spec<Fr, W, R>, const W: usize, const R: usize, const A: usize> Circuit<
         )?;
 
         layouter.assign_region(
-            || "Verkle proof",
+            || "verkle proof",
             |mut region| {
-                for i in 0..self.non_leaf_elements.len() {
+                for i in 0..self.path_elements.len() {
                     if i == 0 {
                         self.assign(
                             self.leaf,
@@ -165,7 +188,7 @@ impl<S: Spec<Fr, W, R>, const W: usize, const R: usize, const A: usize> Circuit<
                         )?;
                     } else {
                         self.assign(
-                            self.non_leaf_elements[i - 1],
+                            self.path_elements[i - 1],
                             self.commitment[i],
                             self.indices[i],
                             &mut region,
@@ -179,13 +202,17 @@ impl<S: Spec<Fr, W, R>, const W: usize, const R: usize, const A: usize> Circuit<
             },
         )?;
 
-        let mut poly_list = vec![];
-        poly_list.push(self.leaf);
-        for i in 0..self.non_leaf_elements.len() - 1 {
-            poly_list.push(self.non_leaf_elements[i]);
-        }
+        let mut poly_list = vec![self.leaf];
+        poly_list.extend(&self.path_elements[..self.path_elements.len() - 1]);
 
-        let b = verify_kzg_proof::<
+        let point_list = self
+            .indices
+            .iter()
+            .map(|x| OMEGA_POWER[x.to_bytes()[0] as usize])
+            .collect();
+
+        // assign the verification result of the opening, it should be True
+        let b = Fr::from(verify_kzg_proof::<
             KZGCommitmentScheme<Bn256>,
             VerifierSHPLONK<'_, Bn256>,
             Challenge255<G1Affine>,
@@ -193,12 +220,11 @@ impl<S: Spec<Fr, W, R>, const W: usize, const R: usize, const A: usize> Circuit<
             AccumulatorStrategy<'_, Bn256>,
         >(
             &self.params,
-            self.indices.clone(),
+            point_list,
             poly_list,
             self.commitment.clone(),
             self.proof.as_slice(),
-        );
-        let b = Fr::from(b);
+        ));
 
         layouter.assign_region(
             || "assign check result",
@@ -213,6 +239,7 @@ impl<S: Spec<Fr, W, R>, const W: usize, const R: usize, const A: usize> Circuit<
             },
         )?;
 
+        // assign the root value
         let root = layouter.assign_region(
             || "assign root",
             |mut region| {
@@ -220,11 +247,12 @@ impl<S: Spec<Fr, W, R>, const W: usize, const R: usize, const A: usize> Circuit<
                     || "assign root",
                     config.advice[0],
                     0,
-                    || Value::known(self.non_leaf_elements[self.non_leaf_elements.len() - 1]),
+                    || Value::known(self.path_elements[self.path_elements.len() - 1]),
                 )
             },
         )?;
 
+        // constraints the leaf and the root being equal to the public instances
         layouter.constrain_instance(leaf_cell.cell(), config.instance, 0)?;
         layouter.constrain_instance(root.cell(), config.instance, 1)?;
         Ok(())
@@ -249,11 +277,14 @@ impl<S: Spec<Fr, W, R>, const W: usize, const R: usize, const A: usize>
             offset,
             || Value::known(cur_value),
         )?;
+
+        // hash the commitment into a scalar value. We use Poseidon hash function
         let (x, y) = commitment.into_coordinates();
         let x_fr = Fr::from_bytes(&x.to_bytes()).unwrap();
         let y_fr = Fr::from_bytes(&y.to_bytes()).unwrap();
         let next_value = Hash::<Fr, S, ConstantLength<2>, W, R>::init().hash([x_fr, y_fr]);
 
+        // assign the current path node
         region.assign_advice(
             || "value of the next node",
             config.advice[1],
@@ -261,6 +292,7 @@ impl<S: Spec<Fr, W, R>, const W: usize, const R: usize, const A: usize>
             || Value::known(next_value),
         )?;
 
+        // assign the next path node
         region.assign_advice(
             || "the index of the layer",
             config.indices,
@@ -282,7 +314,7 @@ impl<S: Spec<Fr, W, R>, const W: usize, const R: usize, const A: usize>
 }
 
 #[derive(Clone, Debug)]
-///
+/// The constants in Fr for Poseidon hash
 pub struct OrchardNullifier;
 
 impl Spec<Fr, 3, 2> for OrchardNullifier {
@@ -321,13 +353,13 @@ mod tests {
     };
     use rand::thread_rng;
     use rand_core::OsRng;
-    ///
-    pub struct KZGTest {
+    /// A KZG struct for the purpose of testing the correctness of the Verkle tree circuit
+    pub struct KZGforTesting {
         kzg_params: ParamsKZG<Bn256>,
         domain: EvaluationDomain<Fr>,
     }
 
-    impl KZGTest {
+    impl KZGforTesting {
         /// Initialize KZG parameters
         pub fn new(k: u32) -> Self {
             Self {
@@ -336,23 +368,21 @@ mod tests {
             }
         }
 
-        ///
+        /// Convert a given list into a polynomial
         pub fn poly_from_evals(&self, evals: [Fr; 4]) -> Polynomial<Fr, Coeff> {
             // Use Lagrange interpolation
-            self.domain.coeff_from_vec(lagrange_interpolate(
-                &[Fr::from(0), Fr::from(1), Fr::from(2), Fr::from(3)],
-                &evals,
-            ))
+            self.domain
+                .coeff_from_vec(lagrange_interpolate(&OMEGA_POWER[0..4], &evals))
         }
 
-        ///
+        /// Commit the polynomial
         pub fn commit(&self, evals: [Fr; 4]) -> G1Affine {
             self.kzg_params
                 .commit(&self.poly_from_evals(evals), Blind(Fr::random(OsRng)))
                 .to_affine()
         }
 
-        ///
+        /// Create proof for multiple polynomial openings
         pub fn create_proof(
             &self,
             point: Vec<Fr>,
@@ -367,46 +397,56 @@ mod tests {
             >(&self.kzg_params, point, polynomial, commitment)
         }
 
-        ///
+        /// Hash a group element to an element in Fr
         pub fn group_to_scalar<S: Spec<Fr, W, R>, const W: usize, const R: usize>(
             &self,
-            g: G1Affine,
+            commitment: G1Affine,
         ) -> Fr {
-            let (x, y) = g.into_coordinates();
-            let x_fr = Fr::from_bytes(&x.to_bytes()).unwrap();
-            let y_fr = Fr::from_bytes(&y.to_bytes()).unwrap();
-            Hash::<Fr, S, ConstantLength<2>, W, R>::init().hash([x_fr, y_fr])
+            let (x_coordinate, y_coordinate) = commitment.into_coordinates();
+            let x_coordinate_fr =
+                Fr::from_bytes(&x_coordinate.to_bytes()).expect("Cannot convert x into Fr");
+            let y_coordinate_fr =
+                Fr::from_bytes(&y_coordinate.to_bytes()).expect("Cannot convert y into Fr");
+            Hash::<Fr, S, ConstantLength<2>, W, R>::init().hash([x_coordinate_fr, y_coordinate_fr])
         }
     }
 
-    fn create_verkle_tree_proof(
+    /// Create a valid verkle tree proof for the purpose of testing
+    pub fn create_verkle_tree_proof(
         leaf: Fr,
         indices: Vec<usize>,
     ) -> (VerkleTreeCircuit<OrchardNullifier, 3, 2, 4>, Fr) {
         let rng = thread_rng();
-        let kzg = KZGTest::new(2);
-        let mut commitment: Vec<G1Affine> = vec![];
-        let mut poly: Vec<Polynomial<Fr, Coeff>> = vec![];
-        let mut non_leaf_elements: Vec<Fr> = vec![];
+        let kzg = KZGforTesting::new(2);
+        let mut commitment_list: Vec<G1Affine> = vec![];
+        let mut poly_list: Vec<Polynomial<Fr, Coeff>> = vec![];
+        let mut path_elements: Vec<Fr> = vec![];
         let mut temp = leaf;
         for i in 0..indices.len() {
             let mut evals = [0; 4].map(|_| Fr::random(rng.clone()));
             evals[indices[i]] = temp;
-            let p = kzg.poly_from_evals(evals);
-            let c = kzg.commit(evals);
-            poly.push(p);
-            commitment.push(c);
-            temp = kzg.group_to_scalar::<OrchardNullifier, 3, 2>(c);
-            non_leaf_elements.push(temp);
+            // compute the polynomial for each parent node
+            let poly = kzg.poly_from_evals(evals);
+            // compute the commitment of the polynomial
+            let commitment = kzg.commit(evals);
+            poly_list.push(poly);
+            commitment_list.push(commitment);
+            // hash the group to scalar
+            temp = kzg.group_to_scalar::<OrchardNullifier, 3, 2>(commitment);
+            path_elements.push(temp);
         }
+        // the root node of the tree
         let root = temp;
+        // convert the indices to Fr
         let indices_fr: Vec<Fr> = indices.iter().map(|x| Fr::from(*x as u64)).collect();
-        let proof = kzg.create_proof(indices_fr.clone(), poly, commitment.clone());
+        let point_list: Vec<Fr> = indices.iter().map(|x| OMEGA_POWER[*x]).collect();
+        // create the proof of correct opening
+        let proof = kzg.create_proof(point_list, poly_list, commitment_list.clone());
         let circuit = VerkleTreeCircuit::<OrchardNullifier, 3, 2, 4> {
             leaf,
-            commitment,
+            commitment: commitment_list,
             proof,
-            non_leaf_elements,
+            path_elements,
             indices: indices_fr,
             params: kzg.kzg_params,
             _marker: PhantomData,
@@ -417,27 +457,9 @@ mod tests {
     #[test]
 
     fn test_valid_verkle_tree() {
-        let kzg = KZGTest::new(2);
-        let leaf = Fr::from(1);
-        let indices = vec![Fr::from(1)];
-        let evals = [Fr::from(3), leaf, Fr::from(7), Fr::from(15)];
-        let poly0 = vec![kzg.poly_from_evals(evals)];
-        let commit = kzg.commit(evals);
-        let root = kzg.group_to_scalar::<OrchardNullifier, 3, 2>(commit);
-        let non_leaf_elements = vec![root];
-        let commitment = vec![commit];
-        let proof = kzg.create_proof(vec![Fr::from(1)], poly0, commitment.clone());
-
-        let circuit = VerkleTreeCircuit::<OrchardNullifier, 3, 2, 4> {
-            leaf,
-            commitment,
-            proof,
-            non_leaf_elements,
-            indices,
-            params: kzg.kzg_params,
-            _marker: PhantomData,
-        };
-
+        let leaf = Fr::from(25234512);
+        let indices = vec![0];
+        let (circuit, root) = create_verkle_tree_proof(leaf, indices);
         let prover =
             MockProver::run(10, &circuit, vec![vec![leaf, root]]).expect("Cannot run the circuit");
         assert_eq!(prover.verify(), Ok(()));
@@ -445,27 +467,56 @@ mod tests {
 
     #[test]
     fn wrong_verkle_root() {
-        let kzg = KZGTest::new(2);
+        let leaf = Fr::from(341231);
+        let indices = vec![0, 1];
+        let (circuit, _) = create_verkle_tree_proof(leaf, indices);
+        let prover = MockProver::run(10, &circuit, vec![vec![leaf, Fr::from(0)]])
+            .expect("Cannot run the circuit");
+        assert_ne!(prover.verify(), Ok(()));
+    }
+
+    #[test]
+    fn wrong_verkle_leaf() {
+        let leaf = Fr::from(341231);
+        let indices = vec![0, 1];
+        let (circuit, root) = create_verkle_tree_proof(leaf, indices);
+        let prover = MockProver::run(10, &circuit, vec![vec![Fr::from(0), root]])
+            .expect("Cannot run the circuit");
+        assert_ne!(prover.verify(), Ok(()));
+    }
+
+    #[test]
+    fn wrong_proof() {
+        let kzg = KZGforTesting::new(2);
         let leaf = Fr::from(1);
+
         let indices = vec![Fr::from(0)];
+        // the right 'polynomial'
         let evals = [leaf, Fr::from(0), Fr::from(0), Fr::from(0)];
-        let poly0 = vec![kzg.poly_from_evals(evals)];
-        let commit = kzg.commit(evals);
-        let root = kzg.group_to_scalar::<OrchardNullifier, 3, 2>(commit);
-        let non_leaf_elements = vec![Fr::from(0)];
-        let commitment = vec![commit];
-        let proof = kzg.create_proof(vec![Fr::from(0)], poly0, commitment.clone());
+        // the wrong 'polynomial'
+        let false_evals = [Fr::from(2), Fr::from(0), Fr::from(0), Fr::from(0)];
+        // commit to the right polynomial
+        let commitment = kzg.commit(evals);
+        let root = kzg.group_to_scalar::<OrchardNullifier, 3, 2>(commitment);
+        let path_elements = vec![root];
+        let commitment_list = vec![commitment];
+
+        // wrong proof here
+        let proof = kzg.create_proof(
+            vec![OMEGA_POWER[0]],
+            vec![kzg.poly_from_evals(false_evals)],
+            commitment_list.clone(),
+        );
 
         let circuit = VerkleTreeCircuit::<OrchardNullifier, 3, 2, 4> {
             leaf,
-            commitment,
+            commitment: commitment_list,
             proof,
-            non_leaf_elements,
+            path_elements,
             indices,
             params: kzg.kzg_params,
             _marker: PhantomData,
         };
-
         let prover =
             MockProver::run(10, &circuit, vec![vec![leaf, root]]).expect("Cannot run the circuit");
         assert_ne!(prover.verify(), Ok(()));
@@ -473,27 +524,33 @@ mod tests {
 
     #[test]
     fn wrong_opening_index() {
-        let kzg = KZGTest::new(2);
+        let kzg = KZGforTesting::new(2);
         let leaf = Fr::from(1);
+
+        // the original index
         let indices = vec![Fr::from(0)];
         let evals = [leaf, Fr::from(0), Fr::from(0), Fr::from(0)];
-        let poly0 = vec![kzg.poly_from_evals(evals)];
-        let commit = kzg.commit(evals);
-        let root = kzg.group_to_scalar::<OrchardNullifier, 3, 2>(commit);
-        let non_leaf_elements = vec![root];
-        let commitment = vec![commit];
-        let proof = kzg.create_proof(vec![Fr::from(1)], poly0, commitment.clone());
+        let commitment = kzg.commit(evals);
+        let root = kzg.group_to_scalar::<OrchardNullifier, 3, 2>(commitment);
+        let path_elements = vec![root];
+        let commitment_list = vec![commitment];
+
+        // wrong opening index here, should be OMEGA_POWER[0]
+        let proof = kzg.create_proof(
+            vec![OMEGA_POWER[1]],
+            vec![kzg.poly_from_evals(evals)],
+            commitment_list.clone(),
+        );
 
         let circuit = VerkleTreeCircuit::<OrchardNullifier, 3, 2, 4> {
             leaf,
-            commitment,
+            commitment: commitment_list,
             proof,
-            non_leaf_elements,
+            path_elements,
             indices,
             params: kzg.kzg_params,
             _marker: PhantomData,
         };
-
         let prover =
             MockProver::run(10, &circuit, vec![vec![leaf, root]]).expect("Cannot run the circuit");
         assert_ne!(prover.verify(), Ok(()));
@@ -501,27 +558,31 @@ mod tests {
 
     #[test]
     fn invalid_opening_index_range() {
-        let kzg = KZGTest::new(2);
+        let kzg = KZGforTesting::new(2);
         let leaf = Fr::from(1);
-        let indices = vec![Fr::from(4)];
         let evals = [leaf, Fr::from(0), Fr::from(0), Fr::from(0)];
-        let poly0 = vec![kzg.poly_from_evals(evals)];
-        let commit = kzg.commit(evals);
-        let root = kzg.group_to_scalar::<OrchardNullifier, 3, 2>(commit);
-        let non_leaf_elements = vec![root];
-        let commitment = vec![commit];
-        let proof = kzg.create_proof(vec![Fr::from(0)], poly0, commitment.clone());
+        let commitment = kzg.commit(evals);
+        let root = kzg.group_to_scalar::<OrchardNullifier, 3, 2>(commitment);
+        let path_elements = vec![root];
+        let commitment_list = vec![commitment];
+
+        //  invalid index range here, should be in [0..3]
+        let indices = vec![Fr::from(4)];
+        let proof = kzg.create_proof(
+            vec![OMEGA_POWER[4]],
+            vec![kzg.poly_from_evals(evals)],
+            commitment_list.clone(),
+        );
 
         let circuit = VerkleTreeCircuit::<OrchardNullifier, 3, 2, 4> {
             leaf,
-            commitment,
+            commitment: commitment_list,
             proof,
-            non_leaf_elements,
+            path_elements,
             indices,
             params: kzg.kzg_params,
             _marker: PhantomData,
         };
-
         let prover =
             MockProver::run(10, &circuit, vec![vec![leaf, root]]).expect("Cannot run the circuit");
         assert_ne!(prover.verify(), Ok(()));
@@ -539,36 +600,38 @@ mod tests {
 
     #[test]
     fn wrong_verkle_path() {
-        let kzg = KZGTest::new(2);
+        let kzg = KZGforTesting::new(2);
         let leaf = Fr::from(1);
+        // indices
         let indices = vec![Fr::from(0), Fr::from(1)];
-        let evals = [leaf, Fr::from(1), Fr::from(3), Fr::from(5)];
-        let poly0 = kzg.poly_from_evals(evals);
-        let commit_0 = kzg.commit(evals);
-        let non_leaf_0 = kzg.group_to_scalar::<OrchardNullifier, 3, 2>(commit_0);
+        // create the first polynomial
+        let evals_0 = [leaf, Fr::from(1), Fr::from(3), Fr::from(5)];
+        let poly_0 = kzg.poly_from_evals(evals_0);
+        let commitment_0 = kzg.commit(evals_0);
+        let non_leaf_0 = kzg.group_to_scalar::<OrchardNullifier, 3, 2>(commitment_0);
+        // create the second polynomial
         let evals_1 = [Fr::from(0), non_leaf_0, Fr::from(3), Fr::from(5)];
-        let poly1 = kzg.poly_from_evals(evals_1);
-        let commit_1 = kzg.commit(evals_1);
-        let root = kzg.group_to_scalar::<OrchardNullifier, 3, 2>(commit_1);
-
-        let non_leaf_elements = vec![Fr::from(0), root];
-        let commitment = vec![commit_0, commit_1];
+        let poly_1 = kzg.poly_from_evals(evals_1);
+        let commitment_1 = kzg.commit(evals_1);
+        let root = kzg.group_to_scalar::<OrchardNullifier, 3, 2>(commitment_1);
+        // wrong path here, the first element should be non_leaf_0, but now it is equal to 0
+        let path_elements = vec![Fr::from(0), root];
+        let commitment_list = vec![commitment_0, commitment_1];
         let proof = kzg.create_proof(
-            vec![Fr::from(0), Fr::from(1)],
-            vec![poly0, poly1],
-            commitment.clone(),
+            vec![OMEGA_POWER[0], OMEGA_POWER[1]],
+            vec![poly_0, poly_1],
+            commitment_list.clone(),
         );
 
         let circuit = VerkleTreeCircuit::<OrchardNullifier, 3, 2, 4> {
             leaf,
-            commitment,
+            commitment: commitment_list,
             proof,
-            non_leaf_elements,
+            path_elements,
             indices,
             params: kzg.kzg_params,
             _marker: PhantomData,
         };
-
         let prover =
             MockProver::run(10, &circuit, vec![vec![leaf, root]]).expect("Cannot run the circuit");
         assert_ne!(prover.verify(), Ok(()));
