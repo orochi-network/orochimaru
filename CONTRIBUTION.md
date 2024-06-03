@@ -72,7 +72,7 @@ If you experience or witness unacceptable behavior, please report it to the Oroc
 - Export methods, classes must ben in `PascalCase`
 - Interface start with `I`
 - Type start with `T`
-- Enum start with `E`, all enum member must be in `PascalCase`
+- Enum start with `E`, all enums member must be in `PascalCase`
 - Common parts should be used as prefix (eg. buttonTest, buttonLogin, serviceEndpoint, serviceProxy)
 
 **Rust**
