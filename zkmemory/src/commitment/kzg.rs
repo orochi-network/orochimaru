@@ -135,131 +135,6 @@ where
             .coeff_from_vec(lagrange_interpolate(&OMEGA_POWER, &evals))
     }
 
-    // Create the list of proof for KZG openings
-    // More specifially, this function, given a list of points x_1,x_2,...,x_n
-    // and polynomials p_1(x),p_2(x),...,p_n(x),
-    // create a witness for the value p_1(x_1), p_2(x_2),...,p_n(x_n).
-    // Used as a misc function to create the proof of the trace record
-    fn create_kzg_proof<
-        'params,
-        Scheme: CommitmentScheme,
-        P: Prover<'params, Scheme>,
-        E: EncodedChallenge<Scheme::Curve>,
-        TW: TranscriptWriterBuffer<Vec<u8>, Scheme::Curve, E>,
-    >(
-        &self,
-        params: &'params Scheme::ParamsProver,
-        // a list of point x_1,x_2,...x_n
-        points_list: Vec<Scheme::Scalar>,
-        // a list of polynomials p_1(x), p_2(x),...,p_n(x)
-        polynomial_list: Vec<Polynomial<Scheme::Scalar, Coeff>>,
-        // the list of commitment of p_1(x),p_2(x),...,p_n(x)
-        commitment_list: Vec<Scheme::Curve>,
-    ) -> Vec<u8>
-    where
-        Scheme::Scalar: WithSmallOrderMulGroup<3>,
-    {
-        assert_eq!(
-            (points_list.len(), polynomial_list.len()),
-            (points_list.len(), commitment_list.len())
-        );
-
-        let mut transcript = TW::init(Vec::new());
-        let blind = Blind::new(&mut OsRng);
-
-        // Add the commitment the polynomial p_i(x) to transcript
-        for commitment in &commitment_list {
-            // Add the commitment of the polynomial p_i(x) to transcript
-            transcript
-                .write_point(*commitment)
-                .expect("Unable to write point")
-        }
-
-        let mut queries: Vec<ProverQuery<'_, <Scheme as CommitmentScheme>::Curve>> = Vec::new();
-        for (i, point) in points_list.iter().enumerate() {
-            // Evaluate the values p_i(x_i) for i=1,2,...,n and add to the transcript
-            transcript
-                .write_scalar(eval_polynomial(&polynomial_list[i], *point))
-                .expect("Unable to write scalar to transcript");
-
-            // This query is used to list all the values p_1(x_1), p_2(x_2),...,p_n(x_n)
-            // in the query list of SHPLONK prover
-            queries.push(ProverQuery::new(*point, &polynomial_list[i], blind));
-        }
-
-        // Create the proof
-        P::new(params)
-            .create_proof(&mut OsRng, &mut transcript, queries)
-            .expect("Unable to create proof");
-        transcript.finalize()
-    }
-
-    // Verify KZG openings
-    // This function, given the list of points x_1,x_2,...,x_n,
-    // a list of openings p_1(x_1),p_2(x_2),...,p_n(x_n)
-    // and a list of commitment c_1,c_2,..c_n
-    // then returns True or False to determine the correctness of the opening.
-    // Used as a misc function to help verifying the trace record
-    fn verify_kzg_proof<
-        'a,
-        'params,
-        Scheme: CommitmentScheme,
-        Vr: Verifier<'params, Scheme>,
-        E: EncodedChallenge<Scheme::Curve>,
-        Tr: TranscriptReadBuffer<&'a [u8], Scheme::Curve, E>,
-        Strategy: VerificationStrategy<'params, Scheme, Vr, Output = Strategy>,
-    >(
-        &self,
-        params: &'params Scheme::ParamsVerifier,
-        // A list of points x_1,x_2,...x_n
-        points_list: Vec<Scheme::Scalar>,
-        // The evaluation of p_1(x_1),p_2(x_2),...,p_n(x_n)
-        eval: Vec<Scheme::Scalar>,
-        // The commitments of the polynomials p_1(x),p_2(x),...,p_n(x)
-        commitments: Vec<Scheme::Curve>,
-        // The proof of opening
-        proof: &'a [u8],
-    ) -> bool {
-        let verifier = Vr::new(params);
-        let mut transcript = Tr::init(proof);
-        let mut check = true;
-        let mut eval_list = Vec::new();
-        let mut queries = Vec::new();
-
-        let commitment_list: Vec<<Scheme as CommitmentScheme>::Curve> = points_list
-            .iter()
-            .map(|_| transcript.read_point().expect("Unable to read point"))
-            .collect();
-
-        for (i, point) in points_list.iter().enumerate() {
-            // Check if commitment list input matches the commitment list from the Prover's proof
-            check = check && (commitments[i] == commitment_list[i]);
-
-            // Read the eval list from transcript
-            eval_list.push(transcript.read_scalar().expect("Unable to read scalar"));
-
-            // Check if eval list input matches the eval list from the Prover's proof
-            check = check && (eval[i] == eval_list[i]);
-
-            queries.push(VerifierQuery::new_commitment(
-                &commitment_list[i],
-                *point,
-                eval[i],
-            ));
-        }
-
-        // Apply the verify function from SHPLONK to return the result
-        check
-            && Strategy::new(params)
-                .process(|msm_accumulator| {
-                    verifier
-                        .verify_proof(&mut transcript, queries, msm_accumulator)
-                        .map_err(|_| Error::Opening)
-                })
-                .expect("Unable to verify proof")
-                .finalize()
-    }
-
     /// Open all fields from the trace record
     /// The function, given input a trace record and its commitment,
     /// outputs a proof of correct opening
@@ -282,15 +157,17 @@ where
         // Create the proof
         // I use the anonymous lifetime parameter '_ here, since currently
         // I do not know how to add a specific life time parameter in the script.
-        self.create_kzg_proof::<
-        KZGCommitmentScheme<Bn256>,
-        ProverSHPLONK<'_,Bn256>,
-        Challenge255<G1Affine>,
-        Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>>(
-        &self.kzg_params,
-        OMEGA_POWER[0..5].to_vec(),
-        polynomial_list,
-        commitment_list)
+        create_kzg_proof::<
+            KZGCommitmentScheme<Bn256>,
+            ProverSHPLONK<'_, Bn256>,
+            Challenge255<G1Affine>,
+            Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>,
+        >(
+            &self.kzg_params,
+            OMEGA_POWER[0..5].to_vec(),
+            polynomial_list,
+            commitment_list,
+        )
     }
 
     /// Verify the correctness of the trace record.
@@ -310,17 +187,143 @@ where
         // for the polynomial p(x) converted from the trace
         let eval = Vec::from(self.trace_to_field(trace));
         // Finally, verify the correctness of the trace record
-        self.verify_kzg_proof::<
-        KZGCommitmentScheme<Bn256>,
-        VerifierSHPLONK<'_,Bn256>,
-        Challenge255<G1Affine>,
-        Blake2bRead<&'_[u8], G1Affine, Challenge255<G1Affine>>,
-        AccumulatorStrategy<'_,Bn256>,
-        >(&self.kzg_params, OMEGA_POWER[0..5].to_vec(),
-        eval,
-        commitment_list,
-        proof.as_slice())
+        verify_kzg_proof::<
+            KZGCommitmentScheme<Bn256>,
+            VerifierSHPLONK<'_, Bn256>,
+            Challenge255<G1Affine>,
+            Blake2bRead<&'_ [u8], G1Affine, Challenge255<G1Affine>>,
+            AccumulatorStrategy<'_, Bn256>,
+        >(
+            &self.kzg_params,
+            OMEGA_POWER[0..5].to_vec(),
+            eval,
+            commitment_list,
+            proof.as_slice(),
+        )
     }
+}
+
+/// Create the list of proof for KZG openings
+/// More specifially, this function, given a list of points x_1,x_2,...,x_n
+/// and polynomials p_1(x),p_2(x),...,p_n(x),
+/// create a witness for the value p_1(x_1), p_2(x_2),...,p_n(x_n).
+/// Used as a misc function to create the proof of the trace record
+pub fn create_kzg_proof<
+    'params,
+    Scheme: CommitmentScheme,
+    P: Prover<'params, Scheme>,
+    E: EncodedChallenge<Scheme::Curve>,
+    TW: TranscriptWriterBuffer<Vec<u8>, Scheme::Curve, E>,
+>(
+    params: &'params Scheme::ParamsProver,
+    // a list of point x_1,x_2,...x_n
+    points_list: Vec<Scheme::Scalar>,
+    // a list of polynomials p_1(x), p_2(x),...,p_n(x)
+    polynomial_list: Vec<Polynomial<Scheme::Scalar, Coeff>>,
+    // the list of commitment of p_1(x),p_2(x),...,p_n(x)
+    commitment_list: Vec<Scheme::Curve>,
+) -> Vec<u8>
+where
+    Scheme::Scalar: WithSmallOrderMulGroup<3>,
+{
+    assert_eq!(
+        (points_list.len(), polynomial_list.len()),
+        (points_list.len(), commitment_list.len())
+    );
+
+    let mut transcript = TW::init(Vec::new());
+    let blind = Blind::new(&mut OsRng);
+
+    // Add the commitment the polynomial p_i(x) to transcript
+    for commitment in &commitment_list {
+        // Add the commitment of the polynomial p_i(x) to transcript
+        transcript
+            .write_point(*commitment)
+            .expect("Unable to write point")
+    }
+
+    let mut queries: Vec<ProverQuery<'_, <Scheme as CommitmentScheme>::Curve>> = Vec::new();
+    for (i, point) in points_list.iter().enumerate() {
+        // Evaluate the values p_i(x_i) for i=1,2,...,n and add to the transcript
+        transcript
+            .write_scalar(eval_polynomial(&polynomial_list[i], *point))
+            .expect("Unable to write scalar to transcript");
+
+        // This query is used to list all the values p_1(x_1), p_2(x_2),...,p_n(x_n)
+        // in the query list of SHPLONK prover
+        queries.push(ProverQuery::new(*point, &polynomial_list[i], blind));
+    }
+
+    // Create the proof
+    P::new(params)
+        .create_proof(&mut OsRng, &mut transcript, queries)
+        .expect("Unable to create proof");
+    transcript.finalize()
+}
+
+/// Verify KZG openings
+/// This function, given the list of points x_1,x_2,...,x_n,
+/// a list of openings p_1(x_1),p_2(x_2),...,p_n(x_n)
+/// and a list of commitment c_1,c_2,..c_n
+/// then returns True or False to determine the correctness of the opening.
+/// Used as a misc function to help verifying the trace record
+pub fn verify_kzg_proof<
+    'a,
+    'params,
+    Scheme: CommitmentScheme,
+    Vr: Verifier<'params, Scheme>,
+    E: EncodedChallenge<Scheme::Curve>,
+    Tr: TranscriptReadBuffer<&'a [u8], Scheme::Curve, E>,
+    Strategy: VerificationStrategy<'params, Scheme, Vr, Output = Strategy>,
+>(
+    params: &'params Scheme::ParamsVerifier,
+    // A list of points x_1,x_2,...x_n
+    points_list: Vec<Scheme::Scalar>,
+    // The evaluation of p_1(x_1),p_2(x_2),...,p_n(x_n)
+    eval: Vec<Scheme::Scalar>,
+    // The commitments of the polynomials p_1(x),p_2(x),...,p_n(x)
+    commitments: Vec<Scheme::Curve>,
+    // The proof of opening
+    proof: &'a [u8],
+) -> bool {
+    let verifier = Vr::new(params);
+    let mut transcript = Tr::init(proof);
+    let mut check = true;
+    let mut eval_list = Vec::new();
+    let mut queries = Vec::new();
+
+    let commitment_list: Vec<<Scheme as CommitmentScheme>::Curve> = points_list
+        .iter()
+        .map(|_| transcript.read_point().expect("Unable to read point"))
+        .collect();
+
+    for (i, point) in points_list.iter().enumerate() {
+        // Check if commitment list input matches the commitment list from the Prover's proof
+        check = check && (commitments[i] == commitment_list[i]);
+
+        // Read the eval list from transcript
+        eval_list.push(transcript.read_scalar().expect("Unable to read scalar"));
+
+        // Check if eval list input matches the eval list from the Prover's proof
+        check = check && (eval[i] == eval_list[i]);
+
+        queries.push(VerifierQuery::new_commitment(
+            &commitment_list[i],
+            *point,
+            eval[i],
+        ));
+    }
+
+    // Apply the verify function from SHPLONK to return the result
+    check
+        && Strategy::new(params)
+            .process(|msm_accumulator| {
+                verifier
+                    .verify_proof(&mut transcript, queries, msm_accumulator)
+                    .map_err(|_| Error::Opening)
+            })
+            .expect("Unable to verify proof")
+            .finalize()
 }
 
 #[cfg(test)]

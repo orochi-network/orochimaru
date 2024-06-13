@@ -18,7 +18,7 @@ use halo2_proofs::{
 use itertools::Itertools;
 
 /// Lookup table for max n bits range check
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct Table<const N: usize> {
     col: Column<Fixed>,
 }
@@ -67,7 +67,7 @@ impl<const N: usize> Table<N> {
 }
 
 /// Config for checking if a value val is zero or not
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct IsZeroConfig<F: Field + PrimeField> {
     /// the value needed to check
     pub val: Column<Advice>,
@@ -111,7 +111,7 @@ impl<F: Field + PrimeField> IsZeroConfig<F> {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 /// Config for binary number
 pub struct BinaryConfig<F: Field + PrimeField, const N: usize> {
     /// the list of bit representation
@@ -182,7 +182,7 @@ pub fn equal_value<F: Field + PrimeField, const N: usize>(
 }
 
 /// The witness table consisting of the elements of the trace records
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub(crate) struct TraceRecordWitnessTable<F: Field + PrimeField> {
     pub(crate) address: [Column<Advice>; 32],
     pub(crate) time_log: [Column<Advice>; 8],
@@ -203,7 +203,7 @@ impl<F: Field + PrimeField> TraceRecordWitnessTable<F> {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 /// config for checking the ordering of time or address||time
 /// in original memory or sorted memory respectively
 pub(crate) struct GreaterThanConfig<F: Field + PrimeField, const N: usize> {
@@ -345,7 +345,7 @@ fn rlc_limb_differences<F: Field + PrimeField>(
 }
 
 /// The lookup tables. We have 3 tables of size 256, 40 and 2
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub(crate) struct LookUpTables {
     pub(crate) size256_table: Table<256>,
     pub(crate) size40_table: Table<40>,
@@ -353,7 +353,7 @@ pub(crate) struct LookUpTables {
 }
 
 /// Query the element of a trace record at a specific position
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub(crate) struct Queries<F: Field + PrimeField> {
     pub(crate) address: [Expression<F>; 32], // 256 bits
     pub(crate) time_log: [Expression<F>; 8], // 64 bits
@@ -393,7 +393,7 @@ impl<F: Field + PrimeField> Queries<F> {
 
 /// Trace record struct for Lexicographic ordering circuit
 /// We need every element to be of an array of type F, where each
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(crate) struct ConvertedTraceRecord<F: Field + PrimeField> {
     pub(crate) address: [F; 32], // 256 bits
     pub(crate) time_log: [F; 8], // 256 bits

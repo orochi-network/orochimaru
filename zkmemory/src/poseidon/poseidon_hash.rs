@@ -8,15 +8,15 @@
 //! Merkle tree and Verkle tree opening proofs.
 
 extern crate alloc;
-use alloc::{fmt, vec::Vec};
-use core::{fmt::Debug, iter, marker::PhantomData};
+use alloc::vec::Vec;
+use core::{iter, marker::PhantomData};
 use ff::{Field, PrimeField};
 
 /// The type of a square matrix of size T
 pub(crate) type Mtrx<F, const T: usize> = [[F; T]; T];
 
 /// The trait for specifying the hash parameters
-pub trait Spec<F: Field + PrimeField, const T: usize, const R: usize>: fmt::Debug {
+pub trait Spec<F: Field + PrimeField, const T: usize, const R: usize> {
     /// The number of full rounds for Poseidon hash.
     fn full_rounds() -> usize;
 
@@ -32,7 +32,7 @@ pub trait Spec<F: Field + PrimeField, const T: usize, const R: usize>: fmt::Debu
 
 /// The trait for specifying the domain of messages
 pub trait Domain<F: Field + PrimeField, const R: usize> {
-    /// Iterator that outputs padding field elements.
+    /// Iterator that outputs padding Field+PrimeField elements.
     type Padding: IntoIterator<Item = F>;
 
     /// The initial capacity element, encoding this domain.
@@ -45,7 +45,7 @@ pub trait Domain<F: Field + PrimeField, const R: usize> {
 /// The number of messages to be hashed
 pub struct ConstantLength<const L: usize>;
 
-impl<F: PrimeField, const R: usize, const L: usize> Domain<F, R> for ConstantLength<L> {
+impl<F: Field + PrimeField, const R: usize, const L: usize> Domain<F, R> for ConstantLength<L> {
     type Padding = iter::Take<iter::Repeat<F>>;
 
     fn initial_capacity_element() -> F {
@@ -64,7 +64,7 @@ pub trait SpongeMode {}
 impl<F, const R: usize> SpongeMode for Absorbing<F, R> {}
 impl<F, const R: usize> SpongeMode for Squeezing<F, R> {}
 
-impl<F: fmt::Debug, const R: usize> Absorbing<F, R> {
+impl<F: PrimeField, const R: usize> Absorbing<F, R> {
     pub(crate) fn init_with(val: F) -> Self {
         Self(
             iter::once(Some(val))
@@ -77,11 +77,11 @@ impl<F: fmt::Debug, const R: usize> Absorbing<F, R> {
 }
 
 /// The absorbing state of the `Sponge`.
-#[derive(Debug)]
+
 pub struct Absorbing<F, const R: usize>(pub(crate) [Option<F>; R]);
 
 /// The squeezing state of the `Sponge`.
-#[derive(Debug)]
+
 pub struct Squeezing<F, const R: usize>(pub(crate) [Option<F>; R]);
 
 /// The type used to hold permutation state.
@@ -303,7 +303,7 @@ impl<F: Field + PrimeField, S: Spec<F, T, R>, const T: usize, const R: usize, co
 use crate::poseidon::poseidon_constants::{MDS, MDS_INV, ROUND_CONSTANTS};
 use halo2curves::pasta::Fp;
 /// Generate specific constants for testing the poseidon hash
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct OrchardNullifier;
 
 impl Spec<Fp, 3, 2> for OrchardNullifier {

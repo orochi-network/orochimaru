@@ -3,7 +3,6 @@
 extern crate alloc;
 use crate::poseidon::poseidon_hash::{ConstantLength, Hash, Spec};
 use alloc::{vec, vec::Vec};
-use core::fmt::Debug;
 use core::marker::PhantomData;
 use ff::{Field, PrimeField};
 use halo2_proofs::{
@@ -14,7 +13,7 @@ use halo2_proofs::{
     poly::Rotation,
 };
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 /// Merkle tree config
 pub struct MerkleTreeConfig<F: Field + PrimeField> {
     /// advice has 3 columns, the first column is the left input of the hash,
@@ -90,7 +89,7 @@ impl<F: Field + PrimeField> MerkleTreeConfig<F> {
 
 #[derive(Default)]
 /// Merkle tree circuit
-pub(crate) struct MemoryTreeCircuit<
+pub(crate) struct MerkleTreeCircuit<
     S: Spec<F, W, R>,
     F: Field + PrimeField,
     const W: usize,
@@ -105,7 +104,7 @@ pub(crate) struct MemoryTreeCircuit<
     _marker: PhantomData<S>,
 }
 impl<S: Spec<F, W, R> + Clone, F: Field + PrimeField, const W: usize, const R: usize> Circuit<F>
-    for MemoryTreeCircuit<S, F, W, R>
+    for MerkleTreeCircuit<S, F, W, R>
 {
     type Config = MerkleTreeConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
@@ -175,7 +174,7 @@ impl<S: Spec<F, W, R> + Clone, F: Field + PrimeField, const W: usize, const R: u
 }
 
 impl<S: Spec<F, W, R> + Clone, F: Field + PrimeField, const W: usize, const R: usize>
-    MemoryTreeCircuit<S, F, W, R>
+    MerkleTreeCircuit<S, F, W, R>
 {
     // Assign the elements in the path into the witness table
     fn assign(
@@ -246,7 +245,7 @@ impl<S: Spec<F, W, R> + Clone, F: Field + PrimeField, const W: usize, const R: u
 #[cfg(test)]
 mod tests {
     extern crate alloc;
-    use super::MemoryTreeCircuit;
+    use super::MerkleTreeCircuit;
     use crate::poseidon::poseidon_hash::*;
     use alloc::vec;
     use core::marker::PhantomData;
@@ -280,7 +279,7 @@ mod tests {
         let leaf_fp = Fp::from(leaf);
         let indices = indices.iter().map(|x| Fp::from(*x)).collect();
         let elements = elements.iter().map(|x| Fp::from(*x)).collect();
-        let circuit = MemoryTreeCircuit::<OrchardNullifier, Fp, 3, 2> {
+        let circuit = MerkleTreeCircuit::<OrchardNullifier, Fp, 3, 2> {
             leaf: leaf_fp,
             indices,
             elements,
@@ -314,7 +313,7 @@ mod tests {
         let leaf_fp = Fp::from(leaf);
         let indices = indices.iter().map(|x| Fp::from(*x)).collect();
         let elements = elements.iter().map(|x| Fp::from(*x)).collect();
-        let circuit = MemoryTreeCircuit::<OrchardNullifier, Fp, 3, 2> {
+        let circuit = MerkleTreeCircuit::<OrchardNullifier, Fp, 3, 2> {
             leaf: leaf_fp,
             indices,
             elements,
@@ -335,7 +334,7 @@ mod tests {
         let leaf_fp = Fp::from(leaf);
         let indices = indices.iter().map(|x| Fp::from(*x)).collect();
         let elements = elements.iter().map(|x| Fp::from(*x)).collect();
-        let circuit = MemoryTreeCircuit::<OrchardNullifier, Fp, 3, 2> {
+        let circuit = MerkleTreeCircuit::<OrchardNullifier, Fp, 3, 2> {
             leaf: leaf_fp,
             indices,
             elements,
@@ -357,7 +356,7 @@ mod tests {
         let leaf_fp = Fp::from(leaf);
         let false_indices = false_indices.iter().map(|x| Fp::from(*x)).collect();
         let elements = elements.iter().map(|x| Fp::from(*x)).collect();
-        let circuit = MemoryTreeCircuit::<OrchardNullifier, Fp, 3, 2> {
+        let circuit = MerkleTreeCircuit::<OrchardNullifier, Fp, 3, 2> {
             leaf: leaf_fp,
             indices: false_indices,
             elements,
@@ -378,7 +377,7 @@ mod tests {
         let leaf_fp = Fp::from(leaf);
         let indices = indices.iter().map(|x| Fp::from(*x)).collect();
         let elements = elements.iter().map(|x| Fp::from(*x)).collect();
-        let circuit = MemoryTreeCircuit::<OrchardNullifier, Fp, 3, 2> {
+        let circuit = MerkleTreeCircuit::<OrchardNullifier, Fp, 3, 2> {
             leaf: leaf_fp,
             indices,
             elements,
@@ -399,7 +398,7 @@ mod tests {
         let leaf_fp = Fp::from(leaf);
         let indices = indices.iter().map(|x| Fp::from(*x)).collect();
         let elements = elements.iter().map(|x| Fp::from(*x)).collect();
-        let circuit = MemoryTreeCircuit::<OrchardNullifier, Fp, 3, 2> {
+        let circuit = MerkleTreeCircuit::<OrchardNullifier, Fp, 3, 2> {
             leaf: leaf_fp,
             indices,
             elements,

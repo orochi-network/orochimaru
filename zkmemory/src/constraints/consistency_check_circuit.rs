@@ -21,7 +21,7 @@ use halo2_proofs::{
 use rand::thread_rng;
 
 /// Config for consistency check circuit
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(crate) struct ConsistencyConfig<F: Field + PrimeField> {
     // the config of the original memory
     pub(crate) original_memory_config: OriginalMemoryConfig<F>,
@@ -62,7 +62,7 @@ impl<F: Field + PrimeField> ConsistencyConfig<F> {
 }
 
 /// Define the memory consistency circuit
-#[derive(Default, Clone, Debug)]
+#[derive(Default)]
 pub(crate) struct MemoryConsistencyCircuit<F: Field + PrimeField + From<B256>> {
     /// input_trace: Array of trace records before sorting (sorted by time_log)
     pub(crate) input: Vec<TraceRecord<B256, B256, 32, 32>>,
