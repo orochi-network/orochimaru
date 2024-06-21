@@ -206,3 +206,6 @@ impl<F: Field + PrimeField> TraceRecordWitnessTable<F> {
         }
     }
 }
+
+
+
