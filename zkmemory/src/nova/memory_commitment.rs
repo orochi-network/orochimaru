@@ -161,3 +161,134 @@ impl<S: Spec<F, W, R> + Clone, F: Field + PrimeField, const W: usize, const R: u
         Ok(())
     }
 }
+
+
+pub struct NovaAugmentedCircuitInputs<E: Engine> {
+  params: E::Scalar,
+  i: E::Base,
+  z0: Vec<E::Base>,
+  zi: Option<Vec<E::Base>>,
+  U: Option<RelaxedR1CSInstance<E>>,
+  u: Option<R1CSInstance<E>>,
+  T: Option<Commitment<E>>,
+}
+
+impl<E: Engine> NovaAugmentedCircuitInputs<E> {
+  /// Create new inputs/witness for the verification circuit
+  pub fn new(
+    params: E::Scalar,
+    i: E::Base,
+    z0: Vec<E::Base>,
+    zi: Option<Vec<E::Base>>,
+    U: Option<RelaxedR1CSInstance<E>>,
+    u: Option<R1CSInstance<E>>,
+    T: Option<Commitment<E>>,
+  ) -> Self {
+    Self {
+      params,
+      i,
+      z0,
+      zi,
+      U,
+      u,
+      T,
+    }
+  }
+}
+
+/// The augmented circuit F' in Nova that includes a step circuit F
+/// and the circuit for the verifier in Nova's non-interactive folding scheme
+pub struct NovaAugmentedCircuit<'a, E: Engine, SC: StepCircuit<E::Base>> {
+  params: &'a NovaAugmentedCircuitParams,
+  ro_consts: ROConstantsCircuit<E>,
+  inputs: Option<NovaAugmentedCircuitInputs<E>>,
+  step_circuit: &'a SC, // The function that is applied for each step
+}
+
+impl<'a, E: Engine, SC: StepCircuit<E::Base>> NovaAugmentedCircuit<'a, E, SC> {
+  /// Create a new verification circuit for the input relaxed r1cs instances
+  pub const fn new(
+    params: &'a NovaAugmentedCircuitParams,
+    inputs: Option<NovaAugmentedCircuitInputs<E>>,
+    step_circuit: &'a SC,
+    ro_consts: ROConstantsCircuit<E>,
+  ) -> Self {
+    Self {
+      params,
+      inputs,
+      step_circuit,
+      ro_consts,
+    }
+  }
+
+  /// Allocate all witnesses and return
+  fn alloc_witness<CS: ConstraintSystem<<E as Engine>::Base>>(
+    &self,
+    mut cs: CS,
+    arity: usize,
+  ) -> Result<
+    (
+      AllocatedNum<E::Base>,
+      AllocatedNum<E::Base>,
+      Vec<AllocatedNum<E::Base>>,
+      Vec<AllocatedNum<E::Base>>,
+      AllocatedRelaxedR1CSInstance<E>,
+      AllocatedR1CSInstance<E>,
+      AllocatedPoint<E>,
+    ),
+    SynthesisError,
+  > {
+    // Allocate the params
+    let params = alloc_scalar_as_base::<E, _>(
+      cs.namespace(|| "params"),
+      self.inputs.as_ref().map(|inputs| inputs.params),
+    )?;
+
+    // Allocate i
+    let i = AllocatedNum::alloc(cs.namespace(|| "i"), || Ok(self.inputs.get()?.i))?;
+
+    // Allocate z0
+    let z_0 = (0..arity)
+      .map(|i| {
+        AllocatedNum::alloc(cs.namespace(|| format!("z0_{i}")), || {
+          Ok(self.inputs.get()?.z0[i])
+        })
+      })
+      .collect::<Result<Vec<AllocatedNum<E::Base>>, _>>()?;
+
+    // Allocate zi. If inputs.zi is not provided (base case) allocate default value 0
+    let zero = vec![E::Base::ZERO; arity];
+    let z_i = (0..arity)
+      .map(|i| {
+        AllocatedNum::alloc(cs.namespace(|| format!("zi_{i}")), || {
+          Ok(self.inputs.get()?.zi.as_ref().unwrap_or(&zero)[i])
+        })
+      })
+      .collect::<Result<Vec<AllocatedNum<E::Base>>, _>>()?;
+
+    // Allocate the running instance
+    let U: AllocatedRelaxedR1CSInstance<E> = AllocatedRelaxedR1CSInstance::alloc(
+      cs.namespace(|| "Allocate U"),
+      self.inputs.as_ref().and_then(|inputs| inputs.U.as_ref()),
+      self.params.limb_width,
+      self.params.n_limbs,
+    )?;
+
+    // Allocate the instance to be folded in
+    let u = AllocatedR1CSInstance::alloc(
+      cs.namespace(|| "allocate instance u to fold"),
+      self.inputs.as_ref().and_then(|inputs| inputs.u.as_ref()),
+    )?;
+
+    // Allocate T
+    let T = AllocatedPoint::alloc(
+      cs.namespace(|| "allocate T"),
+      self
+        .inputs
+        .as_ref()
+        .and_then(|inputs| inputs.T.map(|T| T.to_coordinates())),
+    )?;
+    T.check_on_curve(cs.namespace(|| "check T on curve"))?;
+
+    Ok((params, i, z_0, z_i, U, u, T))
+  }
