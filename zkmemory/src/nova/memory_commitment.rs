@@ -292,3 +292,160 @@ impl<'a, E: Engine, SC: StepCircuit<E::Base>> NovaAugmentedCircuit<'a, E, SC> {
 
     Ok((params, i, z_0, z_i, U, u, T))
   }
+
+  /// Synthesizes non base case and returns the new relaxed `R1CSInstance`
+  /// And a boolean indicating if all checks pass
+  fn synthesize_non_base_case<CS: ConstraintSystem<<E as Engine>::Base>>(
+    &self,
+    mut cs: CS,
+    params: &AllocatedNum<E::Base>,
+    i: &AllocatedNum<E::Base>,
+    z_0: &[AllocatedNum<E::Base>],
+    z_i: &[AllocatedNum<E::Base>],
+    U: &AllocatedRelaxedR1CSInstance<E>,
+    u: &AllocatedR1CSInstance<E>,
+    T: &AllocatedPoint<E>,
+    arity: usize,
+  ) -> Result<(AllocatedRelaxedR1CSInstance<E>, AllocatedBit), SynthesisError> {
+    // Check that u.x[0] = Hash(params, U, i, z0, zi)
+    let mut ro = E::ROCircuit::new(
+      self.ro_consts.clone(),
+      NUM_FE_WITHOUT_IO_FOR_CRHF + 2 * arity,
+    );
+    ro.absorb(params);
+    ro.absorb(i);
+    for e in z_0 {
+      ro.absorb(e);
+    }
+    for e in z_i {
+      ro.absorb(e);
+    }
+    U.absorb_in_ro(cs.namespace(|| "absorb U"), &mut ro)?;
+
+    let hash_bits = ro.squeeze(cs.namespace(|| "Input hash"), NUM_HASH_BITS)?;
+    let hash = le_bits_to_num(cs.namespace(|| "bits to hash"), &hash_bits)?;
+    let check_pass = alloc_num_equals(
+      cs.namespace(|| "check consistency of u.X[0] with H(params, U, i, z0, zi)"),
+      &u.X0,
+      &hash,
+    )?;
+
+    // Run NIFS Verifier
+    let U_fold = U.fold_with_r1cs(
+      cs.namespace(|| "compute fold of U and u"),
+      params,
+      u,
+      T,
+      self.ro_consts.clone(),
+      self.params.limb_width,
+      self.params.n_limbs,
+    )?;
+
+    Ok((U_fold, check_pass))
+  }
+}
+
+impl<'a, E: Engine, SC: StepCircuit<E::Base>> NovaAugmentedCircuit<'a, E, SC> {
+  /// synthesize circuit giving constraint system
+  pub fn synthesize<CS: ConstraintSystem<<E as Engine>::Base>>(
+    self,
+    cs: &mut CS,
+  ) -> Result<Vec<AllocatedNum<E::Base>>, SynthesisError> {
+    let arity = self.step_circuit.arity();
+
+    // Allocate all witnesses
+    let (params, i, z_0, z_i, U, u, T) =
+      self.alloc_witness(cs.namespace(|| "allocate the circuit witness"), arity)?;
+
+    // Compute variable indicating if this is the base case
+    let zero = alloc_zero(cs.namespace(|| "zero"));
+    let is_base_case = alloc_num_equals(cs.namespace(|| "Check if base case"), &i.clone(), &zero)?;
+
+    // Synthesize the circuit for the base case and get the new running instance
+    let Unew_base = self.synthesize_base_case(cs.namespace(|| "base case"), u.clone())?;
+
+    // Synthesize the circuit for the non-base case and get the new running
+    // instance along with a boolean indicating if all checks have passed
+    let (Unew_non_base, check_non_base_pass) = self.synthesize_non_base_case(
+      cs.namespace(|| "synthesize non base case"),
+      &params,
+      &i,
+      &z_0,
+      &z_i,
+      &U,
+      &u,
+      &T,
+      arity,
+    )?;
+
+    // Either check_non_base_pass=true or we are in the base case
+    let should_be_false = AllocatedBit::nor(
+      cs.namespace(|| "check_non_base_pass nor base_case"),
+      &check_non_base_pass,
+      &is_base_case,
+    )?;
+    cs.enforce(
+      || "check_non_base_pass nor base_case = false",
+      |lc| lc + should_be_false.get_variable(),
+      |lc| lc + CS::one(),
+      |lc| lc,
+    );
+
+    // Compute the U_new
+    let Unew = Unew_base.conditionally_select(
+      cs.namespace(|| "compute U_new"),
+      &Unew_non_base,
+      &Boolean::from(is_base_case.clone()),
+    )?;
+
+    // Compute i + 1
+    let i_new = AllocatedNum::alloc(cs.namespace(|| "i + 1"), || {
+      Ok(*i.get_value().get()? + E::Base::ONE)
+    })?;
+    cs.enforce(
+      || "check i + 1",
+      |lc| lc,
+      |lc| lc,
+      |lc| lc + i_new.get_variable() - CS::one() - i.get_variable(),
+    );
+
+    // Compute z_{i+1}
+    let z_input = conditionally_select_vec(
+      cs.namespace(|| "select input to F"),
+      &z_0,
+      &z_i,
+      &Boolean::from(is_base_case),
+    )?;
+
+    let z_next = self
+      .step_circuit
+      .synthesize(&mut cs.namespace(|| "F"), &z_input)?;
+
+    if z_next.len() != arity {
+      return Err(SynthesisError::IncompatibleLengthVector(
+        "z_next".to_string(),
+      ));
+    }
+
+    // Compute the new hash H(params, Unew, i+1, z0, z_{i+1})
+    let mut ro = E::ROCircuit::new(self.ro_consts, NUM_FE_WITHOUT_IO_FOR_CRHF + 2 * arity);
+    ro.absorb(&params);
+    ro.absorb(&i_new);
+    for e in &z_0 {
+      ro.absorb(e);
+    }
+    for e in &z_next {
+      ro.absorb(e);
+    }
+    Unew.absorb_in_ro(cs.namespace(|| "absorb U_new"), &mut ro)?;
+    let hash_bits = ro.squeeze(cs.namespace(|| "output hash bits"), NUM_HASH_BITS)?;
+    let hash = le_bits_to_num(cs.namespace(|| "convert hash to num"), &hash_bits)?;
+
+    // Outputs the computed hash and u.X[1] that corresponds to the hash of the other circuit
+    u.X1
+      .inputize(cs.namespace(|| "Output unmodified hash of the other circuit"))?;
+    hash.inputize(cs.namespace(|| "output new hash of this circuit"))?;
+
+    Ok(z_next)
+  }
+}
