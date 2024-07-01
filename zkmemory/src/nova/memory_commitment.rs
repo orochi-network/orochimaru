@@ -1,6 +1,20 @@
 use core::marker::PhantomData;
 
-
+use crate::{
+  constants::{NUM_FE_WITHOUT_IO_FOR_CRHF, NUM_HASH_BITS},
+  gadgets::{
+    ecc::AllocatedPoint,
+    r1cs::{AllocatedR1CSInstance, AllocatedRelaxedR1CSInstance},
+    utils::{
+      alloc_num_equals, alloc_scalar_as_base, alloc_zero, conditionally_select_vec, le_bits_to_num,
+    },
+  },
+  r1cs::{R1CSInstance, RelaxedR1CSInstance},
+  traits::{
+    circuit::StepCircuit, commitment::CommitmentTrait, Engine, ROCircuitTrait, ROConstantsCircuit,
+  },
+  Commitment,
+};
 
 pub struct MemoryCommitmentConfig<F: Field + PrimeField, const M: usize> {
    
@@ -447,5 +461,93 @@ impl<'a, E: Engine, SC: StepCircuit<E::Base>> NovaAugmentedCircuit<'a, E, SC> {
     hash.inputize(cs.namespace(|| "output new hash of this circuit"))?;
 
     Ok(z_next)
+  }
+}
+
+
+pub struct SparseMatrix<F: PrimeField> {
+  /// all non-zero values in the matrix
+  pub data: Vec<F>,
+  /// column indices
+  pub indices: Vec<usize>,
+  /// row information
+  pub indptr: Vec<usize>,
+  /// number of columns
+  pub cols: usize,
+}
+
+impl<F: PrimeField> SparseMatrix<F> {
+  /// 0x0 empty matrix
+  pub fn empty() -> Self {
+    SparseMatrix {
+      data: vec![],
+      indices: vec![],
+      indptr: vec![0],
+      cols: 0,
+    }
+  }
+
+  /// Construct from the COO representation; Vec<usize(row), usize(col), F>.
+  /// We assume that the rows are sorted during construction.
+  pub fn new(matrix: &[(usize, usize, F)], rows: usize, cols: usize) -> Self {
+    let mut new_matrix = vec![vec![]; rows];
+    for (row, col, val) in matrix {
+      new_matrix[*row].push((*col, *val));
+    }
+
+    for row in new_matrix.iter() {
+      assert!(row.windows(2).all(|w| w[0].0 < w[1].0));
+    }
+
+    let mut indptr = vec![0; rows + 1];
+    for (i, col) in new_matrix.iter().enumerate() {
+      indptr[i + 1] = indptr[i] + col.len();
+    }
+
+    let mut indices = vec![];
+    let mut data = vec![];
+    for col in new_matrix {
+      let (idx, val): (Vec<_>, Vec<_>) = col.into_iter().unzip();
+      indices.extend(idx);
+      data.extend(val);
+    }
+
+    SparseMatrix {
+      data,
+      indices,
+      indptr,
+      cols,
+    }
+  }
+
+  /// Retrieves the data for row slice [i..j] from `ptrs`.
+  /// We assume that `ptrs` is indexed from `indptrs` and do not check if the
+  /// returned slice is actually a valid row.
+  pub fn get_row_unchecked(&self, ptrs: &[usize; 2]) -> impl Iterator<Item = (&F, &usize)> {
+    self.data[ptrs[0]..ptrs[1]]
+      .iter()
+      .zip(&self.indices[ptrs[0]..ptrs[1]])
+  }
+
+  /// Multiply by a dense vector; uses rayon/gpu.
+  pub fn multiply_vec(&self, vector: &[F]) -> Vec<F> {
+    assert_eq!(self.cols, vector.len(), "invalid shape");
+
+    self.multiply_vec_unchecked(vector)
+  }
+
+  /// Multiply by a dense vector; uses rayon/gpu.
+  /// This does not check that the shape of the matrix/vector are compatible.
+  pub fn multiply_vec_unchecked(&self, vector: &[F]) -> Vec<F> {
+    self
+      .indptr
+      .par_windows(2)
+      .map(|ptrs| {
+        self
+          .get_row_unchecked(ptrs.try_into().unwrap())
+          .map(|(val, col_idx)| *val * vector[*col_idx])
+          .sum()
+      })
+      .collect()
   }
 }
