@@ -1,6 +1,6 @@
 use core::marker::PhantomData;
-
-use crate::{
+/// Reference to be added later.
+use Nova::{
   constants::{NUM_FE_WITHOUT_IO_FOR_CRHF, NUM_HASH_BITS},
   gadgets::{
     ecc::AllocatedPoint,
@@ -16,165 +16,7 @@ use crate::{
   Commitment,
 };
 
-pub struct MemoryCommitmentConfig<F: Field + PrimeField, const M: usize> {
-   
-    memory: [Column<Advice>; M],
-    indices: Column<Advice>,
-    pub merkle_root: Column<Instance>,
-    path: MerkleTreeConfig<F>,
-    /// the selectors
-    selector: Column<Fixed>,
-    selector_zero: Selector,
-    _marker0: PhantomData<F>,
-}
 
-impl<F: Field + PrimeField> MerkleTreeConfig<F> {
-    fn configure(meta: &mut ConstraintSystem<F>, merkle_root: Column<Instance>) -> Self {
-        let memory = [0; 3].map(|_| meta.advice_column());
-        let indices = meta.advice_column();
-        let selector = meta.fixed_column();
-        let selector_zero = meta.selector();
-        for i in memory {
-            meta.enable_equality(i);
-        }
-
-        let one = Expression::Constant(F::ONE);
-
-        // for i=0 indices[i] is equal to zero or one
-        // we handle i=0 seperately with selector_zero, since we are using
-        // a common selector for the other gates.
-        meta.create_gate("indices must be 0 or 1", |meta| {
-            let selector_zero = meta.query_selector(selector_zero);
-            let indices = meta.query_advice(indices, Rotation::cur());
-            vec![selector_zero * indices.clone() * (one.clone() - indices)]
-        });
-
-        // for all i>=1 indices[i] is equal to zero or one
-        meta.create_gate("indices must be 0 or 1", |meta| {
-            let indices = meta.query_advice(indices, Rotation::cur());
-            let selector = meta.query_fixed(selector, Rotation::cur());
-            vec![selector * indices.clone() * (one.clone() - indices)]
-        });
-
-        // if indices[i]=0 then advice_cur[i][0]=advice_cur[i-1][2]
-        // otherwise advice_cur[i][1]=advice_cur[i-1][2]
-        meta.create_gate(
-            "output of the current layer is equal to the left or right input of the next layer",
-            |meta| {
-                let advice_cur = advice.map(|x| meta.query_advice(x, Rotation::cur()));
-                let advice_prev = advice.map(|x| meta.query_advice(x, Rotation::prev()));
-                let indices = meta.query_advice(indices, Rotation::cur());
-                let selector = meta.query_fixed(selector, Rotation::cur());
-                vec![
-                    selector
-                        * ((one - indices.clone())
-                            * (advice_cur[0].clone() - advice_prev[2].clone())
-                            + indices * (advice_cur[1].clone() - advice_prev[2].clone())),
-                ]
-            },
-        );
-
-        let path=MerkleTreeConfig::<F>::config(merkle_root);
-
-        MerkleTreeConfig {
-            memory,
-            indices,
-            merkle_root,
-            path,
-            selector,
-            selector_zero,
-            _marker0: PhantomData,
-        }
-    }
-}
-
-#[derive(Default)]
-/// Merkle tree circuit
-pub(crate) struct MemoryTreeCircuit<
-    S: Spec<F, W, R>,
-    F: Field + PrimeField,
-    const W: usize,
-    const R: usize,
-> {
-    /// the leaf node we would like to open
-    pub(crate) leaf: F,
-    /// the values of the sibling nodes in the path
-    pub(crate) elements: Vec<F>,
-    /// the index of the path from the leaf to the merkle root
-    pub(crate) indices: Vec<F>,
-    _marker: PhantomData<S>,
-}
-
-
-impl<S: Spec<F, W, R> + Clone, F: Field + PrimeField, const W: usize, const R: usize, const M: usize> Circuit<F>
-    for MemoryTreeCircuit<S, F, W, R>
-{
-    type Config = MerkleTreeConfig<F,M>;
-    type FloorPlanner = SimpleFloorPlanner;
-
-    fn without_witnesses(&self) -> Self {
-        Self {
-            leaf: F::ZERO,
-            elements: vec![F::ZERO],
-            indices: vec![F::ZERO],
-            _marker: PhantomData,
-        }
-    }
-
-    fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-        let instance = meta.instance_column();
-        meta.enable_equality(instance);
-        MerkleTreeConfig::<F,M>::configure(meta, instance)
-    }
-
-    fn synthesize(
-        &self,
-        config: Self::Config,
-        mut layouter: impl Layouter<F>,
-    ) -> Result<(), Error> {
-        assert_eq!(self.indices.len(), self.elements.len());
-        let mut v = vec![self.leaf];
-
-        layouter.assign_region(
-            || "Merkle proof",
-            |mut region| {
-                for i in 0..self.indices.len() {
-                    let digest = self.assign(v[i], &mut region, config, i);
-                    v.push(digest.expect("cannot get digest"));
-                }
-                Ok(())
-            },
-        )?;
-
-        let leaf_cell = layouter.assign_region(
-            || "assign leaf",
-            |mut region| {
-                region.assign_advice(
-                    || "assign leaf",
-                    config.advice[0],
-                    0,
-                    || Value::known(self.leaf),
-                )
-            },
-        )?;
-
-        let digest = layouter.assign_region(
-            || "assign root",
-            |mut region| {
-                region.assign_advice(
-                    || "assign root",
-                    config.advice[0],
-                    0,
-                    || Value::known(v[self.indices.len()]),
-                )
-            },
-        )?;
-
-        layouter.constrain_instance(leaf_cell.cell(), config.instance, 0)?;
-        layouter.constrain_instance(digest.cell(), config.instance, 1)?;
-        Ok(())
-    }
-}
 
 
 pub struct NovaAugmentedCircuitInputs<E: Engine> {
@@ -359,6 +201,8 @@ impl<'a, E: Engine, SC: StepCircuit<E::Base>> NovaAugmentedCircuit<'a, E, SC> {
   }
 }
 
+
+/// Todo: Check Nova and try to understand how this work later. 
 impl<'a, E: Engine, SC: StepCircuit<E::Base>> NovaAugmentedCircuit<'a, E, SC> {
   /// synthesize circuit giving constraint system
   pub fn synthesize<CS: ConstraintSystem<<E as Engine>::Base>>(
@@ -549,5 +393,226 @@ impl<F: PrimeField> SparseMatrix<F> {
           .sum()
       })
       .collect()
+  }
+}
+
+/// Iterator for sparse matrix
+pub struct Iter<'a, F: PrimeField> {
+  matrix: &'a SparseMatrix<F>,
+  row: usize,
+  i: usize,
+  nnz: usize,
+}
+
+impl<'a, F: PrimeField> Iterator for Iter<'a, F> {
+  type Item = (usize, usize, F);
+
+  fn next(&mut self) -> Option<Self::Item> {
+    // are we at the end?
+    if self.i == self.nnz {
+      return None;
+    }
+
+    // compute current item
+    let curr_item = (
+      self.row,
+      self.matrix.indices[self.i],
+      self.matrix.data[self.i],
+    );
+
+    // advance the iterator
+    self.i += 1;
+    // edge case at the end
+    if self.i == self.nnz {
+      return Some(curr_item);
+    }
+    // if `i` has moved to next row
+    while self.i >= self.matrix.indptr[self.row + 1] {
+      self.row += 1;
+    }
+
+    Some(curr_item)
+  }
+}
+
+
+
+
+/// NIFS Prove and Verify
+/// TODO: Check the RO Trait Nova and implement it
+pub struct NIFS<E: Engine> {
+  pub(crate) comm_T: Commitment<E>,
+}
+
+type ROConstants<E> =
+  <<E as Engine>::RO as ROTrait<<E as Engine>::Base, <E as Engine>::Scalar>>::Constants;
+
+impl<E: Engine> NIFS<E> {
+
+
+  pub fn prove(
+    ck: &CommitmentKey<E>,
+    ro_consts: &ROConstants<E>,
+    pp_digest: &E::Scalar,
+    S: &R1CSShape<E>,
+    U1: &RelaxedR1CSInstance<E>,
+    W1: &RelaxedR1CSWitness<E>,
+    U2: &R1CSInstance<E>,
+    W2: &R1CSWitness<E>,
+  ) -> Result<(NIFS<E>, (RelaxedR1CSInstance<E>, RelaxedR1CSWitness<E>)), NovaError> {
+    // initialize a new RO
+    let mut ro = E::RO::new(ro_consts.clone(), NUM_FE_FOR_RO);
+
+    // append the digest of pp to the transcript
+    ro.absorb(scalar_as_base::<E>(*pp_digest));
+
+    // append U2 to transcript, U1 does not need to absorbed since U2.X[0] = Hash(params, U1, i, z0, zi)
+    U2.absorb_in_ro(&mut ro);
+
+    // compute a commitment to the cross-term
+    let (T, comm_T) = S.commit_T(ck, U1, W1, U2, W2)?;
+
+    // append `comm_T` to the transcript and obtain a challenge
+    comm_T.absorb_in_ro(&mut ro);
+
+    // compute a challenge from the RO
+    let r = ro.squeeze(NUM_CHALLENGE_BITS);
+
+    // fold the instance using `r` and `comm_T`
+    let U = U1.fold(U2, &comm_T, &r);
+
+    // fold the witness using `r` and `T`
+    let W = W1.fold(W2, &T, &r)?;
+
+    // return the folded instance and witness
+    Ok((Self { comm_T }, (U, W)))
+  }
+
+  /// Takes as input a relaxed R1CS instance `U1` and R1CS instance `U2`
+  /// with the same shape and defined with respect to the same parameters,
+  /// and outputs a folded instance `U` with the same shape,
+  /// with the guarantee that the folded instance `U`
+  /// if and only if `U1` and `U2` are satisfiable.
+  pub fn verify(
+    &self,
+    ro_consts: &ROConstants<E>,
+    pp_digest: &E::Scalar,
+    U1: &RelaxedR1CSInstance<E>,
+    U2: &R1CSInstance<E>,
+  ) -> Result<RelaxedR1CSInstance<E>, NovaError> {
+    // initialize a new RO
+    let mut ro = E::RO::new(ro_consts.clone(), NUM_FE_FOR_RO);
+
+    // append the digest of pp to the transcript
+    ro.absorb(scalar_as_base::<E>(*pp_digest));
+
+    // append U2 to transcript, U1 does not need to absorbed since U2.X[0] = Hash(params, U1, i, z0, zi)
+    U2.absorb_in_ro(&mut ro);
+
+    // append `comm_T` to the transcript and obtain a challenge
+    self.comm_T.absorb_in_ro(&mut ro);
+
+    // compute a challenge from the RO
+    let r = ro.squeeze(NUM_CHALLENGE_BITS);
+
+    // fold the instance using `r` and `comm_T`
+    let U = U1.fold(U2, &self.comm_T, &r);
+
+    // return the folded instance
+    Ok(U)
+  }
+}
+
+
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::{
+    provider::PallasEngine,
+    traits::{Engine, Group},
+  };
+  use ff::PrimeField;
+  use proptest::{
+    prelude::*,
+    strategy::{BoxedStrategy, Just, Strategy},
+  };
+
+  type G = <PallasEngine as Engine>::GE;
+  type Fr = <G as Group>::Scalar;
+
+  /// Wrapper struct around a field element that implements additional traits
+  #[derive(Clone, Debug, PartialEq, Eq)]
+  pub struct FWrap<F: PrimeField>(pub F);
+
+  impl<F: PrimeField> Copy for FWrap<F> {}
+
+  #[cfg(not(target_arch = "wasm32"))]
+  /// Trait implementation for generating `FWrap<F>` instances with proptest
+  impl<F: PrimeField> Arbitrary for FWrap<F> {
+    type Parameters = ();
+    type Strategy = BoxedStrategy<Self>;
+
+    fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
+      use rand::rngs::StdRng;
+      use rand_core::SeedableRng;
+
+      let strategy = any::<[u8; 32]>()
+        .prop_map(|seed| FWrap(F::random(StdRng::from_seed(seed))))
+        .no_shrink();
+      strategy.boxed()
+    }
+  }
+
+  #[test]
+  fn test_matrix_creation() {
+    let matrix_data = vec![
+      (0, 1, Fr::from(2)),
+      (1, 2, Fr::from(3)),
+      (2, 0, Fr::from(4)),
+    ];
+    let sparse_matrix = SparseMatrix::<Fr>::new(&matrix_data, 3, 3);
+
+    assert_eq!(
+      sparse_matrix.data,
+      vec![Fr::from(2), Fr::from(3), Fr::from(4)]
+    );
+    assert_eq!(sparse_matrix.indices, vec![1, 2, 0]);
+    assert_eq!(sparse_matrix.indptr, vec![0, 1, 2, 3]);
+  }
+
+  #[test]
+  fn test_matrix_vector_multiplication() {
+    let matrix_data = vec![
+      (0, 1, Fr::from(2)),
+      (0, 2, Fr::from(7)),
+      (1, 2, Fr::from(3)),
+      (2, 0, Fr::from(4)),
+    ];
+    let sparse_matrix = SparseMatrix::<Fr>::new(&matrix_data, 3, 3);
+    let vector = vec![Fr::from(1), Fr::from(2), Fr::from(3)];
+
+    let result = sparse_matrix.multiply_vec(&vector);
+
+    assert_eq!(result, vec![Fr::from(25), Fr::from(9), Fr::from(4)]);
+  }
+
+  fn coo_strategy() -> BoxedStrategy<Vec<(usize, usize, FWrap<Fr>)>> {
+    let coo_strategy = any::<FWrap<Fr>>().prop_flat_map(|f| (0usize..100, 0usize..100, Just(f)));
+    proptest::collection::vec(coo_strategy, 10).boxed()
+  }
+
+  proptest! {
+      #[test]
+      fn test_matrix_iter(mut coo_matrix in coo_strategy()) {
+        // process the randomly generated coo matrix
+        coo_matrix.sort_by_key(|(row, col, _val)| (*row, *col));
+        coo_matrix.dedup_by_key(|(row, col, _val)| (*row, *col));
+        let coo_matrix = coo_matrix.into_iter().map(|(row, col, val)| { (row, col, val.0) }).collect::<Vec<_>>();
+
+        let matrix = SparseMatrix::new(&coo_matrix, 100, 100);
+
+        prop_assert_eq!(coo_matrix, matrix.iter().collect::<Vec<_>>());
+    }
   }
 }
