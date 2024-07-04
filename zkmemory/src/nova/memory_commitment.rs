@@ -1,6 +1,6 @@
-use core::marker::PhantomData;
+
 /// Reference to be added later.
-use Nova::{
+use nova_snark::{
   constants::{NUM_FE_WITHOUT_IO_FOR_CRHF, NUM_HASH_BITS},
   gadgets::{
     ecc::AllocatedPoint,
@@ -18,7 +18,7 @@ use Nova::{
 
 
 
-
+/// The section of circuit. Will Move to a seperate file later.
 pub struct NovaAugmentedCircuitInputs<E: Engine> {
   params: E::Scalar,
   i: E::Base,
@@ -308,7 +308,7 @@ impl<'a, E: Engine, SC: StepCircuit<E::Base>> NovaAugmentedCircuit<'a, E, SC> {
   }
 }
 
-
+// The section of R1CS Matrix. Will Move to a seperate file later.
 pub struct SparseMatrix<F: PrimeField> {
   /// all non-zero values in the matrix
   pub data: Vec<F>,
@@ -436,7 +436,7 @@ impl<'a, F: PrimeField> Iterator for Iter<'a, F> {
 }
 
 
-
+// The section of NIFS. Will Move to the seperate file later.
 
 /// NIFS Prove and Verify
 /// TODO: Check the RO Trait Nova and implement it
