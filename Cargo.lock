@@ -2918,6 +2918,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "poseidon"
+version = "0.1.1"
+dependencies = [
+ "ff",
+ "halo2_proofs",
+ "halo2curves 0.3.2",
+]
+
+[[package]]
 name = "powerfmt"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5364,6 +5373,7 @@ dependencies = [
  "halo2curves 0.3.2",
  "hex",
  "itertools 0.12.1",
+ "poseidon",
  "rand",
  "rand_core",
  "rbtree",

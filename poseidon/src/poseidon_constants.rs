@@ -1411,7 +1411,6 @@ pub(crate) const ROUND_CONSTANTS: [[Base; 3]; 64] = [
     ],
 ];
 
-/// TODO
 pub const MDS_FR: [[Fr; 3]; 3] = [
     [
         Fr::from_raw([
@@ -1475,7 +1474,6 @@ pub const MDS_FR: [[Fr; 3]; 3] = [
     ],
 ];
 
-/// TODO
 pub const MDS_INV_FR: [[Fr; 3]; 3] = [
     [
         Fr::from_raw([
@@ -1539,7 +1537,6 @@ pub const MDS_INV_FR: [[Fr; 3]; 3] = [
     ],
 ];
 
-/// TODO
 pub const ROUND_CONSTANTS_FR: [[Fr; 3]; 64] = [
     [
         Fr::from_raw([

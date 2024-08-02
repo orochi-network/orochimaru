@@ -5,13 +5,11 @@
 extern crate alloc;
 use core::marker::PhantomData;
 extern crate std;
-use crate::{
-    constraints,
-    poseidon::poseidon_hash::{ConstantLength, Hash, Spec},
-    poseidon::{
-        poseidon_constants::{MDS_FR, MDS_INV_FR, ROUND_CONSTANTS_FR},
-        poseidon_hash::Mtrx,
-    },
+use crate::constraints;
+use poseidon::poseidon_hash::{ConstantLength, Hash, Spec};
+use poseidon::{
+    poseidon_constants::{MDS_FR, MDS_INV_FR, ROUND_CONSTANTS_FR},
+    poseidon_hash::Mtrx,
 };
 use alloc::{vec, vec::Vec};
 use constraints::gadgets::Table;
