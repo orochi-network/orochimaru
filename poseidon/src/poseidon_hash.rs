@@ -16,7 +16,7 @@ use ff::{Field, PrimeField};
 pub(crate) type Mtrx<F, const T: usize> = [[F; T]; T];
 
 /// The trait for specifying the hash parameters
-pub trait Spec<F: Field + PrimeField, const T: usize, const R: usize> {
+pub trait Spec<F: Field + PrimeField, const T: usize, const R: usize>: Clone {
     /// The number of full rounds for Poseidon hash.
     fn full_rounds() -> usize;
 
@@ -31,7 +31,7 @@ pub trait Spec<F: Field + PrimeField, const T: usize, const R: usize> {
 }
 
 /// The trait for specifying the domain of messages
-pub trait Domain<F: Field + PrimeField, const R: usize> {
+pub trait Domain<F: Field + PrimeField, const R: usize>: Clone {
     /// Iterator that outputs padding Field+PrimeField elements.
     type Padding: IntoIterator<Item = F>;
 
@@ -303,8 +303,9 @@ impl<F: Field + PrimeField, S: Spec<F, T, R>, const T: usize, const R: usize, co
     }
 }
 
-use crate::poseidon::poseidon_constants::{MDS, MDS_INV, ROUND_CONSTANTS};
+use crate::poseidon_constants::{MDS, MDS_INV, ROUND_CONSTANTS, MDS_FR, MDS_INV_FR, ROUND_CONSTANTS_FR};
 use halo2curves::pasta::Fp;
+use halo2_proofs::halo2curves::bn256::Fr;
 /// Generate specific constants for testing the poseidon hash
 #[derive(Clone)]
 pub struct OrchardNullifier;
@@ -327,11 +328,30 @@ impl Spec<Fp, 3, 2> for OrchardNullifier {
     }
 }
 
+impl Spec<Fr, 3, 2> for OrchardNullifier {
+    fn full_rounds() -> usize {
+        8
+    }
+
+    fn partial_rounds() -> usize {
+        56
+    }
+
+    fn sbox(val: Fr) -> Fr {
+        val.pow_vartime([5])
+    }
+
+    fn constants() -> (Vec<[Fr; 3]>, Mtrx<Fr, 3>, Mtrx<Fr, 3>) {
+        (ROUND_CONSTANTS_FR[..].to_vec(), MDS_FR, MDS_INV_FR)
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
     use super::*;
     use halo2curves::pasta::pallas::Base;
+    use halo2_proofs::halo2curves::bn256::Fr;
     #[test]
     fn poseidon_hash() {
         let message = [Base::from(120), Base::from(240)];
@@ -343,6 +363,20 @@ mod tests {
         let result = hasher.hash(message);
         let mut state = [message[0], message[1], Base::from_u128(2 << 64)];
         permute::<Fp, OrchardNullifier, 3, 2>(&mut state, &mds, &round_constants);
+        assert_eq!(state[0], result);
+    }
+
+    #[test]
+    fn poseidon_hash_fr() {
+        let message = [Fr::from(120), Fr::from(240)];
+
+        let (round_constants, mds, _) = OrchardNullifier::constants();
+
+        let hasher = Hash::<Fr, OrchardNullifier, ConstantLength<2>, 3, 2>::init();
+
+        let result = hasher.hash(message);
+        let mut state = [message[0], message[1], Fr::from_u128(2 << 64)];
+        permute::<Fr, OrchardNullifier, 3, 2>(&mut state, &mds, &round_constants);
         assert_eq!(state[0], result);
     }
 }

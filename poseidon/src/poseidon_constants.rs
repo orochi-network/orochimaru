@@ -1411,7 +1411,7 @@ pub(crate) const ROUND_CONSTANTS: [[Base; 3]; 64] = [
     ],
 ];
 
-pub(crate) const MDS_FR: [[Fr; 3]; 3] = [
+pub const MDS_FR: [[Fr; 3]; 3] = [
     [
         Fr::from_raw([
             0x0afc0cfa0a8a5646,
@@ -1474,7 +1474,7 @@ pub(crate) const MDS_FR: [[Fr; 3]; 3] = [
     ],
 ];
 
-pub(crate) const MDS_INV_FR: [[Fr; 3]; 3] = [
+pub const MDS_INV_FR: [[Fr; 3]; 3] = [
     [
         Fr::from_raw([
             0x6f436f0d24d67ac7,
@@ -1537,7 +1537,7 @@ pub(crate) const MDS_INV_FR: [[Fr; 3]; 3] = [
     ],
 ];
 
-pub(crate) const ROUND_CONSTANTS_FR: [[Fr; 3]; 64] = [
+pub const ROUND_CONSTANTS_FR: [[Fr; 3]; 64] = [
     [
         Fr::from_raw([
             0xbdb74213bf63188b,

@@ -8,6 +8,7 @@ members = [
     "node/migration",
     "wano",
     "verkletree",
+    "poseidon",
 ]
 exclude = []
 resolver = "2"

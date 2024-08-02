@@ -10,15 +10,27 @@ use core::marker::PhantomData;
 use alloc::string::ToString;
 use alloc::{format, vec::Vec};
 use ff::PrimeField;
-use halo2_proofs::circuit::{SimpleFloorPlanner, Value};
-use halo2_proofs::plonk::{Any, Constraints};
 use halo2_proofs::{
-    circuit::Layouter,
+    circuit::{SimpleFloorPlanner, Value, Layouter},
     plonk::{
+        create_proof, keygen_pk, keygen_vk, ProvingKey, verify_proof,
         Advice, Circuit, Column, ConstraintSystem, Error, Expression, Fixed, Selector, VirtualCells,
+        Any, Constraints,
     },
-    poly::Rotation,
+    poly::{
+        Rotation,
+        kzg::{
+            commitment::{KZGCommitmentScheme, ParamsKZG},
+            multiopen::{ProverSHPLONK, VerifierSHPLONK},
+            strategy::SingleStrategy,
+        },
+    },
+    transcript::{
+        Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
+    },
+    halo2curves::bn256::{Bn256, Fr, G1Affine},
 };
+use rand_core::OsRng;
 
 use super::gadgets::{Hash, PaddedWord, PoseidonState, StateWord};
 use super::poseidon_hash::{Absorbing, ConstantLength, Domain, Mtrx, Spec, Squeezing, State};
@@ -41,7 +53,7 @@ pub struct PoseidonConfig<F: PrimeField, const T: usize, const R: usize> {
 }
 
 impl<F: PrimeField, const T: usize, const R: usize> PoseidonConfig<F, T, R> {
-    /// Create the gates of Poseidon
+    ///
     pub fn configure<S: Spec<F, T, R>>(
         meta: &mut ConstraintSystem<F>,
         state: [Column<Advice>; T],
@@ -349,25 +361,24 @@ impl<F: PrimeField, const T: usize, const R: usize> PoseidonConfig<F, T, R> {
     }
 }
 
-#[derive(Debug)]
-/// The poseidon circuit
+#[derive(Debug, Clone)]
 pub struct PoseidonCircuit<
-    S: Spec<F, T, R>,
+    S: Spec<F, T, R> + Clone,
     F: PrimeField,
-    D: Domain<F, R>,
+    D: Domain<F, R> + Clone,
     const T: usize,
     const R: usize,
     const L: usize,
 > {
-    message: [F; L],
+    pub message: [F; L],
     // For the purpose of this test, witness the result.
     // TODO: Move this into an instance column.
-    output: F,
-    _marker: PhantomData<D>,
-    _marker2: PhantomData<S>,
+    pub output: F,
+    pub _marker: PhantomData<D>,
+    pub _marker2: PhantomData<S>,
 }
 impl<
-        S: Spec<F, T, R>,
+        S: Spec<F, T, R> + Clone,
         F: PrimeField,
         D: Domain<F, R> + Clone,
         const T: usize,
@@ -450,26 +461,100 @@ impl<
     }
 }
 
+pub struct PoseidonProver<S, D, const T: usize, const R: usize, const L: usize>
+where
+    S: Spec<Fr, T, R> + Clone,
+    D: Domain<Fr, R> + Clone,
+{
+    params: ParamsKZG<Bn256>,
+    pk: ProvingKey<G1Affine>,
+    circuit: PoseidonCircuit<S, Fr, D, T, R, L>,
+    expected: bool,
+}
+
+impl<S, D, const T: usize, const R: usize, const L: usize> PoseidonProver<S, D, T, R, L>
+where
+    S: Spec<Fr, T, R> + Clone,
+    D: Domain<Fr, R> + Clone,
+{
+    /// initialize the parameters for the prover
+    pub fn new(k: u32, circuit: PoseidonCircuit<S, Fr, D, T, R, L>, expected: bool) -> Self {
+        let params = ParamsKZG::<Bn256>::setup(k, OsRng); // TODO add production level trusted setup
+        let vk = keygen_vk(&params, &circuit).expect("Cannot initialize verify key");
+        let pk = keygen_pk(&params, vk.clone(), &circuit).expect("Cannot initialize verify key");
+        Self {
+            params,
+            pk,
+            circuit,
+            expected,
+        }
+    }
+
+    /// Create proof for the permutation circuit
+    pub fn create_proof(&mut self) -> Vec<u8> {
+        let mut transcript = Blake2bWrite::<Vec<u8>, G1Affine, Challenge255<G1Affine>>::init(vec![]);
+        create_proof::<
+            KZGCommitmentScheme<Bn256>,
+            ProverSHPLONK<'_, Bn256>,
+            Challenge255<G1Affine>,
+            OsRng,
+            Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>,
+            PoseidonCircuit<S, Fr, D, T, R, L>,
+        >(
+            &self.params,
+            &self.pk,
+            &[self.circuit.clone()],
+            &[&[]],
+            OsRng,
+            &mut transcript,
+        )
+        .expect("Fail to create proof.");
+        transcript.finalize()
+    }
+
+    /// Verify the proof (by comparing the result with expected value)
+    pub fn verify(&mut self, proof: Vec<u8>) -> bool {
+        let strategy = SingleStrategy::new(&self.params);
+        let mut transcript = Blake2bRead::<&[u8], G1Affine, Challenge255<G1Affine>>::init(&proof[..]);
+        let result = verify_proof::<
+            KZGCommitmentScheme<Bn256>,
+            VerifierSHPLONK<'_, Bn256>,
+            Challenge255<G1Affine>,
+            Blake2bRead<&[u8], G1Affine, Challenge255<G1Affine>>,
+            SingleStrategy<'_, Bn256>,
+        > (
+            &self.params,
+            self.pk.get_vk(),
+            strategy,
+            &[&[]], // NOTE
+            &mut transcript,
+        );
+        match result {
+            Ok(()) => self.expected,
+            Err(_) => !self.expected,
+        }
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
-    use super::PoseidonCircuit;
     use super::*;
-    use crate::poseidon::poseidon_hash::{Hash, OrchardNullifier};
+    use crate::poseidon_hash::{Hash, OrchardNullifier};
     use alloc::vec;
     use ff::Field;
     use halo2_proofs::dev::MockProver;
-    use halo2curves::pasta::Fp;
+    use halo2_proofs::halo2curves::bn256::Fr;
     use rand::rngs::OsRng;
-
     #[test]
     fn poseidon_hash() {
         let rng = OsRng;
 
-        let message = [Fp::random(rng), Fp::random(rng)];
-        let output = Hash::<Fp, OrchardNullifier, ConstantLength<2>, 3, 2>::init().hash(message);
+        let message = [Fr::random(rng), Fr::random(rng)];
+        let output = Hash::<Fr, OrchardNullifier, ConstantLength<2>, 3, 2>::init().hash(message);
 
         let k = 6;
-        let circuit = PoseidonCircuit::<OrchardNullifier, Fp, ConstantLength<2>, 3, 2, 2> {
+        let circuit = PoseidonCircuit::<OrchardNullifier, Fr, ConstantLength<2>, 3, 2, 2> {
             message,
             output,
             _marker: PhantomData,
@@ -477,5 +562,26 @@ mod tests {
         };
         let prover = MockProver::run(k, &circuit, vec![]).expect("cannot prove");
         assert_eq!(prover.verify(), Ok(()))
+    }
+
+    #[test]
+    fn test_poseidon_circuit_real_prover() {
+        let rng = OsRng;
+
+        let message = [Fr::random(rng), Fr::random(rng)];
+        let output = Hash::<Fr, OrchardNullifier, ConstantLength<2>, 3, 2>::init().hash(message);
+
+        let k = 6;
+        let circuit = PoseidonCircuit::<OrchardNullifier, Fr, ConstantLength<2>, 3, 2, 2> {
+            message,
+            output,
+            _marker: PhantomData,
+            _marker2: PhantomData,
+        };
+
+        // Test with prover
+        let mut prover = PoseidonProver::new(k, circuit, true);
+        let proof = prover.create_proof();
+        assert!(prover.verify(proof));
     }
 }

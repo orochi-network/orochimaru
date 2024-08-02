@@ -1,0 +1,22 @@
+[package]
+name = "poseidon"
+version = "0.1.1"
+description = "Poseidon Hash"
+authors.workspace = true
+repository.workspace = true
+edition.workspace = true
+license = "Apache-2.0"
+readme = "README.md"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "poseidon"
+path = "src/lib.rs"
+
+[dependencies]
+halo2_proofs = { workspace = true }
+halo2curves = { workspace = true }
+rand = { workspace = true }
+rand_core = { workspace = true }
+ff = { workspace = true }
