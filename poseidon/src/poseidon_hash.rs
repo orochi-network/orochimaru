@@ -13,7 +13,7 @@ use core::{iter, marker::PhantomData};
 use ff::{Field, PrimeField};
 
 /// The type of a square matrix of size T
-pub(crate) type Mtrx<F, const T: usize> = [[F; T]; T];
+pub type Mtrx<F, const T: usize> = [[F; T]; T];
 
 /// The trait for specifying the hash parameters
 pub trait Spec<F: Field + PrimeField, const T: usize, const R: usize> {
@@ -300,7 +300,7 @@ impl<F: Field + PrimeField, S: Spec<F, T, R>, const T: usize, const R: usize, co
     }
 }
 
-use crate::poseidon::poseidon_constants::{MDS, MDS_INV, ROUND_CONSTANTS};
+use crate::poseidon_constants::{MDS, MDS_INV, ROUND_CONSTANTS};
 use halo2curves::pasta::Fp;
 /// Generate specific constants for testing the poseidon hash
 #[derive(Clone)]
