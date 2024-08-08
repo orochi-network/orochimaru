@@ -467,8 +467,8 @@ mod tests {
 
         let k = 6;
         let circuit = PoseidonCircuit::<OrchardNullifier, Fp, ConstantLength<2>, 3, 2, 2> {
-            message: message,
-            output: output,
+            message,
+            output,
             _marker: PhantomData,
             _marker2: PhantomData,
         };
