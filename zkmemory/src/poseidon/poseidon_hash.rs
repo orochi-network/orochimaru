@@ -42,6 +42,7 @@ pub trait Domain<F: Field + PrimeField, const R: usize> {
     fn padding(input_len: usize) -> Self::Padding;
 }
 
+#[derive(Clone)]
 /// The number of messages to be hashed
 pub struct ConstantLength<const L: usize>;
 
@@ -77,16 +78,17 @@ impl<F: fmt::Debug, const R: usize> Absorbing<F, R> {
 }
 
 /// The absorbing state of the `Sponge`.
-#[derive(Debug)]
+#[derive(Clone,Debug)]
 pub struct Absorbing<F, const R: usize>(pub(crate) [Option<F>; R]);
 
 /// The squeezing state of the `Sponge`.
-#[derive(Debug)]
+#[derive(Clone,Debug)]
 pub struct Squeezing<F, const R: usize>(pub(crate) [Option<F>; R]);
 
 /// The type used to hold permutation state.
 pub(crate) type State<F, const T: usize> = [F; T];
 
+#[derive(Clone)]
 /// A Poseidon sponge.
 pub(crate) struct Sponge<
     F: Field + PrimeField,
@@ -261,6 +263,7 @@ impl<F: Field + PrimeField, S: Spec<F, T, R>, const T: usize, const R: usize>
     }
 }
 
+#[derive(Clone)]
 /// A Poseidon hash function, built around a sponge.
 pub struct Hash<
     F: Field + PrimeField,

@@ -29,3 +29,4 @@ hex = { workspace = true }
 rbtree = { workspace = true }
 itertools = "0.12.1"
 nova-snark = { workspace = true }
+bellpepper-core = { workspace = true }
