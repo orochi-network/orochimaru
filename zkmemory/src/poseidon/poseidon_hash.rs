@@ -9,7 +9,7 @@
 
 extern crate alloc;
 use alloc::vec::Vec;
-use core::{iter, marker::PhantomData};
+use core::{fmt::Debug, iter, marker::PhantomData};
 use ff::{Field, PrimeField};
 
 /// The type of a square matrix of size T
@@ -43,6 +43,7 @@ pub trait Domain<F: Field + PrimeField, const R: usize> {
 }
 
 /// The number of messages to be hashed
+#[derive(Clone)]
 pub struct ConstantLength<const L: usize>;
 
 impl<F: Field + PrimeField, const R: usize, const L: usize> Domain<F, R> for ConstantLength<L> {
@@ -61,10 +62,11 @@ impl<F: Field + PrimeField, const R: usize, const L: usize> Domain<F, R> for Con
 
 /// The state of the `Sponge`.
 pub trait SpongeMode {}
+
 impl<F, const R: usize> SpongeMode for Absorbing<F, R> {}
 impl<F, const R: usize> SpongeMode for Squeezing<F, R> {}
 
-impl<F: PrimeField, const R: usize> Absorbing<F, R> {
+impl<F: Debug, const R: usize> Absorbing<F, R> {
     pub(crate) fn init_with(val: F) -> Self {
         Self(
             iter::once(Some(val))
@@ -77,11 +79,9 @@ impl<F: PrimeField, const R: usize> Absorbing<F, R> {
 }
 
 /// The absorbing state of the `Sponge`.
-
 pub struct Absorbing<F, const R: usize>(pub(crate) [Option<F>; R]);
 
 /// The squeezing state of the `Sponge`.
-
 pub struct Squeezing<F, const R: usize>(pub(crate) [Option<F>; R]);
 
 /// The type used to hold permutation state.
@@ -326,6 +326,7 @@ impl Spec<Fp, 3, 2> for OrchardNullifier {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
     use halo2curves::pasta::pallas::Base;
     #[test]
