@@ -78,11 +78,11 @@ impl<F: fmt::Debug, const R: usize> Absorbing<F, R> {
 }
 
 /// The absorbing state of the `Sponge`.
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct Absorbing<F, const R: usize>(pub(crate) [Option<F>; R]);
 
 /// The squeezing state of the `Sponge`.
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct Squeezing<F, const R: usize>(pub(crate) [Option<F>; R]);
 
 /// The type used to hold permutation state.
