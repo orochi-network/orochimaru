@@ -95,12 +95,14 @@ impl<
             .expect("unable to get instruction_minus_one");
 
             // Get memory[address]
-            let mut memory_address = zero.clone();
-            for (i, item) in memory.iter().enumerate().take(self.memory_len) {
-                if G::Scalar::from(i as u64) == self.trace_record[j].address {
-                    memory_address = item.clone();
-                }
-            }
+            let memory_address =
+                AllocatedNum::alloc(cs.namespace(|| "get memory[address]"), || {
+                    Ok(self
+                        .clone()
+                        .get_memory_address(memory.clone(), self.trace_record[j].address))
+                })
+                .expect("unable to get memory[address]");
+
             // create the Merkle commitment of the tree
             let commitment =
                 AllocatedNum::alloc(cs.namespace(|| format!("merkle root {j}")), || {
@@ -134,13 +136,18 @@ impl<
 
             // create the output, which includes the memory and the Merkle
             // tree commitment of the memory
-            z_out.clear();
+            z_out = (0..self.memory_len).map(|_| zero.clone()).collect();
             for (i, item) in memory.iter().enumerate().take(self.memory_len) {
-                if G::Scalar::from(i as u64) != self.trace_record[j].address {
-                    z_out.push(item.clone());
-                } else {
-                    z_out.push(value.clone());
-                }
+                let tmp = AllocatedNum::alloc(cs.namespace(|| "get new memory state"), || {
+                    Ok(self.clone().get_new_memory_cell(
+                        item.clone(),
+                        value.clone(),
+                        G::Scalar::from(i as u64),
+                        self.trace_record[j].address,
+                    ))
+                })
+                .expect("unable to get new memory cells");
+                z_out[i] = tmp;
             }
             // commitment to the new updated memory
             let new_commitment = AllocatedNum::alloc(
@@ -210,5 +217,32 @@ impl<
             size = root.len();
         }
         root[0]
+    }
+
+    fn get_new_memory_cell(
+        self,
+        item: AllocatedNum<G::Scalar>,
+        value: AllocatedNum<G::Scalar>,
+        i: G::Scalar,
+        address: G::Scalar,
+    ) -> G::Scalar {
+        let item = item.get_value().expect("unable to get tmp1");
+        let value = value.get_value().expect("unable to get value");
+        let d = (i - address).is_zero().unwrap_u8();
+        G::Scalar::from((1 - d) as u64) * item + G::Scalar::from(d as u64) * value
+    }
+
+    fn get_memory_address(
+        self,
+        memory: Vec<AllocatedNum<G::Scalar>>,
+        address: G::Scalar,
+    ) -> G::Scalar {
+        let mut tmp = G::Scalar::ZERO;
+        let mut tmp2: u8;
+        for (i, item) in memory.iter().enumerate() {
+            tmp2 = (G::Scalar::from(i as u64) - address).is_zero().unwrap_u8();
+            tmp += G::Scalar::from(tmp2 as u64) * item.get_value().unwrap();
+        }
+        tmp
     }
 }
