@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod test {
-
+    extern crate alloc;
+    use alloc::vec::Vec;
     use ff::Field;
     use nova_snark::{
         provider::{Bn256EngineKZG, GrumpkinEngine},
@@ -8,13 +9,42 @@ mod test {
         PublicParams, RecursiveSNARK,
     };
 
-    use crate::nova::memory_consistency_circuit::NovaMemoryConsistencyCircuit;
+    use crate::{
+        nova::{
+            memory_consistency_circuit::NovaMemoryConsistencyCircuit,
+            poseidon_parameters::OrchardNullifierScalar,
+        },
+        poseidon::poseidon_hash::{ConstantLength, Hash},
+    };
     type E1 = Bn256EngineKZG;
     type E2 = GrumpkinEngine;
     type EE1 = nova_snark::provider::hyperkzg::EvaluationEngine<E1>;
     type EE2 = nova_snark::provider::ipa_pc::EvaluationEngine<E2>;
     type S1 = nova_snark::spartan::snark::RelaxedR1CSSNARK<E1, EE1>; // non-preprocessing SNARK
     type S2 = nova_snark::spartan::snark::RelaxedR1CSSNARK<E2, EE2>; // non-preprocessing SNARK
+    type FF = <E1 as nova_snark::traits::Engine>::Scalar;
+
+    fn merkle_tree_commit(memory: Vec<FF>) -> FF {
+        let mut root: Vec<FF> = memory;
+
+        let hash = Hash::<FF, OrchardNullifierScalar, ConstantLength<2>, 3, 2>::init();
+        let mut size = root.len();
+        while size > 1 {
+            let mut root_size = size;
+            while root_size > 1 {
+                let left = root.pop().expect("unable to get left");
+                let right = root.pop().expect("unable to get right");
+                // TODO: replace "out" with a hash function
+                let out = hash.clone().hash([left, right]);
+                // End TODO
+                root.push(out);
+                root_size -= 2;
+            }
+            size = root.len();
+        }
+        root[0]
+    }
+
     #[test]
     // test correct memory consistency in one step
     fn test_memory_consistency_in_one_step() {
@@ -22,22 +52,21 @@ mod test {
         let instruction = [1 as u64].to_vec();
         let value = [1292001 as u64].to_vec();
         // let num_steps = 10;
-        let circuit_primary = NovaMemoryConsistencyCircuit::<<E1 as Engine>::GE>::new(
-            4,
-            1,
-            address,
-            instruction,
-            value,
-        );
+        let circuit_primary = NovaMemoryConsistencyCircuit::<
+            <E1 as Engine>::GE,
+            OrchardNullifierScalar,
+            3,
+            2,
+        >::new(4, 1, address, instruction, value);
         let circuit_secondary = TrivialCircuit::<<E2 as Engine>::Scalar>::default();
 
-        type C1 = NovaMemoryConsistencyCircuit<<E1 as Engine>::GE>;
+        type C1 = NovaMemoryConsistencyCircuit<<E1 as Engine>::GE, OrchardNullifierScalar, 3, 2>;
         type C2 = TrivialCircuit<<E2 as Engine>::Scalar>;
 
         let pp = PublicParams::<
             E1,
             E2,
-            NovaMemoryConsistencyCircuit<<E1 as Engine>::GE>,
+            NovaMemoryConsistencyCircuit<<E1 as Engine>::GE, OrchardNullifierScalar, 3, 2>,
             TrivialCircuit<<E2 as Engine>::Scalar>,
         >::setup(
             &circuit_primary,
@@ -56,7 +85,7 @@ mod test {
                 <E1 as Engine>::Scalar::zero(),
                 <E1 as Engine>::Scalar::zero(),
                 <E1 as Engine>::Scalar::zero(),
-                <E1 as Engine>::Scalar::from(3 as u64),
+                merkle_tree_commit([<E1 as Engine>::Scalar::zero(); 4].to_vec()),
             ],
             &[<E2 as Engine>::Scalar::zero()],
         )
@@ -74,7 +103,7 @@ mod test {
                 <E1 as Engine>::Scalar::zero(),
                 <E1 as Engine>::Scalar::zero(),
                 <E1 as Engine>::Scalar::zero(),
-                <E1 as Engine>::Scalar::from(3 as u64),
+                merkle_tree_commit([<E1 as Engine>::Scalar::zero(); 4].to_vec()),
             ],
             &[<E2 as Engine>::Scalar::ZERO],
         );
@@ -89,22 +118,21 @@ mod test {
         let instruction = [1 as u64, 0 as u64].to_vec();
         let value = [1292001 as u64, 1292001 as u64].to_vec();
         // let num_steps = 10;
-        let circuit_primary = NovaMemoryConsistencyCircuit::<<E1 as Engine>::GE>::new(
-            4,
+        let circuit_primary = NovaMemoryConsistencyCircuit::<
+            <E1 as Engine>::GE,
+            OrchardNullifierScalar,
+            3,
             2,
-            address,
-            instruction,
-            value,
-        );
+        >::new(4, 2, address, instruction, value);
         let circuit_secondary = TrivialCircuit::<<E2 as Engine>::Scalar>::default();
 
-        type C1 = NovaMemoryConsistencyCircuit<<E1 as Engine>::GE>;
+        type C1 = NovaMemoryConsistencyCircuit<<E1 as Engine>::GE, OrchardNullifierScalar, 3, 2>;
         type C2 = TrivialCircuit<<E2 as Engine>::Scalar>;
 
         let pp = PublicParams::<
             E1,
             E2,
-            NovaMemoryConsistencyCircuit<<E1 as Engine>::GE>,
+            NovaMemoryConsistencyCircuit<<E1 as Engine>::GE, OrchardNullifierScalar, 3, 2>,
             TrivialCircuit<<E2 as Engine>::Scalar>,
         >::setup(
             &circuit_primary,
@@ -123,7 +151,7 @@ mod test {
                 <E1 as Engine>::Scalar::zero(),
                 <E1 as Engine>::Scalar::zero(),
                 <E1 as Engine>::Scalar::zero(),
-                <E1 as Engine>::Scalar::from(3 as u64),
+                merkle_tree_commit([<E1 as Engine>::Scalar::zero(); 4].to_vec()),
             ],
             &[<E2 as Engine>::Scalar::zero()],
         )
@@ -141,7 +169,7 @@ mod test {
                 <E1 as Engine>::Scalar::zero(),
                 <E1 as Engine>::Scalar::zero(),
                 <E1 as Engine>::Scalar::zero(),
-                <E1 as Engine>::Scalar::from(3 as u64),
+                merkle_tree_commit([<E1 as Engine>::Scalar::zero(); 4].to_vec()),
             ],
             &[<E2 as Engine>::Scalar::ZERO],
         );
@@ -155,22 +183,21 @@ mod test {
         let instruction = [2 as u64].to_vec();
         let value = [1292001 as u64].to_vec();
         // let num_steps = 10;
-        let circuit_primary = NovaMemoryConsistencyCircuit::<<E1 as Engine>::GE>::new(
-            4,
-            1,
-            address,
-            instruction,
-            value,
-        );
+        let circuit_primary = NovaMemoryConsistencyCircuit::<
+            <E1 as Engine>::GE,
+            OrchardNullifierScalar,
+            3,
+            2,
+        >::new(4, 1, address, instruction, value);
         let circuit_secondary = TrivialCircuit::<<E2 as Engine>::Scalar>::default();
 
-        type C1 = NovaMemoryConsistencyCircuit<<E1 as Engine>::GE>;
+        type C1 = NovaMemoryConsistencyCircuit<<E1 as Engine>::GE, OrchardNullifierScalar, 3, 2>;
         type C2 = TrivialCircuit<<E2 as Engine>::Scalar>;
 
         let pp = PublicParams::<
             E1,
             E2,
-            NovaMemoryConsistencyCircuit<<E1 as Engine>::GE>,
+            NovaMemoryConsistencyCircuit<<E1 as Engine>::GE, OrchardNullifierScalar, 3, 2>,
             TrivialCircuit<<E2 as Engine>::Scalar>,
         >::setup(
             &circuit_primary,
@@ -189,7 +216,7 @@ mod test {
                 <E1 as Engine>::Scalar::zero(),
                 <E1 as Engine>::Scalar::zero(),
                 <E1 as Engine>::Scalar::zero(),
-                <E1 as Engine>::Scalar::from(3 as u64),
+                merkle_tree_commit([<E1 as Engine>::Scalar::zero(); 4].to_vec()),
             ],
             &[<E2 as Engine>::Scalar::zero()],
         )
@@ -207,7 +234,7 @@ mod test {
                 <E1 as Engine>::Scalar::zero(),
                 <E1 as Engine>::Scalar::zero(),
                 <E1 as Engine>::Scalar::zero(),
-                <E1 as Engine>::Scalar::from(3 as u64),
+                merkle_tree_commit([<E1 as Engine>::Scalar::zero(); 4].to_vec()),
             ],
             &[<E2 as Engine>::Scalar::ZERO],
         );
@@ -221,22 +248,21 @@ mod test {
         let instruction = [0 as u64].to_vec();
         let value = [1292001 as u64].to_vec();
         // let num_steps = 10;
-        let circuit_primary = NovaMemoryConsistencyCircuit::<<E1 as Engine>::GE>::new(
-            4,
-            1,
-            address,
-            instruction,
-            value,
-        );
+        let circuit_primary = NovaMemoryConsistencyCircuit::<
+            <E1 as Engine>::GE,
+            OrchardNullifierScalar,
+            3,
+            2,
+        >::new(4, 1, address, instruction, value);
         let circuit_secondary = TrivialCircuit::<<E2 as Engine>::Scalar>::default();
 
-        type C1 = NovaMemoryConsistencyCircuit<<E1 as Engine>::GE>;
+        type C1 = NovaMemoryConsistencyCircuit<<E1 as Engine>::GE, OrchardNullifierScalar, 3, 2>;
         type C2 = TrivialCircuit<<E2 as Engine>::Scalar>;
 
         let pp = PublicParams::<
             E1,
             E2,
-            NovaMemoryConsistencyCircuit<<E1 as Engine>::GE>,
+            NovaMemoryConsistencyCircuit<<E1 as Engine>::GE, OrchardNullifierScalar, 3, 2>,
             TrivialCircuit<<E2 as Engine>::Scalar>,
         >::setup(
             &circuit_primary,
@@ -255,7 +281,7 @@ mod test {
                 <E1 as Engine>::Scalar::zero(),
                 <E1 as Engine>::Scalar::zero(),
                 <E1 as Engine>::Scalar::zero(),
-                <E1 as Engine>::Scalar::from(3 as u64),
+                merkle_tree_commit([<E1 as Engine>::Scalar::zero(); 4].to_vec()),
             ],
             &[<E2 as Engine>::Scalar::zero()],
         )
@@ -273,7 +299,7 @@ mod test {
                 <E1 as Engine>::Scalar::zero(),
                 <E1 as Engine>::Scalar::zero(),
                 <E1 as Engine>::Scalar::zero(),
-                <E1 as Engine>::Scalar::from(3 as u64),
+                merkle_tree_commit([<E1 as Engine>::Scalar::zero(); 4].to_vec()),
             ],
             &[<E2 as Engine>::Scalar::ZERO],
         );
@@ -287,22 +313,21 @@ mod test {
         let instruction = [0 as u64].to_vec();
         let value = [1292001 as u64].to_vec();
         // let num_steps = 10;
-        let circuit_primary = NovaMemoryConsistencyCircuit::<<E1 as Engine>::GE>::new(
-            4,
-            1,
-            address,
-            instruction,
-            value,
-        );
+        let circuit_primary = NovaMemoryConsistencyCircuit::<
+            <E1 as Engine>::GE,
+            OrchardNullifierScalar,
+            3,
+            2,
+        >::new(4, 1, address, instruction, value);
         let circuit_secondary = TrivialCircuit::<<E2 as Engine>::Scalar>::default();
 
-        type C1 = NovaMemoryConsistencyCircuit<<E1 as Engine>::GE>;
+        type C1 = NovaMemoryConsistencyCircuit<<E1 as Engine>::GE, OrchardNullifierScalar, 3, 2>;
         type C2 = TrivialCircuit<<E2 as Engine>::Scalar>;
 
         let pp = PublicParams::<
             E1,
             E2,
-            NovaMemoryConsistencyCircuit<<E1 as Engine>::GE>,
+            NovaMemoryConsistencyCircuit<<E1 as Engine>::GE, OrchardNullifierScalar, 3, 2>,
             TrivialCircuit<<E2 as Engine>::Scalar>,
         >::setup(
             &circuit_primary,

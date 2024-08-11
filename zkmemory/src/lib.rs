@@ -25,7 +25,7 @@ pub mod constraints;
 pub mod error;
 /// Definition of abstract machine (instruction, trace and context)
 pub mod machine;
-///
+/// Memory consistency circuit using Nova proof system
 pub mod nova;
 /// The module of Poseidon hash function
 pub mod poseidon;
