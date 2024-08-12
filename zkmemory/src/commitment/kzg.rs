@@ -367,7 +367,7 @@ mod test {
         let fr = Fr::from_bytes(&chunk).expect("Unable to convert to Fr");
 
         // Convert back from Fr to bytes
-        let chunk_fr: [u8; 32] = fr.try_into().expect("Cannot convert from Fr to bytes");
+        let chunk_fr: [u8; 32] = fr.into();
 
         assert_eq!(chunk_fr, chunk);
     }

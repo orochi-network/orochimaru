@@ -235,7 +235,7 @@ mod test {
             ],
             &[<E2 as Engine>::Scalar::ZERO],
         );
-        assert_ne!(res.is_ok(), true);
+        assert!(!res.is_ok());
     }
 
     #[test]
@@ -298,7 +298,7 @@ mod test {
             ],
             &[<E2 as Engine>::Scalar::ZERO],
         );
-        assert_ne!(res.is_ok(), true);
+        assert!(!res.is_ok());
     }
 
     // test memory consistency in two steps
@@ -361,7 +361,7 @@ mod test {
             ],
             &[<E2 as Engine>::Scalar::ZERO],
         );
-        assert_ne!(res.is_ok(), true);
+        assert!(!res.is_ok());
     }
 
     #[test]
@@ -424,7 +424,7 @@ mod test {
             ],
             &[<E2 as Engine>::Scalar::ZERO],
         );
-        assert_ne!(res.is_ok(), true);
+        assert!(!res.is_ok());
     }
 
     #[test]
