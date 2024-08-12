@@ -1,3 +1,5 @@
+//! Circuit for memory consistency check using [Nova](https://github.com/microsoft/Nova)
+//!
 extern crate alloc;
 use core::marker::PhantomData;
 
@@ -6,7 +8,6 @@ use alloc::vec;
 use alloc::vec::Vec;
 use bellpepper_core::{num::AllocatedNum, ConstraintSystem, SynthesisError};
 use ff::Field;
-/// Reference to be added later.
 use nova_snark::traits::{circuit::StepCircuit, Group};
 
 use crate::poseidon::poseidon_hash::ConstantLength;
@@ -58,14 +59,6 @@ impl<
         // meaning that if instruction=0 then the value of trace_record must be equal to
         // z_i[address]. Also we need the merkle root in z_i
 
-        // The ZERO variable
-        let zero = AllocatedNum::alloc(cs.namespace(|| "zero"), || Ok(G::Scalar::ZERO))
-            .expect("unable to get ZERO value");
-
-        // The ONE variable
-        let one = AllocatedNum::alloc(cs.namespace(|| "one"), || Ok(G::Scalar::ONE))
-            .expect("unable to get ONE value");
-
         let mut z_out = z_in.to_vec();
 
         // Get the current state of the memory
@@ -88,12 +81,6 @@ impl<
                 })
                 .expect("unable to get instruction");
 
-            let instruction_minus_one = AllocatedNum::alloc(
-                cs.namespace(|| format!("instruction {j} minus one")),
-                || Ok(self.trace_record[j].instruction - G::Scalar::ONE),
-            )
-            .expect("unable to get instruction_minus_one");
-
             // Get memory[address]
             let memory_address =
                 AllocatedNum::alloc(cs.namespace(|| "get memory[address]"), || {
@@ -114,29 +101,29 @@ impl<
             cs.enforce(
                 || "commitment to the memory must be valid",
                 |lc| lc + commitment.get_variable(),
-                |lc| lc + one.get_variable(),
+                |lc| lc + CS::one(),
                 |lc| lc + z_out[self.memory_len].get_variable(),
             );
 
             // if instruction = 0 then memory[address]=value
             cs.enforce(
                 || "if instruction=0 then memory[address] = value",
-                |lc| lc + instruction_minus_one.get_variable(),
+                |lc| lc + instruction.get_variable(),
                 |lc| lc + memory_address.get_variable() - value.get_variable(),
-                |lc| lc + zero.get_variable(),
+                |lc| lc + memory_address.get_variable() - value.get_variable(),
             );
 
             // instruction must be read or write
             cs.enforce(
                 || "operation is read or write",
                 |lc| lc + instruction.get_variable(),
-                |lc| lc + instruction_minus_one.get_variable(),
-                |lc| lc + zero.get_variable(),
+                |lc| lc + instruction.get_variable(),
+                |lc| lc + instruction.get_variable(),
             );
 
             // create the output, which includes the memory and the Merkle
             // tree commitment of the memory
-            z_out = (0..self.memory_len).map(|_| zero.clone()).collect();
+            z_out = (0..self.memory_len).map(|i| memory[i].clone()).collect();
             for (i, item) in memory.iter().enumerate().take(self.memory_len) {
                 let tmp = AllocatedNum::alloc(cs.namespace(|| "get new memory state"), || {
                     Ok(self.clone().get_new_memory_cell(

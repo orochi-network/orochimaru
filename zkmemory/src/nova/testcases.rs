@@ -9,8 +9,6 @@ mod test {
         traits::{circuit::TrivialCircuit, snark::RelaxedR1CSSNARKTrait, Engine},
         PublicParams, RecursiveSNARK,
     };
-    extern crate std;
-    use std::println;
 
     use crate::{
         nova::{
@@ -430,8 +428,7 @@ mod test {
             .expect("unable to prove");
 
         for circuits in circuit_primary {
-            let res = recursive_snark.prove_step(&pp, &circuits, &circuit_secondary);
-            assert!(res.is_ok());
+            let _ = recursive_snark.prove_step(&pp, &circuits, &circuit_secondary);
         }
         let res = recursive_snark.verify(
             &pp,
@@ -445,6 +442,6 @@ mod test {
             ],
             &[<E2 as Engine>::Scalar::zero()],
         );
-        println!("{:?}", res);
+        assert_eq!(res.is_ok(), true);
     }
 }
