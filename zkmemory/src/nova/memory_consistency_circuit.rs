@@ -99,6 +99,26 @@ impl<
                 })
                 .expect("unable to get commitment");
 
+            // get lookup result to check whether address in 0..memory_len
+            let mut lookup_res = 0;
+            for i in 0..self.memory_len {
+                lookup_res += (G::Scalar::from(i as u64) - self.trace_record[j].address)
+                    .is_zero()
+                    .unwrap_u8();
+            }
+            let lookup_res_alloc = AllocatedNum::alloc(cs.namespace(|| "lookup result"), || {
+                Ok(G::Scalar::from(lookup_res as u64))
+            })
+            .expect("unable to get lookup result");
+
+            // address must be in 0..memory_len
+            cs.enforce(
+                || "address must be in 0..memory_len",
+                |lc| lc + lookup_res_alloc.get_variable(),
+                |lc| lc + CS::one(),
+                |lc| lc + CS::one(),
+            );
+
             // commitment to the memory must be valid
             cs.enforce(
                 || "commitment to the memory must be valid",
