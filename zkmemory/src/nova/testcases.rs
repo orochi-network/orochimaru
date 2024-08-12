@@ -235,7 +235,7 @@ mod test {
             ],
             &[<E2 as Engine>::Scalar::ZERO],
         );
-        assert!(!res.is_ok());
+        assert!(res.is_err());
     }
 
     #[test]
@@ -298,7 +298,7 @@ mod test {
             ],
             &[<E2 as Engine>::Scalar::ZERO],
         );
-        assert!(!res.is_ok());
+        assert!(res.is_err());
     }
 
     // test memory consistency in two steps
@@ -361,7 +361,7 @@ mod test {
             ],
             &[<E2 as Engine>::Scalar::ZERO],
         );
-        assert!(!res.is_ok());
+        assert!(res.is_err());
     }
 
     #[test]
@@ -424,7 +424,7 @@ mod test {
             ],
             &[<E2 as Engine>::Scalar::ZERO],
         );
-        assert!(!res.is_ok());
+        assert!(res.is_err());
     }
 
     #[test]
