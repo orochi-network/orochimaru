@@ -64,6 +64,7 @@ impl<F: PrimeField, S: Spec<F, T, R>, const T: usize, const R: usize, const L: u
     }
 }
 
+
 /// A Poseidon sponge.
 #[derive(Debug)]
 pub struct Sponge<

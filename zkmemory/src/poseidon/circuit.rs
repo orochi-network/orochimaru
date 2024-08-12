@@ -460,7 +460,7 @@ mod tests {
     use halo2_proofs::dev::MockProver;
     use halo2curves::pasta::Fp;
     use rand::rngs::OsRng;
-
+  
     #[test]
     fn poseidon_hash() {
         let rng = OsRng;

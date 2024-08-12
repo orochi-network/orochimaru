@@ -16,7 +16,7 @@ use halo2_proofs::{
     poly::Rotation,
 };
 use rand::thread_rng;
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 /// Config for trace record that is sorted by time_log
 pub(crate) struct OriginalMemoryConfig<F: Field + PrimeField> {
     /// The original trace circuit
@@ -125,7 +125,7 @@ impl<F: Field + PrimeField> Circuit<F> for OriginalMemoryCircuit<F> {
             size2_table: Table::<2>::construct(meta),
         };
         // The random challenges
-        // For debugging purpose, we let alpha to be uniformly distributed
+        // For ging purpose, we let alpha to be uniformly distributed
         // Later, one can force the prover to commit the memory traces first, then
         // let alpha to be the hash of the commitment
         let alpha = Expression::Constant(F::random(rng));
@@ -215,11 +215,8 @@ impl<F: Field + PrimeField> OriginalMemoryCircuit<F> {
                 .zip(&prev_time_log)
                 .find(|((_, a), b)| a != b);
             let zero = F::ZERO;
-            let ((index, cur_limb), prev_limb) = if cfg!(test) {
-                find_result.unwrap_or(((&8, &zero), &zero))
-            } else {
-                find_result.expect("two trace records cannot have equal time log")
-            };
+            let ((index, cur_limb), prev_limb) = find_result.unwrap_or(((&8, &zero), &zero));
+
             let difference = *cur_limb - *prev_limb;
 
             // Assign the selector to be one at the current row
