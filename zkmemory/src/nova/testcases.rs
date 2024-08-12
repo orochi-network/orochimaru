@@ -307,6 +307,71 @@ mod test {
         assert_ne!(res.is_ok(), true);
     }
 
+    // test memory consistency in two steps
+    #[test]
+    fn test_invalid_read_part_two() {
+        let address = [0 as u64, 0 as u64].to_vec();
+        let instruction = [1 as u64, 0 as u64].to_vec();
+        let value = [1292001 as u64, 0 as u64].to_vec();
+        // let num_steps = 10;
+        let circuit_primary = NovaMemoryConsistencyCircuit::<
+            <E1 as Engine>::GE,
+            OrchardNullifierScalar,
+            3,
+            2,
+        >::new(4, 2, address, instruction, value);
+        let circuit_secondary = TrivialCircuit::<<E2 as Engine>::Scalar>::default();
+
+        type C1 = NovaMemoryConsistencyCircuit<<E1 as Engine>::GE, OrchardNullifierScalar, 3, 2>;
+        type C2 = TrivialCircuit<<E2 as Engine>::Scalar>;
+
+        let pp = PublicParams::<
+            E1,
+            E2,
+            NovaMemoryConsistencyCircuit<<E1 as Engine>::GE, OrchardNullifierScalar, 3, 2>,
+            TrivialCircuit<<E2 as Engine>::Scalar>,
+        >::setup(
+            &circuit_primary,
+            &circuit_secondary,
+            &*S1::ck_floor(),
+            &*S2::ck_floor(),
+        )
+        .expect("unable to setup");
+
+        let mut recursive_snark = RecursiveSNARK::<E1, E2, C1, C2>::new(
+            &pp,
+            &circuit_primary,
+            &circuit_secondary,
+            &[
+                <E1 as Engine>::Scalar::zero(),
+                <E1 as Engine>::Scalar::zero(),
+                <E1 as Engine>::Scalar::zero(),
+                <E1 as Engine>::Scalar::zero(),
+                merkle_tree_commit([<E1 as Engine>::Scalar::zero(); 4].to_vec()),
+            ],
+            &[<E2 as Engine>::Scalar::zero()],
+        )
+        .expect("unable to prove");
+
+        let _ = recursive_snark.prove_step(&pp, &circuit_primary, &circuit_secondary);
+        // assert!(res.is_ok());
+        // println!("{:?}", res);
+
+        let res = recursive_snark.verify(
+            &pp,
+            1,
+            &[
+                <E1 as Engine>::Scalar::zero(),
+                <E1 as Engine>::Scalar::zero(),
+                <E1 as Engine>::Scalar::zero(),
+                <E1 as Engine>::Scalar::zero(),
+                merkle_tree_commit([<E1 as Engine>::Scalar::zero(); 4].to_vec()),
+            ],
+            &[<E2 as Engine>::Scalar::ZERO],
+        );
+        assert_ne!(res.is_ok(), true);
+    }
+
     #[test]
     // test invalid commitment
     fn test_invalid_commitment() {
