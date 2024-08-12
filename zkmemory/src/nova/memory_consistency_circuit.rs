@@ -1,18 +1,17 @@
 //! Circuit for memory consistency check using [Nova](https://github.com/microsoft/Nova)
-//!
+//! We referenced [Nova's example](https://github.com/microsoft/Nova/tree/main/examples) to create the memory consistency circuit
+//! This circuit is only usable for memory of size which is a power of two.
 extern crate alloc;
-use core::marker::PhantomData;
-
+use crate::poseidon::poseidon_hash::ConstantLength;
+use crate::poseidon::poseidon_hash::Hash;
+use crate::poseidon::poseidon_hash::Spec;
 use alloc::format;
 use alloc::vec;
 use alloc::vec::Vec;
 use bellpepper_core::{num::AllocatedNum, ConstraintSystem, SynthesisError};
+use core::marker::PhantomData;
 use ff::Field;
 use nova_snark::traits::{circuit::StepCircuit, Group};
-
-use crate::poseidon::poseidon_hash::ConstantLength;
-use crate::poseidon::poseidon_hash::Hash;
-use crate::poseidon::poseidon_hash::Spec;
 
 #[derive(Copy, Clone)]
 /// the trace record struct
@@ -47,6 +46,9 @@ impl<
         self.memory_len + 1
     }
 
+    // based on the idea in page 6 of https://eprint.iacr.org/2022/1758.pdf, where
+    // z_in consists of the memory states and the commitment. In each step,
+    // the function update z_in into z_out based on the trace_record
     fn synthesize<CS: ConstraintSystem<G::Scalar>>(
         &self,
         cs: &mut CS,

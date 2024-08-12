@@ -1,6 +1,13 @@
 #[cfg(test)]
 mod test {
     extern crate alloc;
+    use crate::{
+        nova::{
+            memory_consistency_circuit::NovaMemoryConsistencyCircuit,
+            poseidon_parameters::OrchardNullifierScalar,
+        },
+        poseidon::poseidon_hash::{ConstantLength, Hash},
+    };
     use alloc::vec;
     use alloc::vec::Vec;
     use ff::Field;
@@ -8,14 +15,6 @@ mod test {
         provider::{Bn256EngineKZG, GrumpkinEngine},
         traits::{circuit::TrivialCircuit, snark::RelaxedR1CSSNARKTrait, Engine},
         PublicParams, RecursiveSNARK,
-    };
-
-    use crate::{
-        nova::{
-            memory_consistency_circuit::NovaMemoryConsistencyCircuit,
-            poseidon_parameters::OrchardNullifierScalar,
-        },
-        poseidon::poseidon_hash::{ConstantLength, Hash},
     };
     type E1 = Bn256EngineKZG;
     type E2 = GrumpkinEngine;
@@ -48,7 +47,7 @@ mod test {
 
     #[test]
     // test correct memory consistency in one step
-    // for simolicity we experiment with a memory of size 4
+    // for simplicity we experiment with a memory of size 4 only
     fn test_memory_consistency_in_one_step() {
         let address = [0 as u64].to_vec();
         let instruction = [1 as u64].to_vec();
@@ -78,6 +77,9 @@ mod test {
         )
         .expect("unable to setup");
 
+        // The first four elements of z0_primary are the memory cells
+        // of a memory of size 4. The final element is the commitment
+        // of the memory.
         let mut recursive_snark = RecursiveSNARK::<E1, E2, C1, C2>::new(
             &pp,
             &circuit_primary,
@@ -94,8 +96,6 @@ mod test {
         .expect("unable to prove");
 
         let _ = recursive_snark.prove_step(&pp, &circuit_primary, &circuit_secondary);
-        // assert!(res.is_ok());
-        // println!("{:?}", res);
 
         let res = recursive_snark.verify(
             &pp,
@@ -159,8 +159,6 @@ mod test {
         .expect("unable to prove");
 
         let _ = recursive_snark.prove_step(&pp, &circuit_primary, &circuit_secondary);
-        // assert!(res.is_ok());
-        // println!("{:?}", res);
 
         let res = recursive_snark.verify(
             &pp,
@@ -224,8 +222,6 @@ mod test {
         .expect("unable to prove");
 
         let _ = recursive_snark.prove_step(&pp, &circuit_primary, &circuit_secondary);
-        //assert!(res.is_ok());
-        //  println!("{:?}", res);
 
         let res = recursive_snark.verify(
             &pp,
@@ -289,8 +285,6 @@ mod test {
         .expect("unable to prove");
 
         let _ = recursive_snark.prove_step(&pp, &circuit_primary, &circuit_secondary);
-        //assert!(res.is_ok());
-        //  println!("{:?}", res);
 
         let res = recursive_snark.verify(
             &pp,
@@ -354,8 +348,6 @@ mod test {
         .expect("unable to prove");
 
         let _ = recursive_snark.prove_step(&pp, &circuit_primary, &circuit_secondary);
-        // assert!(res.is_ok());
-        // println!("{:?}", res);
 
         let res = recursive_snark.verify(
             &pp,
@@ -419,8 +411,6 @@ mod test {
         .expect("unable to prove");
 
         let _ = recursive_snark.prove_step(&pp, &circuit_primary, &circuit_secondary);
-        //assert!(res.is_ok());
-        //  println!("{:?}", res);
 
         let res = recursive_snark.verify(
             &pp,

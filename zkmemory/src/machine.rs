@@ -1018,6 +1018,35 @@ mod tests {
     }
 
     #[test]
+    fn test_stack_machine_part_two() {
+        let mut sm = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default_config());
+
+        assert_eq!(sm.stack_allocated.low(), B256::zero());
+        let base = sm.base_address();
+        let program = vec![
+            Instruction::Push(B256::from(1000)),
+            Instruction::Push(B256::from(170)),
+            Instruction::Swap(sm.r0),
+            Instruction::Pop(),
+            Instruction::Swap(sm.r1),
+            Instruction::Pop(),
+            Instruction::Mov(sm.r3, sm.r0),
+            Instruction::Save(base + B256::from(128), sm.r0),
+            Instruction::Save(base + B256::from(160), sm.r1),
+            Instruction::Save(base + B256::from(192), sm.r3),
+            Instruction::Mov(sm.r3, sm.r4),
+        ];
+        // Execute program1
+        for instruction in program {
+            sm.exec(&instruction);
+        }
+
+        assert_eq!(sm.dummy_read(base + B256::from(128)), B256::from(170));
+        assert_eq!(sm.dummy_read(base + B256::from(160)), B256::from(1000));
+        assert_eq!(sm.dummy_read(base + B256::from(192)), B256::from(170));
+    }
+
+    #[test]
     #[should_panic]
     fn test_invalid_instruction() {
         let mut sm = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default_config());

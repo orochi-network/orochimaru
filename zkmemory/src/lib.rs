@@ -1,7 +1,7 @@
 //! This crate provides a simple RAM machine for use in the zkVM
 #![recursion_limit = "256"]
 #![cfg_attr(not(feature = "std"), no_std)]
-/*#![deny(
+#![deny(
     unused,
     warnings,
     future_incompatible,
@@ -9,7 +9,7 @@
     rust_2018_idioms,
     missing_docs,
     unused_imports
-)]*/
+)]
 #![forbid(unsafe_code)]
 
 /// Base trait for generic type
