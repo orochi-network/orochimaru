@@ -49,9 +49,9 @@ mod test {
     // test correct memory consistency in one step
     // for simplicity we experiment with a memory of size 4 only
     fn test_memory_consistency_in_one_step() {
-        let address = [0 as u64].to_vec();
-        let instruction = [1 as u64].to_vec();
-        let value = [1292001 as u64].to_vec();
+        let address = [0_u64].to_vec();
+        let instruction = [1_u64].to_vec();
+        let value = [1292001_u64].to_vec();
         // let num_steps = 10;
         let circuit_primary = NovaMemoryConsistencyCircuit::<
             <E1 as Engine>::GE,
@@ -109,15 +109,15 @@ mod test {
             ],
             &[<E2 as Engine>::Scalar::ZERO],
         );
-        assert_eq!(res.is_ok(), true);
+        assert!(res.is_ok());
     }
 
     // test memory consistency in two steps
     #[test]
     fn test_memory_consistency_in_two_steps() {
-        let address = [0 as u64, 0 as u64].to_vec();
-        let instruction = [1 as u64, 0 as u64].to_vec();
-        let value = [1292001 as u64, 1292001 as u64].to_vec();
+        let address = [0_u64, 0_u64].to_vec();
+        let instruction = [1_u64, 0_u64].to_vec();
+        let value = [1292001_u64, 1292001_u64].to_vec();
         // let num_steps = 10;
         let circuit_primary = NovaMemoryConsistencyCircuit::<
             <E1 as Engine>::GE,
@@ -172,15 +172,15 @@ mod test {
             ],
             &[<E2 as Engine>::Scalar::ZERO],
         );
-        assert_eq!(res.is_ok(), true);
+        assert!(res.is_ok());
     }
 
     #[test]
     // test invalid instruction in trace record
     fn test_invalid_instruction() {
-        let address = [0 as u64].to_vec();
-        let instruction = [2 as u64].to_vec();
-        let value = [1292001 as u64].to_vec();
+        let address = [0_u64].to_vec();
+        let instruction = [2_u64].to_vec();
+        let value = [1292001_u64].to_vec();
         // let num_steps = 10;
         let circuit_primary = NovaMemoryConsistencyCircuit::<
             <E1 as Engine>::GE,
@@ -241,9 +241,9 @@ mod test {
     #[test]
     // test invalid read
     fn test_invalid_read() {
-        let address = [0 as u64].to_vec();
-        let instruction = [0 as u64].to_vec();
-        let value = [1292001 as u64].to_vec();
+        let address = [0_u64].to_vec();
+        let instruction = [0_u64].to_vec();
+        let value = [1292001_u64].to_vec();
         // let num_steps = 10;
         let circuit_primary = NovaMemoryConsistencyCircuit::<
             <E1 as Engine>::GE,
@@ -304,9 +304,9 @@ mod test {
     // test memory consistency in two steps
     #[test]
     fn test_invalid_read_part_two() {
-        let address = [0 as u64, 0 as u64].to_vec();
-        let instruction = [1 as u64, 0 as u64].to_vec();
-        let value = [1292001 as u64, 0 as u64].to_vec();
+        let address = [0_u64, 0_u64].to_vec();
+        let instruction = [1_u64, 0_u64].to_vec();
+        let value = [1292001_u64, 0_u64].to_vec();
         // let num_steps = 10;
         let circuit_primary = NovaMemoryConsistencyCircuit::<
             <E1 as Engine>::GE,
@@ -367,9 +367,9 @@ mod test {
     #[test]
     // test invalid commitment
     fn test_invalid_commitment() {
-        let address = [0 as u64].to_vec();
-        let instruction = [0 as u64].to_vec();
-        let value = [1292001 as u64].to_vec();
+        let address = [0_u64].to_vec();
+        let instruction = [0_u64].to_vec();
+        let value = [1292001_u64].to_vec();
         // let num_steps = 10;
         let circuit_primary = NovaMemoryConsistencyCircuit::<
             <E1 as Engine>::GE,
@@ -404,7 +404,7 @@ mod test {
                 <E1 as Engine>::Scalar::zero(),
                 <E1 as Engine>::Scalar::zero(),
                 <E1 as Engine>::Scalar::zero(),
-                <E1 as Engine>::Scalar::from(99 as u64),
+                <E1 as Engine>::Scalar::from(99_u64),
             ],
             &[<E2 as Engine>::Scalar::zero()],
         )
@@ -420,7 +420,7 @@ mod test {
                 <E1 as Engine>::Scalar::zero(),
                 <E1 as Engine>::Scalar::zero(),
                 <E1 as Engine>::Scalar::zero(),
-                <E1 as Engine>::Scalar::from(99 as u64),
+                <E1 as Engine>::Scalar::from(99_u64),
             ],
             &[<E2 as Engine>::Scalar::ZERO],
         );
@@ -430,9 +430,9 @@ mod test {
     #[test]
     // test correct memory consistency in four step
     fn test_memory_consistency_in_four_step() {
-        let address = [0 as u64, 1 as u64, 2 as u64, 3 as u64].to_vec();
-        let instruction = [1 as u64, 0 as u64, 1 as u64, 0 as u64].to_vec();
-        let value = [1292001 as u64, 0 as u64, 1292001 as u64, 0 as u64].to_vec();
+        let address = [0_u64, 1_u64, 2_u64, 3_u64].to_vec();
+        let instruction = [1_u64, 0_u64, 1_u64, 0_u64].to_vec();
+        let value = [1292001_u64, 0_u64, 1292001_u64, 0_u64].to_vec();
         let mut circuit_primary = vec![];
         for i in 0..2 {
             circuit_primary.push(NovaMemoryConsistencyCircuit::<
@@ -497,6 +497,6 @@ mod test {
             ],
             &[<E2 as Engine>::Scalar::zero()],
         );
-        assert_eq!(res.is_ok(), true);
+        assert!(res.is_ok());
     }
 }
