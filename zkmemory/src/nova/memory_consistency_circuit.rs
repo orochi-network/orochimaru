@@ -228,7 +228,7 @@ impl<
         let mut tmp2: u8;
         for (i, item) in memory.iter().enumerate() {
             tmp2 = (G::Scalar::from(i as u64) - address).is_zero().unwrap_u8();
-            tmp += G::Scalar::from(tmp2 as u64) * item.get_value().unwrap();
+            tmp += G::Scalar::from(tmp2 as u64) * item.get_value().expect("unable to get result");
         }
         tmp
     }
