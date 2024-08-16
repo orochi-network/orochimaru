@@ -1,6 +1,5 @@
 use core::fmt::{Debug, Display};
 use core::ops::{Add, Div, Mul, Rem, Sub};
-use core::usize;
 use ethnum::U256;
 
 /// Base trait for memory address and value

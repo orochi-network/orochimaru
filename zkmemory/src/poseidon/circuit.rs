@@ -41,7 +41,7 @@ pub struct PoseidonConfig<F: PrimeField, const T: usize, const R: usize> {
 }
 
 impl<F: PrimeField, const T: usize, const R: usize> PoseidonConfig<F, T, R> {
-    ///
+    /// Create the gates of Poseidon
     pub fn configure<S: Spec<F, T, R>>(
         meta: &mut ConstraintSystem<F>,
         state: [Column<Advice>; T],
@@ -350,7 +350,8 @@ impl<F: PrimeField, const T: usize, const R: usize> PoseidonConfig<F, T, R> {
 }
 
 #[derive(Debug)]
-struct PoseidonCircuit<
+/// The poseidon circuit
+pub struct PoseidonCircuit<
     S: Spec<F, T, R>,
     F: PrimeField,
     D: Domain<F, R>,
@@ -451,6 +452,7 @@ impl<
 
 #[cfg(test)]
 mod tests {
+    use super::PoseidonCircuit;
     use super::*;
     use crate::poseidon::poseidon_hash::{Hash, OrchardNullifier};
     use alloc::vec;
@@ -458,6 +460,7 @@ mod tests {
     use halo2_proofs::dev::MockProver;
     use halo2curves::pasta::Fp;
     use rand::rngs::OsRng;
+
     #[test]
     fn poseidon_hash() {
         let rng = OsRng;
