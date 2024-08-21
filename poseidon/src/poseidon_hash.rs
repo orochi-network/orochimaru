@@ -13,7 +13,7 @@ use core::{fmt::Debug, iter, marker::PhantomData};
 use ff::{Field, PrimeField};
 
 /// The type of a square matrix of size T
-pub(crate) type Mtrx<F, const T: usize> = [[F; T]; T];
+pub type Mtrx<F, const T: usize> = [[F; T]; T];
 
 /// The trait for specifying the hash parameters
 pub trait Spec<F: Field + PrimeField, const T: usize, const R: usize>: Clone {

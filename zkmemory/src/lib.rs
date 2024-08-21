@@ -27,8 +27,6 @@ pub mod error;
 pub mod machine;
 /// Memory consistency circuit using Nova proof system
 pub mod nova;
-/// The module of Poseidon hash function
-pub mod poseidon;
 #[cfg(test)]
 mod tests {
     extern crate alloc;

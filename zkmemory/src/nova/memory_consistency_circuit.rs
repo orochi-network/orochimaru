@@ -2,9 +2,9 @@
 //! We referenced [Nova's example](https://github.com/microsoft/Nova/tree/main/examples) to create the memory consistency circuit
 //! This circuit is only usable for memory of size which is a power of two.
 extern crate alloc;
-use crate::poseidon::poseidon_hash::ConstantLength;
-use crate::poseidon::poseidon_hash::Hash;
-use crate::poseidon::poseidon_hash::Spec;
+use poseidon::poseidon_hash::ConstantLength;
+use poseidon::poseidon_hash::Hash;
+use poseidon::poseidon_hash::Spec;
 use alloc::format;
 use alloc::vec;
 use alloc::vec::Vec;

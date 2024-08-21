@@ -1,13 +1,11 @@
 #[cfg(test)]
 mod test {
     extern crate alloc;
-    use crate::{
-        nova::{
+    use crate::nova::{
             memory_consistency_circuit::NovaMemoryConsistencyCircuit,
             poseidon_parameters::OrchardNullifierScalar,
-        },
-        poseidon::poseidon_hash::{ConstantLength, Hash},
     };
+    use poseidon::poseidon_hash::{ConstantLength, Hash};
     use alloc::vec;
     use alloc::vec::Vec;
     use ff::Field;

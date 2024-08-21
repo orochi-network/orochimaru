@@ -1,3 +1,4 @@
+//! Similar to [Zcash](https://github.com/zcash/halo2/blob/main/halo2_gadgets/src/poseidon/primitives/fp.rs),  The constants for Fp and Fr can be reproduced from [this repository](https://github.com/daira/pasta-hadeshash)
 //! This file consists of specific hash parameters.
 
 use halo2_proofs::halo2curves::{bn256::Fr, pasta::pallas::Base};
