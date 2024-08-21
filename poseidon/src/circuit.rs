@@ -11,24 +11,24 @@ use alloc::string::ToString;
 use alloc::{format, vec::Vec};
 use ff::PrimeField;
 use halo2_proofs::{
-    circuit::{SimpleFloorPlanner, Value, Layouter},
+    circuit::{Layouter, SimpleFloorPlanner, Value},
+    halo2curves::bn256::{Bn256, Fr, G1Affine},
     plonk::{
-        create_proof, keygen_pk, keygen_vk, ProvingKey, verify_proof,
-        Advice, Circuit, Column, ConstraintSystem, Error, Expression, Fixed, Selector, VirtualCells,
-        Any, Constraints,
+        create_proof, keygen_pk, keygen_vk, verify_proof, Advice, Any, Circuit, Column,
+        ConstraintSystem, Constraints, Error, Expression, Fixed, ProvingKey, Selector,
+        VirtualCells,
     },
     poly::{
-        Rotation,
         kzg::{
             commitment::{KZGCommitmentScheme, ParamsKZG},
             multiopen::{ProverSHPLONK, VerifierSHPLONK},
             strategy::SingleStrategy,
         },
+        Rotation,
     },
     transcript::{
         Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
     },
-    halo2curves::bn256::{Bn256, Fr, G1Affine},
 };
 use rand_core::OsRng;
 
@@ -53,7 +53,7 @@ pub struct PoseidonConfig<F: PrimeField, const T: usize, const R: usize> {
 }
 
 impl<F: PrimeField, const T: usize, const R: usize> PoseidonConfig<F, T, R> {
-    ///
+    /// Configure the poseidon circuit
     pub fn configure<S: Spec<F, T, R>>(
         meta: &mut ConstraintSystem<F>,
         state: [Column<Advice>; T],
@@ -492,7 +492,8 @@ where
 
     /// Create proof for the permutation circuit
     pub fn create_proof(&mut self) -> Vec<u8> {
-        let mut transcript = Blake2bWrite::<Vec<u8>, G1Affine, Challenge255<G1Affine>>::init(vec![]);
+        let mut transcript =
+            Blake2bWrite::<Vec<u8>, G1Affine, Challenge255<G1Affine>>::init(vec![]);
         create_proof::<
             KZGCommitmentScheme<Bn256>,
             ProverSHPLONK<'_, Bn256>,
@@ -515,14 +516,15 @@ where
     /// Verify the proof (by comparing the result with expected value)
     pub fn verify(&mut self, proof: Vec<u8>) -> bool {
         let strategy = SingleStrategy::new(&self.params);
-        let mut transcript = Blake2bRead::<&[u8], G1Affine, Challenge255<G1Affine>>::init(&proof[..]);
+        let mut transcript =
+            Blake2bRead::<&[u8], G1Affine, Challenge255<G1Affine>>::init(&proof[..]);
         let result = verify_proof::<
             KZGCommitmentScheme<Bn256>,
             VerifierSHPLONK<'_, Bn256>,
             Challenge255<G1Affine>,
             Blake2bRead<&[u8], G1Affine, Challenge255<G1Affine>>,
             SingleStrategy<'_, Bn256>,
-        > (
+        >(
             &self.params,
             self.pk.get_vk(),
             strategy,
@@ -535,7 +537,6 @@ where
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {

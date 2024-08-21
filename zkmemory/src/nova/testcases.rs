@@ -2,10 +2,9 @@
 mod test {
     extern crate alloc;
     use crate::nova::{
-            memory_consistency_circuit::NovaMemoryConsistencyCircuit,
-            poseidon_parameters::OrchardNullifierScalar,
+        memory_consistency_circuit::NovaMemoryConsistencyCircuit,
+        poseidon_parameters::OrchardNullifierScalar,
     };
-    use poseidon::poseidon_hash::{ConstantLength, Hash};
     use alloc::vec;
     use alloc::vec::Vec;
     use ff::Field;
@@ -14,6 +13,7 @@ mod test {
         traits::{circuit::TrivialCircuit, snark::RelaxedR1CSSNARKTrait, Engine},
         PublicParams, RecursiveSNARK,
     };
+    use poseidon::poseidon_hash::{ConstantLength, Hash};
     type E1 = Bn256EngineKZG;
     type E2 = GrumpkinEngine;
     type EE1 = nova_snark::provider::hyperkzg::EvaluationEngine<E1>;

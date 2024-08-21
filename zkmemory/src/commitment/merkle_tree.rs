@@ -1,7 +1,6 @@
 //! Circuit for proving the correctness of the Merkle tree commitment.
 
 extern crate alloc;
-use poseidon::poseidon_hash::{ConstantLength, Hash, Spec};
 use alloc::{vec, vec::Vec};
 use core::marker::PhantomData;
 use ff::{Field, PrimeField};
@@ -12,6 +11,7 @@ use halo2_proofs::{
     },
     poly::Rotation,
 };
+use poseidon::poseidon_hash::{ConstantLength, Hash, Spec};
 
 #[derive(Clone, Copy)]
 /// Merkle tree config
@@ -246,10 +246,10 @@ impl<S: Spec<F, W, R> + Clone, F: Field + PrimeField, const W: usize, const R: u
 mod tests {
     extern crate alloc;
     use super::MerkleTreeCircuit;
-    use poseidon::poseidon_hash::*;
     use alloc::vec;
     use core::marker::PhantomData;
     use halo2_proofs::{dev::MockProver, halo2curves::pasta::Fp};
+    use poseidon::poseidon_hash::*;
     use rand::{thread_rng, Rng};
     use rand_core::RngCore;
 

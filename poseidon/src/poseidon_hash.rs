@@ -303,9 +303,11 @@ impl<F: Field + PrimeField, S: Spec<F, T, R>, const T: usize, const R: usize, co
     }
 }
 
-use crate::poseidon_constants::{MDS, MDS_INV, ROUND_CONSTANTS, MDS_FR, MDS_INV_FR, ROUND_CONSTANTS_FR};
-use halo2curves::pasta::Fp;
+use crate::poseidon_constants::{
+    MDS, MDS_FR, MDS_INV, MDS_INV_FR, ROUND_CONSTANTS, ROUND_CONSTANTS_FR,
+};
 use halo2_proofs::halo2curves::bn256::Fr;
+use halo2curves::pasta::Fp;
 /// Generate specific constants for testing the poseidon hash
 #[derive(Clone)]
 pub struct OrchardNullifier;
@@ -348,10 +350,9 @@ impl Spec<Fr, 3, 2> for OrchardNullifier {
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
-    use halo2curves::pasta::pallas::Base;
     use halo2_proofs::halo2curves::bn256::Fr;
+    use halo2curves::pasta::pallas::Base;
     #[test]
     fn poseidon_hash() {
         let message = [Base::from(120), Base::from(240)];

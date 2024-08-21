@@ -5,12 +5,8 @@
 extern crate alloc;
 use core::marker::PhantomData;
 extern crate std;
+use super::kzg::verify_kzg_proof;
 use crate::constraints;
-use poseidon::poseidon_hash::{ConstantLength, Hash, Spec};
-use poseidon::{
-    poseidon_constants::{MDS_FR, MDS_INV_FR, ROUND_CONSTANTS_FR},
-    poseidon_hash::Mtrx,
-};
 use alloc::{vec, vec::Vec};
 use constraints::gadgets::Table;
 use ff::Field;
@@ -32,8 +28,11 @@ use halo2_proofs::{
     },
     transcript::{Blake2bRead, Challenge255},
 };
-
-use super::kzg::verify_kzg_proof;
+use poseidon::poseidon_hash::{ConstantLength, Hash, Spec};
+use poseidon::{
+    poseidon_constants::{MDS_FR, MDS_INV_FR, ROUND_CONSTANTS_FR},
+    poseidon_hash::Mtrx,
+};
 
 const OMEGA_POWER: [Fr; 5] = [
     Fr::from_raw([0x01, 0, 0, 0]),

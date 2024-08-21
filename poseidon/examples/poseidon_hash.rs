@@ -1,15 +1,12 @@
+use halo2_proofs::{arithmetic::Field, dev::MockProver};
+use halo2curves::pasta::Fp;
 use poseidon::{
     circuit::PoseidonCircuit,
-    poseidon_hash::{Hash, OrchardNullifier, ConstantLength}
+    poseidon_hash::{ConstantLength, Hash, OrchardNullifier},
 };
-use halo2_proofs::{
-    dev::MockProver,
-    arithmetic::Field,
-};
-use std::marker::PhantomData;
-use halo2curves::pasta::Fp;
 use rand::rngs::OsRng;
-fn main(){
+use std::marker::PhantomData;
+fn main() {
     let rng = OsRng;
 
     let message = [Fp::random(rng), Fp::random(rng)];
