@@ -587,8 +587,8 @@ mod tests {
     extern crate alloc;
     extern crate std;
     use alloc::{vec, vec::Vec};
+    use core::marker::PhantomData;
     use rbtree::RBTree;
-    use std::marker::PhantomData;
 
     /// My instruction set for the machine
     #[derive(Debug, Clone, Copy)]

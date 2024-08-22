@@ -3,18 +3,11 @@
 //! We choose KZG as the polynomial commitment scheme for committing the messages in the children.
 //! Right now, the circuit could only support committing messages in the field Fr of Bn256, not in all finite fields.
 extern crate alloc;
-use core::marker::PhantomData;
-extern crate std;
-use crate::{
-    constraints,
-    poseidon::poseidon_hash::{ConstantLength, Hash, Spec},
-    poseidon::{
-        poseidon_constants::{MDS_FR, MDS_INV_FR, ROUND_CONSTANTS_FR},
-        poseidon_hash::Mtrx,
-    },
-};
+use super::kzg::verify_kzg_proof;
+use crate::constraints;
 use alloc::{vec, vec::Vec};
 use constraints::gadgets::Table;
+use core::marker::PhantomData;
 use ff::Field;
 use halo2_proofs::{
     circuit::{Layouter, Region, SimpleFloorPlanner, Value},
@@ -34,8 +27,11 @@ use halo2_proofs::{
     },
     transcript::{Blake2bRead, Challenge255},
 };
-
-use super::kzg::verify_kzg_proof;
+use poseidon::poseidon_hash::{ConstantLength, Hash, Spec};
+use poseidon::{
+    poseidon_constants::{MDS_FR, MDS_INV_FR, ROUND_CONSTANTS_FR},
+    poseidon_hash::Mtrx,
+};
 
 const OMEGA_POWER: [Fr; 5] = [
     Fr::from_raw([0x01, 0, 0, 0]),

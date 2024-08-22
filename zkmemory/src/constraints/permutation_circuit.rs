@@ -215,7 +215,7 @@ where
     pub fn new(k: u32, circuit: PermutationCircuit<C::Scalar>, expected: bool) -> Self {
         let params = ParamsIPA::<C>::new(k);
         let vk = keygen_vk(&params, &circuit).expect("Cannot initialize verify key");
-        let pk = keygen_pk(&params, vk.clone(), &circuit).expect("Cannot initialize verify key");
+        let pk = keygen_pk(&params, vk.clone(), &circuit).expect("Cannot initialize proving key");
         Self {
             params,
             pk,

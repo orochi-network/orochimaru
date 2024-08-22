@@ -64,7 +64,7 @@ impl<F: PrimeField, S: Spec<F, T, R>, const T: usize, const R: usize, const L: u
     }
 }
 
-/// A Poseidon sponge.
+/// A duplex sponge for the Poseidon permutation.
 #[derive(Debug)]
 pub struct Sponge<
     F: PrimeField,
@@ -187,7 +187,7 @@ fn poseidon_sponge<F: PrimeField, D: Domain<F, R>, const T: usize, const R: usiz
 }
 
 #[derive(Clone, Debug)]
-/// The Stateword
+/// A stateword from the state of a Poseidon sponge.
 pub struct StateWord<F: PrimeField>(pub AssignedCell<F, F>);
 
 impl<F: PrimeField> From<StateWord<F>> for AssignedCell<F, F> {
@@ -196,11 +196,11 @@ impl<F: PrimeField> From<StateWord<F>> for AssignedCell<F, F> {
     }
 }
 
-/// The current state of Poseidon
+/// The state of a Poseidon sponge.
 pub struct PoseidonState<F: PrimeField, const T: usize>(pub [StateWord<F>; T]);
 
 impl<F: PrimeField, const T: usize> PoseidonState<F, T> {
-    /// Load the initial state
+    /// Load the initial state into the circuit.
     pub fn load<D: Domain<F, R>, const R: usize>(
         region: &mut Region<'_, F>,
         config: &PoseidonConfig<F, T, R>,

@@ -3,7 +3,7 @@ use alloc::vec::Vec;
 use ff::Field;
 use nova_snark::provider::Bn256EngineKZG;
 
-use crate::poseidon::poseidon_hash::{Mtrx, Spec};
+use poseidon::poseidon_hash::{Mtrx, Spec};
 type E1 = Bn256EngineKZG;
 type FF = <E1 as nova_snark::traits::Engine>::Scalar;
 /// Generate specific constants for testing the poseidon hash
