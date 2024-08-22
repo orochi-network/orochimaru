@@ -481,7 +481,7 @@ where
     pub fn new(k: u32, circuit: PoseidonCircuit<S, Fr, D, T, R, L>, expected: bool) -> Self {
         let params = ParamsKZG::<Bn256>::setup(k, OsRng); // TODO add production level trusted setup
         let vk = keygen_vk(&params, &circuit).expect("Cannot initialize verify key");
-        let pk = keygen_pk(&params, vk.clone(), &circuit).expect("Cannot initialize verify key");
+        let pk = keygen_pk(&params, vk.clone(), &circuit).expect("Cannot initialize proving key");
         Self {
             params,
             pk,
