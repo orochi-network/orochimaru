@@ -3,12 +3,11 @@
 //! We choose KZG as the polynomial commitment scheme for committing the messages in the children.
 //! Right now, the circuit could only support committing messages in the field Fr of Bn256, not in all finite fields.
 extern crate alloc;
-use core::marker::PhantomData;
-extern crate std;
 use super::kzg::verify_kzg_proof;
 use crate::constraints;
 use alloc::{vec, vec::Vec};
 use constraints::gadgets::Table;
+use core::marker::PhantomData;
 use ff::Field;
 use halo2_proofs::{
     circuit::{Layouter, Region, SimpleFloorPlanner, Value},

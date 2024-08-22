@@ -301,7 +301,7 @@ mod tests {
     extern crate alloc;
     extern crate std;
     use alloc::{vec, vec::Vec};
-    use std::marker::PhantomData;
+    use core::marker::PhantomData;
     // Common function to build and test the circuit
     fn build_and_test_circuit(trace: Vec<ConvertedTraceRecord<Fp>>, k: u32) {
         let circuit = OriginalMemoryCircuit::<Fp> {
