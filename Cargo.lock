@@ -5112,20 +5112,13 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 name = "verkletree"
 version = "0.1.1"
 dependencies = [
- "bellpepper-core",
- "cargo-llvm-cov",
- "ethnum",
  "ff",
  "group",
  "halo2_proofs",
  "halo2curves 0.3.2",
- "hex",
- "itertools 0.12.1",
- "nova-snark",
  "poseidon",
  "rand",
  "rand_core",
- "rbtree",
  "zkmemory",
 ]
 
