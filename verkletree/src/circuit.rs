@@ -8,7 +8,7 @@ use constraints::gadgets::Table;
 use core::marker::PhantomData;
 use ff::Field;
 use halo2_proofs::{
-    circuit::{self, Layouter, Region, SimpleFloorPlanner, Value},
+    circuit::{Layouter, Region, SimpleFloorPlanner, Value},
     halo2curves::{
         bn256::{Bn256, Fr, G1Affine},
         CurveAffineExt,
