@@ -7,7 +7,9 @@ use alloc::{vec, vec::Vec};
 use constraints::gadgets::Table;
 use core::marker::PhantomData;
 use ff::Field;
+use group::Curve;
 use halo2_proofs::{
+    arithmetic::lagrange_interpolate,
     circuit::{Layouter, Region, SimpleFloorPlanner, Value},
     halo2curves::{
         bn256::{Bn256, Fr, G1Affine},
@@ -18,13 +20,13 @@ use halo2_proofs::{
         ConstraintSystem, Error, Expression, Fixed, Instance, ProvingKey, Selector,
     },
     poly::{
-        commitment::ParamsProver,
+        commitment::{Blind, ParamsProver},
         kzg::{
             commitment::{KZGCommitmentScheme, ParamsKZG},
             multiopen::{ProverSHPLONK, VerifierSHPLONK},
             strategy::{AccumulatorStrategy, SingleStrategy},
         },
-        Rotation,
+        Coeff, EvaluationDomain, Polynomial, Rotation,
     },
     transcript::{
         Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
@@ -36,6 +38,7 @@ use poseidon::{
     poseidon_hash::Mtrx,
 };
 use rand_core::OsRng;
+use zkmemory::commitment::kzg::create_kzg_proof;
 use zkmemory::commitment::kzg::verify_kzg_proof;
 use zkmemory::constraints;
 
@@ -46,6 +49,7 @@ pub(crate) const OMEGA_POWER: [Fr; 5] = [
     Fr::from_raw([0x0157, 0, 0, 0]),
     Fr::from_raw([0x0961, 0, 0, 0]),
 ];
+use rand::thread_rng;
 
 #[derive(Clone, Copy)]
 /// Verkle tree config
@@ -405,127 +409,115 @@ impl<S: Spec<Fr, W, R>, const W: usize, const R: usize, const A: usize>
     }
 }
 
+/// A KZG struct for the purpose of testing the correctness of the Verkle tree circuit
+pub struct KZGStruct {
+    kzg_params: ParamsKZG<Bn256>,
+    domain: EvaluationDomain<Fr>,
+}
+
+impl KZGStruct {
+    /// Initialize KZG parameters
+    pub fn new(k: u32) -> Self {
+        Self {
+            kzg_params: ParamsKZG::<Bn256>::new(k),
+            domain: EvaluationDomain::new(1, k),
+        }
+    }
+
+    /// Convert a given list into a polynomial
+    pub fn poly_from_evals(&self, evals: [Fr; 4]) -> Polynomial<Fr, Coeff> {
+        // Use Lagrange interpolation
+        self.domain
+            .coeff_from_vec(lagrange_interpolate(&OMEGA_POWER[0..4], &evals))
+    }
+
+    /// Commit the polynomial
+    pub fn commit(&self, evals: [Fr; 4]) -> G1Affine {
+        self.kzg_params
+            .commit(&self.poly_from_evals(evals), Blind(Fr::random(OsRng)))
+            .to_affine()
+    }
+
+    /// Create proof for multiple polynomial openings
+    pub fn create_proof(
+        &self,
+        point: Vec<Fr>,
+        polynomial: Vec<Polynomial<Fr, Coeff>>,
+        commitment: Vec<G1Affine>,
+    ) -> Vec<u8> {
+        create_kzg_proof::<
+            KZGCommitmentScheme<Bn256>,
+            ProverSHPLONK<'_, Bn256>,
+            Challenge255<G1Affine>,
+            Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>,
+        >(&self.kzg_params, point, polynomial, commitment)
+    }
+
+    /// Hash a group element to an element in Fr
+    pub fn group_to_scalar<S: Spec<Fr, W, R>, const W: usize, const R: usize>(
+        &self,
+        commitment: G1Affine,
+    ) -> Fr {
+        let (x_coordinate, y_coordinate) = commitment.into_coordinates();
+        let x_coordinate_fr =
+            Fr::from_bytes(&x_coordinate.to_bytes()).expect("Cannot convert x into Fr");
+        let y_coordinate_fr =
+            Fr::from_bytes(&y_coordinate.to_bytes()).expect("Cannot convert y into Fr");
+        Hash::<Fr, S, ConstantLength<2>, W, R>::init().hash([x_coordinate_fr, y_coordinate_fr])
+    }
+}
+
+/// Create a valid verkle tree proof for the purpose of testing
+pub fn create_verkle_tree_proof(
+    leaf: Fr,
+    indices: Vec<usize>,
+) -> (VerkleTreeCircuit<OrchardNullifier, 3, 2, 4>, Fr) {
+    let rng = thread_rng();
+    let kzg = KZGStruct::new(2);
+    let mut commitment_list: Vec<G1Affine> = vec![];
+    let mut poly_list: Vec<Polynomial<Fr, Coeff>> = vec![];
+    let mut path_elements: Vec<Fr> = vec![];
+    let mut temp = leaf;
+    for i in 0..indices.len() {
+        let mut evals = [0; 4].map(|_| Fr::random(rng.clone()));
+        evals[indices[i]] = temp;
+        // compute the polynomial for each parent node
+        let poly = kzg.poly_from_evals(evals);
+        // compute the commitment of the polynomial
+        let commitment = kzg.commit(evals);
+        poly_list.push(poly);
+        commitment_list.push(commitment);
+        // hash the group to scalar
+        temp = kzg.group_to_scalar::<OrchardNullifier, 3, 2>(commitment);
+        path_elements.push(temp);
+    }
+    // the root node of the tree
+    let root = temp;
+    // convert the indices to Fr
+    let indices_fr: Vec<Fr> = indices.iter().map(|x| Fr::from(*x as u64)).collect();
+    let point_list: Vec<Fr> = indices.iter().map(|x| OMEGA_POWER[*x]).collect();
+    // create the proof of correct opening
+    let proof = kzg.create_proof(point_list, poly_list, commitment_list.clone());
+    let circuit = VerkleTreeCircuit::<OrchardNullifier, 3, 2, 4> {
+        leaf,
+        commitment: commitment_list,
+        proof,
+        path_elements,
+        indices: indices_fr,
+        params: kzg.kzg_params,
+        _marker: PhantomData,
+    };
+    (circuit, root)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use alloc::vec;
     use core::marker::PhantomData;
-    use group::Curve;
-    use halo2_proofs::{
-        arithmetic::lagrange_interpolate,
-        dev::MockProver,
-        halo2curves::CurveAffineExt,
-        poly::{
-            commitment::Blind, kzg::multiopen::ProverSHPLONK, Coeff, EvaluationDomain, Polynomial,
-        },
-        transcript::Blake2bWrite,
-    };
-    use rand::thread_rng;
-    use rand_core::OsRng;
-    use zkmemory::commitment::kzg::create_kzg_proof;
-    /// A KZG struct for the purpose of testing the correctness of the Verkle tree circuit
-    pub struct KZGStruct {
-        kzg_params: ParamsKZG<Bn256>,
-        domain: EvaluationDomain<Fr>,
-    }
-
-    impl KZGStruct {
-        /// Initialize KZG parameters
-        pub fn new(k: u32) -> Self {
-            Self {
-                kzg_params: ParamsKZG::<Bn256>::new(k),
-                domain: EvaluationDomain::new(1, k),
-            }
-        }
-
-        /// Convert a given list into a polynomial
-        pub fn poly_from_evals(&self, evals: [Fr; 4]) -> Polynomial<Fr, Coeff> {
-            // Use Lagrange interpolation
-            self.domain
-                .coeff_from_vec(lagrange_interpolate(&OMEGA_POWER[0..4], &evals))
-        }
-
-        /// Commit the polynomial
-        pub fn commit(&self, evals: [Fr; 4]) -> G1Affine {
-            self.kzg_params
-                .commit(&self.poly_from_evals(evals), Blind(Fr::random(OsRng)))
-                .to_affine()
-        }
-
-        /// Create proof for multiple polynomial openings
-        pub fn create_proof(
-            &self,
-            point: Vec<Fr>,
-            polynomial: Vec<Polynomial<Fr, Coeff>>,
-            commitment: Vec<G1Affine>,
-        ) -> Vec<u8> {
-            create_kzg_proof::<
-                KZGCommitmentScheme<Bn256>,
-                ProverSHPLONK<'_, Bn256>,
-                Challenge255<G1Affine>,
-                Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>,
-            >(&self.kzg_params, point, polynomial, commitment)
-        }
-
-        /// Hash a group element to an element in Fr
-        pub fn group_to_scalar<S: Spec<Fr, W, R>, const W: usize, const R: usize>(
-            &self,
-            commitment: G1Affine,
-        ) -> Fr {
-            let (x_coordinate, y_coordinate) = commitment.into_coordinates();
-            let x_coordinate_fr =
-                Fr::from_bytes(&x_coordinate.to_bytes()).expect("Cannot convert x into Fr");
-            let y_coordinate_fr =
-                Fr::from_bytes(&y_coordinate.to_bytes()).expect("Cannot convert y into Fr");
-            Hash::<Fr, S, ConstantLength<2>, W, R>::init().hash([x_coordinate_fr, y_coordinate_fr])
-        }
-    }
-
-    /// Create a valid verkle tree proof for the purpose of testing
-    pub fn create_verkle_tree_proof(
-        leaf: Fr,
-        indices: Vec<usize>,
-    ) -> (VerkleTreeCircuit<OrchardNullifier, 3, 2, 4>, Fr) {
-        let rng = thread_rng();
-        let kzg = KZGStruct::new(2);
-        let mut commitment_list: Vec<G1Affine> = vec![];
-        let mut poly_list: Vec<Polynomial<Fr, Coeff>> = vec![];
-        let mut path_elements: Vec<Fr> = vec![];
-        let mut temp = leaf;
-        for i in 0..indices.len() {
-            let mut evals = [0; 4].map(|_| Fr::random(rng.clone()));
-            evals[indices[i]] = temp;
-            // compute the polynomial for each parent node
-            let poly = kzg.poly_from_evals(evals);
-            // compute the commitment of the polynomial
-            let commitment = kzg.commit(evals);
-            poly_list.push(poly);
-            commitment_list.push(commitment);
-            // hash the group to scalar
-            temp = kzg.group_to_scalar::<OrchardNullifier, 3, 2>(commitment);
-            path_elements.push(temp);
-        }
-        // the root node of the tree
-        let root = temp;
-        // convert the indices to Fr
-        let indices_fr: Vec<Fr> = indices.iter().map(|x| Fr::from(*x as u64)).collect();
-        let point_list: Vec<Fr> = indices.iter().map(|x| OMEGA_POWER[*x]).collect();
-        // create the proof of correct opening
-        let proof = kzg.create_proof(point_list, poly_list, commitment_list.clone());
-        let circuit = VerkleTreeCircuit::<OrchardNullifier, 3, 2, 4> {
-            leaf,
-            commitment: commitment_list,
-            proof,
-            path_elements,
-            indices: indices_fr,
-            params: kzg.kzg_params,
-            _marker: PhantomData,
-        };
-        (circuit, root)
-    }
+    use halo2_proofs::dev::MockProver;
 
     #[test]
-
     fn test_valid_verkle_tree() {
         let leaf = Fr::from(25234512);
         let indices = vec![0];
