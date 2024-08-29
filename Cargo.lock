@@ -5111,6 +5111,16 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 [[package]]
 name = "verkletree"
 version = "0.1.1"
+dependencies = [
+ "ff",
+ "group",
+ "halo2_proofs",
+ "halo2curves 0.3.2",
+ "poseidon",
+ "rand",
+ "rand_core",
+ "zkmemory",
+]
 
 [[package]]
 name = "version_check"
