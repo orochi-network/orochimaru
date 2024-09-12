@@ -6,3 +6,5 @@ pub mod kzg;
 pub mod merkle_tree;
 /// Commitment scheme using Verkle Tree
 pub mod verkle_tree;
+/// Commitment scheme trait
+pub mod commitment_scheme;

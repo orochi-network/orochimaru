@@ -2,7 +2,9 @@
 
 extern crate alloc;
 use alloc::{vec, vec::Vec};
+use alloc::boxed::Box;
 use core::marker::PhantomData;
+use core::error::Error as ErrorTrait;
 use ff::{Field, PrimeField};
 use halo2_proofs::{
     circuit::{Layouter, Region, SimpleFloorPlanner, Value},
@@ -12,6 +14,7 @@ use halo2_proofs::{
     poly::Rotation,
 };
 use poseidon::poseidon_hash::{ConstantLength, Hash, Spec};
+use crate::commitment::commitment_scheme::CommitmentScheme;
 
 #[derive(Clone, Copy)]
 /// Merkle tree config
@@ -242,6 +245,39 @@ impl<S: Spec<F, W, R> + Clone, F: Field + PrimeField, const W: usize, const R: u
     }
 }
 
+impl<S: Spec<F, W, R> + Clone, F: Field + PrimeField, const W: usize, const R: usize> CommitmentScheme<F> for MerkleTreeCircuit<S, F, W, R> {
+    type Value = F;
+    type Commitment = F;
+    type Opening = Vec<F>;
+    type Witness = Vec<F>;
+    type PublicParams = ();
+
+    fn setup(_k: u32) -> Result<Self::PublicParams, Box<dyn ErrorTrait>> {
+        Ok(())
+    }
+
+    fn commit(_pp: &Self::PublicParams, value: &Self::Value) -> Result<Self::Commitment, Box<dyn ErrorTrait>> {
+        Ok(*value)
+    }
+
+    fn open(_pp: &Self::PublicParams, value: &Self::Value, witness: &Self::Witness) -> Result<Self::Opening, Box<dyn ErrorTrait>> {
+        Ok(witness.clone())
+    }
+
+    fn verify(
+        _pp: &Self::PublicParams,
+        commitment: &Self::Commitment,
+        opening: &Self::Opening,
+        witness: &Self::Witness,
+    ) -> Result<bool, Box<dyn ErrorTrait>> {
+        Ok(opening == witness && *commitment == witness.last().copied().unwrap_or(F::ZERO))
+    }
+
+    fn create_proof(_pp: &Self::PublicParams, _circuit: Self) -> Result<Vec<u8>, Box<dyn ErrorTrait>> {
+        Ok(vec![])
+    }
+}
+
 #[cfg(test)]
 mod tests {
     extern crate alloc;
@@ -408,4 +444,28 @@ mod tests {
             .expect("Cannot run the circuit");
         assert_ne!(prover.verify(), Ok(()));
     }
+
+    #[test]
+    fn test_correct_merkle_proof_commitment_scheme_trait() {
+        let leaf = Fp::from(0u64);
+        let elements = vec![Fp::from(3u64), Fp::from(4u64), Fp::from(5u64), Fp::from(6u64)];
+        let indices = vec![Fp::from(0u64), Fp::from(0u64), Fp::from(1u64), Fp::from(1u64)];
+        let root = merkle_tree_commit(&leaf, &elements, &indices);
+        let circuit = MerkleTreeCircuit::<OrchardNullifier, Fp, 3, 2> {
+            leaf,
+            indices: indices.clone(),
+            elements: elements.clone(),
+            _marker: PhantomData,
+        };
+
+        let pp = MerkleTreeCircuit::<OrchardNullifier, Fp, 3, 2>::setup(10).unwrap();
+        let commitment = MerkleTreeCircuit::<OrchardNullifier, Fp, 3, 2>::commit(&pp, &leaf).unwrap();
+        let opening = MerkleTreeCircuit::<OrchardNullifier, Fp, 3, 2>::open(&pp, &leaf, &indices).unwrap();
+        let is_valid = MerkleTreeCircuit::<OrchardNullifier, Fp, 3, 2>::verify(&pp, &commitment, &opening, &indices).unwrap();
+        assert!(is_valid, "Verification should succeed for valid opening");
+
+        let prover = MockProver::run(10, &circuit, vec![vec![leaf, root]]).expect("Cannot run the circuit");
+        assert_eq!(prover.verify(), Ok(()));
+    }
+
 }
