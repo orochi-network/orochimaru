@@ -4,10 +4,8 @@
 
 extern crate alloc;
 use crate::{base::Base, machine::MemoryInstruction, machine::TraceRecord};
-use core::error::Error as ErrorTrait;
 use alloc::vec;
 use alloc::vec::Vec;
-use alloc::boxed::Box;
 use core::marker::PhantomData;
 use ff::{Field, WithSmallOrderMulGroup};
 use group::Curve;
@@ -16,7 +14,7 @@ use halo2_proofs::{
     halo2curves::bn256::{Bn256, Fr, G1Affine},
     plonk::Error,
     poly::{
-        commitment::{Blind, CommitmentScheme, ParamsProver, Prover, Verifier},
+        commitment::{Blind, CommitmentScheme, ParamsProver, Prover, Verifier, Params},
         kzg::{
             commitment::{KZGCommitmentScheme, ParamsKZG},
             multiopen::{ProverSHPLONK, VerifierSHPLONK},
@@ -91,7 +89,7 @@ where
     /// Commit a trace record in an execution trace
     /// This function, given input a trace record,
     /// outputs the commitment of the trace
-    pub fn commit(&mut self, trace: TraceRecord<K, V, S, T>) -> G1Affine {
+    pub fn commit_trace(&mut self, trace: TraceRecord<K, V, S, T>) -> G1Affine {
         self.kzg_params
             .commit(&self.poly_from_trace(trace), Blind(Fr::random(OsRng)))
             .to_affine()
@@ -336,54 +334,46 @@ where
     Fr: From<K>,
     Fr: From<V>,
 {
-    type Value = TraceRecord<K, V, S, T>;
     type Commitment = G1Affine;
     type Opening = Vec<u8>;
-    type Witness = ();
+    type Witness = TraceRecord<K, V, S, T>;
     type PublicParams = ParamsKZG<Bn256>;
 
-    fn setup(k: u32) -> Result<Self::PublicParams, Box<dyn ErrorTrait>> {
-        Ok(ParamsKZG::<Bn256>::new(k))
+    fn setup(k: u32) -> Self::PublicParams {
+        ParamsKZG::<Bn256>::new(k)
     }
 
-    fn commit(pp: &Self::PublicParams, value: &Self::Value) -> Result<Self::Commitment, Box<dyn ErrorTrait>> {
+    fn commit(pp: Self::PublicParams, witness: Self::Witness) -> Self::Commitment {
         let mut kzg = Self {
             kzg_params: pp.clone(),
             domain: EvaluationDomain::new(1, pp.k()),
             phantom_data: PhantomData,
         };
-        Ok(kzg.commit(*value))
+        kzg.commit_trace(witness)
     }
 
-    fn open(pp: &Self::PublicParams, value: &Self::Value, _witness: &Self::Witness) -> Result<Self::Opening, Box<dyn ErrorTrait>> {
+    fn open(pp: Self::PublicParams, witness: Self::Witness) -> Self::Opening {
         let mut kzg = Self {
             kzg_params: pp.clone(),
-            domain: EvaluationDomain::new(1, pp.k()),
+            domain: EvaluationDomain::new(1, Params::k(&pp)),
             phantom_data: PhantomData,
         };
-        let commitment = kzg.commit(*value);
-        Ok(kzg.prove_trace_record(*value, commitment))
+        let commitment = kzg.commit_trace(witness);
+        kzg.prove_trace_record(witness, commitment)
     }
 
     fn verify(
-        pp: &Self::PublicParams,
-        commitment: &Self::Commitment,
-        opening: &Self::Opening,
-        value: &Self::Value,
-        _witness: &Self::Witness,
-    ) -> Result<bool, Box<dyn ErrorTrait>> {
+        pp: Self::PublicParams,
+        commitment: Self::Commitment,
+        opening: Self::Opening,
+        _witness: Self::Witness,
+    ) -> bool {
         let kzg = Self {
             kzg_params: pp.clone(),
-            domain: EvaluationDomain::new(1, pp.k()),
+            domain: EvaluationDomain::new(1, Params::k(&pp)),
             phantom_data: PhantomData,
         };
-        Ok(kzg.verify_trace_record(*value, *commitment, opening.clone()))
-    }
-
-    fn create_proof(pp: &Self::PublicParams, circuit: Self) -> Result<Vec<u8>, Box<dyn ErrorTrait>> {
-        // This method is not directly applicable to KZG commitments
-        // You might want to implement a custom proof creation logic here
-        unimplemented!("create_proof is not implemented for KZGMemoryCommitment")
+        kzg.verify_trace_record(_witness, commitment, opening.clone())
     }
 }
 
@@ -462,7 +452,7 @@ mod test {
         let trace = generate_trace_record();
 
         //Commit the trace
-        let commitment = kzg_scheme.commit(trace);
+        let commitment = kzg_scheme.commit_trace(trace);
 
         //Open the trace
         let proof = kzg_scheme.prove_trace_record(trace, commitment);
@@ -480,7 +470,7 @@ mod test {
         let trace = generate_trace_record();
 
         // Commit the initial trace
-        let commitment = kzg_scheme.commit(trace);
+        let commitment = kzg_scheme.commit_trace(trace);
 
         // Given the "commitment", the Prover attempts to find a false trace hoping that it would also
         // has the same commitment output like the initial trace
@@ -495,37 +485,37 @@ mod test {
     fn test_kzg_commitment_scheme() {
         // Setup
         let k = 8;
-        let pp = KZGMemoryCommitment::<B256, B256, 32, 32>::setup(k).unwrap();
+        let pp = KZGMemoryCommitment::<B256, B256, 32, 32>::setup(k);
 
         // Generate a random trace record
         let trace = generate_trace_record();
 
         // Commit
-        let commitment = KZGMemoryCommitment::<B256, B256, 32, 32>::commit(&pp, &trace).unwrap();
+        let commitment = KZGMemoryCommitment::<B256, B256, 32, 32>::commit(pp.clone(), trace);
 
         // Open
-        let opening = KZGMemoryCommitment::<B256, B256, 32, 32>::open(&pp, &trace, &()).unwrap();
+        let opening = KZGMemoryCommitment::<B256, B256, 32, 32>::open(pp.clone(), trace);
 
         // Verify
-        let is_valid = KZGMemoryCommitment::<B256, B256, 32, 32>::verify(&pp, &commitment, &opening, &trace, &()).unwrap();
+        let is_valid = KZGMemoryCommitment::<B256, B256, 32, 32>::verify(pp.clone(), commitment, opening.clone(), trace);
         assert!(is_valid, "Verification should succeed for valid opening");
 
         // Test with incorrect trace
         let incorrect_trace = generate_trace_record();
-        let is_invalid = KZGMemoryCommitment::<B256, B256, 32, 32>::verify(&pp, &commitment, &opening, &incorrect_trace, &()).unwrap();
+        let is_invalid = KZGMemoryCommitment::<B256, B256, 32, 32>::verify(pp.clone(), commitment, opening.clone(), incorrect_trace);
         assert!(!is_invalid, "Verification should fail for invalid trace");
     }
 
     #[test]
     fn test_kzg_commitment_scheme_different_commitments() {
         let k = 8;
-        let pp = KZGMemoryCommitment::<B256, B256, 32, 32>::setup(k).unwrap();
+        let pp = KZGMemoryCommitment::<B256, B256, 32, 32>::setup(k);
 
         let trace1 = generate_trace_record();
         let trace2 = generate_trace_record();
 
-        let commitment1 = KZGMemoryCommitment::<B256, B256, 32, 32>::commit(&pp, &trace1).unwrap();
-        let commitment2 = KZGMemoryCommitment::<B256, B256, 32, 32>::commit(&pp, &trace2).unwrap();
+        let commitment1 = KZGMemoryCommitment::<B256, B256, 32, 32>::commit(pp.clone(), trace1);
+        let commitment2 = KZGMemoryCommitment::<B256, B256, 32, 32>::commit(pp.clone(), trace2);
 
         assert_ne!(commitment1, commitment2, "Different traces should produce different commitments");
     }
