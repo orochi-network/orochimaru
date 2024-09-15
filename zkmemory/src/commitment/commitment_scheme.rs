@@ -12,17 +12,17 @@ pub trait CommitmentScheme<F: PrimeField> { // TODO: add traitbound : Circuit<F>
     type PublicParams;
 
     /// Setup the commitment scheme
-    fn setup(k: u32) -> Self::PublicParams;
+    fn setup(k: Option<u32>) -> Self;
 
     /// Commit to a value
-    fn commit(pp: Self::PublicParams, witness: Self::Witness) -> Self::Commitment;
+    fn commit(&self, witness: Self::Witness) -> Self::Commitment;
 
     /// Open a commitment
-    fn open(pp: Self::PublicParams, witness: Self::Witness) -> Self::Opening;
+    fn open(&self, witness: Self::Witness) -> Self::Opening;
 
     /// Verify a commitment
     fn verify(
-        pp: Self::PublicParams,
+        &self, 
         commitment: Self::Commitment,
         opening: Self::Opening,
         witness: Self::Witness,

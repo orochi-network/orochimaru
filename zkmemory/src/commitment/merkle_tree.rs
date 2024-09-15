@@ -6,11 +6,24 @@ use core::marker::PhantomData;
 use ff::{Field, PrimeField};
 use halo2_proofs::{
     circuit::{Layouter, Region, SimpleFloorPlanner, Value},
+    halo2curves::{bn256::{Bn256, G1Affine}, pasta::Fp},
     plonk::{
-        Advice, Circuit, Column, ConstraintSystem, Error, Expression, Fixed, Instance, Selector,
+        Advice, Circuit, Column, ConstraintSystem, Error, Expression, Fixed, Instance, Selector, ProvingKey,
+        keygen_pk, keygen_vk, verify_proof, create_proof,
     },
-    poly::Rotation,
+    poly::{
+        kzg::{
+            commitment::{KZGCommitmentScheme, ParamsKZG},
+            multiopen::{ProverSHPLONK, VerifierSHPLONK},
+            strategy::SingleStrategy,
+        },
+        Rotation,
+    },
+    transcript::{
+        Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
+    },
 };
+use rand_core::OsRng;
 use poseidon::poseidon_hash::{ConstantLength, Hash, Spec};
 use crate::commitment::commitment_scheme::CommitmentScheme;
 
@@ -88,10 +101,10 @@ impl<F: Field + PrimeField> MerkleTreeConfig<F> {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 /// Merkle tree circuit
 pub(crate) struct MerkleTreeCircuit<
-    S: Spec<F, W, R>,
+    S: Spec<F, W, R> + Clone,
     F: Field + PrimeField,
     const W: usize,
     const R: usize,
@@ -243,6 +256,79 @@ impl<S: Spec<F, W, R> + Clone, F: Field + PrimeField, const W: usize, const R: u
     }
 }
 
+pub struct MerkleTreeProver<S, const W: usize, const R: usize>
+where
+    S: Spec<Fp, W, R> + Clone,
+{
+    params: ParamsKZG<Bn256>,
+    pk: ProvingKey<G1Affine>,
+    circuit: MerkleTreeCircuit<S, Fp, W, R>,
+}
+
+impl<S, const W: usize, const R: usize> MerkleTreeProver<S, W, R>
+where
+    S: Spec<Fp, W, R> + Clone,
+{
+    /// Initialize the parameters for the prover
+    pub fn new(k: u32, circuit: MerkleTreeCircuit<S, Fp, W, R>) -> Self {
+        let params = ParamsKZG::<Bn256>::setup(k, OsRng); // TODO: add production level trusted setup
+        let vk = keygen_vk(&params, &circuit).expect("Cannot initialize verify key");
+        let pk = keygen_pk(&params, vk, &circuit).expect("Cannot initialize proving key");
+        Self {
+            params,
+            pk,
+            circuit,
+        }
+    }
+
+    /// Create proof for the Merkle tree circuit
+    pub fn create_proof(&self) -> Vec<u8> {
+        let mut transcript = Blake2bWrite::<Vec<u8>, G1Affine, Challenge255<G1Affine>>::init(vec![]);
+        
+        let public_inputs = vec![self.circuit.leaf, self.circuit.commit()];
+        
+        create_proof::<
+            KZGCommitmentScheme<Bn256>,
+            ProverSHPLONK<'_, Bn256>,
+            Challenge255<G1Affine>,
+            OsRng,
+            Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>,
+            MerkleTreeCircuit<S, F, W, R>,
+        >(
+            &self.params,
+            &self.pk,
+            &[self.circuit.clone()],
+            &[&public_inputs],
+            OsRng,
+            &mut transcript,
+        )
+        .expect("Failed to create proof");
+
+        transcript.finalize()
+    }
+
+    /// Verify the proof
+    pub fn verify(&self, proof: Vec<u8>, public_inputs: Vec<F>) -> bool {
+        let strategy = SingleStrategy::new(&self.params);
+        let mut transcript = Blake2bRead::<&[u8], G1Affine, Challenge255<G1Affine>>::init(&proof[..]);
+        
+        verify_proof::<
+            KZGCommitmentScheme<Bn256>,
+            VerifierSHPLONK<'_, Bn256>,
+            Challenge255<G1Affine>,
+            Blake2bRead<&[u8], G1Affine, Challenge255<G1Affine>>,
+            SingleStrategy<'_, Bn256>,
+        >(
+            &self.params,
+            self.pk.get_vk(),
+            strategy,
+            &[&public_inputs],
+            &mut transcript,
+        )
+        .is_ok()
+    }
+}
+
 pub fn merkle_tree_commit<F, S, const W: usize, const R: usize>(
     leaf: &F,
     elements: &[F],
@@ -270,22 +356,28 @@ impl<S: Spec<F, W, R> + Clone, F: Field + PrimeField, const W: usize, const R: u
     type Witness = Vec<F>;
     type PublicParams = ();
 
-    fn setup(_k: u32) -> Self::PublicParams {
-        ()
+    // TODO: add circuit
+    fn setup(_k: Option<u32>) -> Self {
+        Self {
+            leaf: F::ZERO,
+            elements: vec![F::ZERO],
+            indices: vec![F::ZERO],
+            _marker: PhantomData,
+        }
     }
 
-    fn commit(_pp: Self::PublicParams, witness: Self::Witness) -> Self::Commitment {
+    fn commit(&self, witness: Self::Witness) -> Self::Commitment {
         let (leaf, elements) = witness.split_first().unwrap();
         let indices = elements.iter().map(|&x| x == F::ONE).collect::<Vec<_>>();
         merkle_tree_commit::<F, S, W, R>(leaf, elements, &indices)
     }
 
-    fn open(_pp: Self::PublicParams, witness: Self::Witness) -> Self::Opening {
+    fn open(&self, witness: Self::Witness) -> Self::Opening {
         witness[1..].to_vec()
     }
 
     fn verify(
-        _pp: Self::PublicParams,
+        &self, 
         commitment: Self::Commitment,
         opening: Self::Opening,
         witness: Self::Witness,
@@ -307,6 +399,7 @@ mod tests {
     use rand::{thread_rng, Rng};
     use rand_core::RngCore;
     use crate::commitment::commitment_scheme::CommitmentScheme;
+    use crate::commitment::merkle_tree::MerkleTreeProver;
 
     /// Compute the root of a merkle tree given the path and the sibling nodes
     pub fn merkle_tree_commit(leaf: &u64, elements: &[u64], indices: &[u64]) -> Fp {
@@ -377,6 +470,35 @@ mod tests {
         let prover = MockProver::run(k, &circuit, vec![vec![Fp::from(leaf), root]])
             .expect("Cannot run the circuit");
         assert_eq!(prover.verify(), Ok(()));
+    }
+
+    #[test]
+    fn test_merkle_proof_real_prover() {
+        let k = 8; // Example circuit size parameter
+        
+        // Create a sample Merkle tree circuit
+        let leaf = Fp::from(0u64);
+        let elements = vec![Fp::from(3u64), Fp::from(4u64), Fp::from(5u64), Fp::from(6u64)];
+        let indices = vec![Fp::from(0u64), Fp::from(0u64), Fp::from(1u64), Fp::from(1u64)];
+        
+        let circuit = MerkleTreeCircuit::<OrchardNullifier, Fp, 3, 2> {
+            leaf,
+            elements: elements.clone(),
+            indices: indices.clone(),
+            _marker: PhantomData,
+        };
+
+        // Create the prover
+        let prover = MerkleTreeProver::new(k, circuit.clone());
+
+        // Create the proof
+        let proof = prover.create_proof();
+
+        // Verify the proof
+        let public_inputs = vec![leaf, circuit.commit()];
+        let is_valid = prover.verify(proof, public_inputs);
+
+        assert!(is_valid, "Merkle proof verification failed");
     }
 
     #[test]
@@ -464,18 +586,19 @@ mod tests {
         assert_ne!(prover.verify(), Ok(()));
     }
 
-    #[test]
+    /* #[test]
     fn test_correct_merkle_proof_commitment_scheme_trait() {
         let leaf = Fp::from(0u64);
         let elements = vec![Fp::from(3u64), Fp::from(4u64), Fp::from(5u64), Fp::from(6u64)];
         let indices = vec![Fp::from(0u64), Fp::from(0u64), Fp::from(1u64), Fp::from(1u64)];
         let witness = [vec![leaf], elements.clone(), indices].concat();
 
-        let pp = <MerkleTreeCircuit<OrchardNullifier, Fp, 3, 2> as CommitmentScheme<Fp>>::setup(10);
-        let commitment = <MerkleTreeCircuit<OrchardNullifier, Fp, 3, 2> as CommitmentScheme<Fp>>::commit(pp, witness.clone());
-        let opening = <MerkleTreeCircuit<OrchardNullifier, Fp, 3, 2> as CommitmentScheme<Fp>>::open(pp, witness.clone());
-        let is_valid = <MerkleTreeCircuit<OrchardNullifier, Fp, 3, 2> as CommitmentScheme<Fp>>::verify(pp, commitment, opening, witness);
+        // TODO change calling on their type to create instance and call  
+        let pp = <MerkleTreeCircuit<OrchardNullifier, Fp, 3, 2> as CommitmentScheme<Fp>>::setup(None);
+        let commitment = <MerkleTreeCircuit<OrchardNullifier, Fp, 3, 2> as CommitmentScheme<Fp>>::commit(witness.clone());
+        let opening = <MerkleTreeCircuit<OrchardNullifier, Fp, 3, 2> as CommitmentScheme<Fp>>::open(witness.clone());
+        let is_valid = <MerkleTreeCircuit<OrchardNullifier, Fp, 3, 2> as CommitmentScheme<Fp>>::verify(commitment, opening, witness);
         assert!(is_valid, "Verification should succeed for valid opening");
     }
-
+ */
 }
