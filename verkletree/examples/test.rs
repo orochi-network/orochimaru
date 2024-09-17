@@ -14,7 +14,7 @@ fn main() {
     let (circuit, root) = create_verkle_tree_proof(leaf, indices);
 
     let k = 10;
-    let params = ParamsKZG::<Bn256>::setup(k, OsRng);
+    let params: ParamsKZG<Bn256> = ParamsKZG::<Bn256>::setup(k, OsRng);
     let vk = keygen_vk(&params, &circuit).expect("Cannot initialize verify key");
     let pk = keygen_pk(&params, vk.clone(), &circuit).expect("Cannot initialize proving key");
 

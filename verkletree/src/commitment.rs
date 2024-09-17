@@ -1,12 +1,9 @@
 use ff::PrimeField;
-use halo2_proofs::plonk::Circuit;
-use std::error::Error;
 
 /// A trait defining a common interface for commitment schemes with zk proving capabilities
-pub trait CommitmentScheme<F: PrimeField>: Circuit<F> {
-    /// The type of the committed value
-    type Value;
-    /// The type of the commitment
+pub trait CommitmentScheme<F: PrimeField> {
+    // TODO: add traitbound : Circuit<F> after kzg is finalized
+    /// The commitment
     type Commitment;
     /// The type of the opening (proof)
     type Opening;
@@ -15,33 +12,20 @@ pub trait CommitmentScheme<F: PrimeField>: Circuit<F> {
     /// The type of public parameters (if needed)
     type PublicParams;
 
-    type Prover;
-
-    type Verifier;
-
-    type Instance;
-
     /// Setup the commitment scheme
-    fn setup(k: u32) -> Result<Self::PublicParams, Box<dyn Error>>;
+    fn setup(k: Option<u32>) -> Self;
 
     /// Commit to a value
-    fn commit(
-        // &mut self,
-        pp: &Self::PublicParams,
-        value: &Self::Value,
-    ) -> Result<Self::Commitment, Box<dyn Error>>;
+    fn commit(&self, witness: Self::Witness) -> Self::Commitment;
 
     /// Open a commitment
-    fn open(
-        pp: &Self::PublicParams,
-        instance: &Self::Instance,
-        prover: Self::Prover,
-    ) -> Result<Self::Opening, Box<dyn Error>>;
+    fn open(&self, witness: Self::Witness) -> Self::Opening;
 
     /// Verify a commitment
     fn verify(
-        opening: &Self::Opening,
-        instance: &Self::Instance,
-        verifier: Self::Verifier,
-    ) -> Result<bool, Box<dyn Error>>;
+        &self,
+        commitment: Self::Commitment,
+        opening: Self::Opening,
+        witness: Self::Witness,
+    ) -> bool;
 }
