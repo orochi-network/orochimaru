@@ -521,14 +521,14 @@ impl<S: Spec<Fr, W, R>, const W: usize, const R: usize, const A: usize> Commitme
     fn setup(k: Option<u32>) -> Self {
         match k {
             Some(k) => {
-                let params = KZGStruct::new(k);
+                let params = ParamsKZG::<Bn256>::setup(k, OsRng);
                 Self {
                     leaf: Fr::from(0),
-                    commitment: params.clone().kzg_params.get_g().to_vec(),
+                    commitment: params.get_g().to_vec(),
                     proof: vec![],
                     path_elements: vec![],
                     indices: vec![],
-                    params: params.kzg_params,
+                    params,
                     _marker: PhantomData,
                 }
             }
