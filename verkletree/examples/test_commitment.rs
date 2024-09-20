@@ -1,0 +1,19 @@
+// use halo2_proofs::halo2curves::bn256::Fr;
+use verkletree::circuit::*;
+use verkletree::commitment::CommitmentScheme;
+extern crate alloc;
+
+fn main() {
+    let k = 7;
+    let circuit = VerkleTreeCircuit::<OrchardNullifier, 3, 2, 4>::setup(Some(k));
+
+    let path_elements = circuit.path_elements.clone();
+
+    let commitment = circuit.commit(path_elements.clone());
+
+    let witness = path_elements;
+
+    let opening = circuit.open(witness.clone());
+
+    assert!(circuit.verify(commitment, opening, witness));
+}
