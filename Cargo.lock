@@ -9,6 +9,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe438c63458706e03479442743baae6c88256498e6431708f6dfc520a26515d3"
 
 [[package]]
+name = "abomonation"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56e72913c99b1f927aa7bd59a41518fdd9995f63ffc8760f211609e0241c4fb2"
+
+[[package]]
+name = "abomonation_derive_ng"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c34056136e0910411c88e9af0bca6e23fcdba258da239684014cd45ca900c9f0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.72",
+]
+
+[[package]]
 name = "addchain"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -180,6 +197,51 @@ name = "anyhow"
 version = "1.0.86"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b3d1d046238990b9cf5bcde22a3fb3584ee5cf65fb2765f454ed428c7a0063da"
+
+[[package]]
+name = "arecibo"
+version = "0.2.0"
+source = "git+https://github.com/argumentcomputer/arecibo#3dea91fb6e6b6915a4387321bba9385e4f45c449"
+dependencies = [
+ "abomonation",
+ "abomonation_derive_ng",
+ "bellpepper 0.4.1 (git+https://github.com/argumentcomputer/bellpepper?branch=dev)",
+ "bellpepper-core",
+ "bincode",
+ "bitvec",
+ "byteorder",
+ "cfg-if",
+ "derive_more",
+ "digest 0.10.7",
+ "ff",
+ "generic-array 1.1.0",
+ "getrandom",
+ "group",
+ "grumpkin-msm",
+ "halo2curves 0.6.1",
+ "itertools 0.13.0",
+ "neptune 13.0.0 (git+https://github.com/argumentcomputer/neptune?branch=dev)",
+ "num-bigint 0.4.6",
+ "num-integer",
+ "num-traits",
+ "once_cell",
+ "pairing",
+ "pasta_curves",
+ "proptest",
+ "rand",
+ "rand_chacha",
+ "rand_core",
+ "rayon",
+ "rayon-scan",
+ "ref-cast",
+ "serde",
+ "sha3 0.10.8",
+ "static_assertions",
+ "subtle",
+ "thiserror",
+ "tracing",
+ "vergen",
+]
 
 [[package]]
 name = "ark-ff"
@@ -636,6 +698,28 @@ dependencies = [
  "bellpepper-core",
  "byteorder",
  "ff",
+]
+
+[[package]]
+name = "bellpepper"
+version = "0.4.1"
+source = "git+https://github.com/argumentcomputer/bellpepper?branch=dev#d0225bf6cb2bb9abaff28ea96a3497f9829815f8"
+dependencies = [
+ "bellpepper-core",
+ "byteorder",
+ "ff",
+ "itertools 0.12.1",
+]
+
+[[package]]
+name = "bellpepper"
+version = "0.4.1"
+source = "git+https://github.com/lurk-lab/bellpepper?branch=dev#d0225bf6cb2bb9abaff28ea96a3497f9829815f8"
+dependencies = [
+ "bellpepper-core",
+ "byteorder",
+ "ff",
+ "itertools 0.12.1",
 ]
 
 [[package]]
@@ -1740,6 +1824,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "grumpkin-msm"
+version = "0.1.0"
+source = "git+https://github.com/argumentcomputer/grumpkin-msm?branch=dev#414da3bca6135a15fa58466b8831f5161ab1c51e"
+dependencies = [
+ "blst",
+ "cc",
+ "getrandom",
+ "halo2curves 0.6.1",
+ "pasta_curves",
+ "rand",
+ "rand_chacha",
+ "rayon",
+ "semolina",
+ "sppark",
+ "which",
+]
+
+[[package]]
 name = "h2"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2206,6 +2308,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2488,7 +2599,7 @@ version = "13.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06626c9ac04c894e9a23d061ba1309f28506cdc5fe64156d28a15fb57fc8e438"
 dependencies = [
- "bellpepper",
+ "bellpepper 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "bellpepper-core",
  "blake2s_simd",
  "blstrs",
@@ -2496,6 +2607,25 @@ dependencies = [
  "ff",
  "generic-array 0.14.7",
  "log",
+ "pasta_curves",
+ "serde",
+ "trait-set",
+]
+
+[[package]]
+name = "neptune"
+version = "13.0.0"
+source = "git+https://github.com/argumentcomputer/neptune?branch=dev#b6fb1f9372be2a50c5686c1dfa27bb0d8c4253e7"
+dependencies = [
+ "abomonation",
+ "abomonation_derive_ng",
+ "bellpepper 0.4.1 (git+https://github.com/lurk-lab/bellpepper?branch=dev)",
+ "bellpepper-core",
+ "blake2s_simd",
+ "blstrs",
+ "byteorder",
+ "ff",
+ "generic-array 0.14.7",
  "pasta_curves",
  "serde",
  "trait-set",
@@ -2552,7 +2682,7 @@ name = "nova-snark"
 version = "0.37.0"
 source = "git+https://github.com/microsoft/Nova#d2c52bd73e6a91c20f23ae4971f24ad70a9d0395"
 dependencies = [
- "bellpepper",
+ "bellpepper 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "bellpepper-core",
  "bincode",
  "bitvec",
@@ -2564,7 +2694,7 @@ dependencies = [
  "group",
  "halo2curves 0.6.1",
  "itertools 0.12.1",
- "neptune",
+ "neptune 13.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-bigint 0.4.6",
  "num-integer",
  "num-traits",
@@ -2707,6 +2837,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4161fcb6d602d4d2081af7c3a45852d875a03dd337a6bfdd6e06407b61342a43"
 dependencies = [
  "hermit-abi 0.3.9",
+ "libc",
+]
+
+[[package]]
+name = "num_threads"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c7398b9c8b70908f6371f47ed36737907c87c52af34c268fed0bf0ceb92ead9"
+dependencies = [
  "libc",
 ]
 
@@ -3261,6 +3400,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rayon-scan"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f87cc11a0140b4b0da0ffc889885760c61b13672d80a908920b2c0df078fa14"
+dependencies = [
+ "rayon",
+]
+
+[[package]]
 name = "rbtree"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3302,6 +3450,26 @@ dependencies = [
  "getrandom",
  "libredox",
  "thiserror",
+]
+
+[[package]]
+name = "ref-cast"
+version = "1.0.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ccf0a6f84d5f1d581da8b41b47ec8600871962f2a528115b542b362d4b744931"
+dependencies = [
+ "ref-cast-impl",
+]
+
+[[package]]
+name = "ref-cast-impl"
+version = "1.0.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bcc303e793d3734489387d205e9b186fac9c6cfacedd98cbb2e8a5943595f3e6"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -4740,7 +4908,9 @@ checksum = "5dfd88e563464686c916c7e46e623e520ddc6d79fa6641390f2e3fa86e83e885"
 dependencies = [
  "deranged",
  "itoa",
+ "libc",
  "num-conv",
+ "num_threads",
  "powerfmt",
  "serde",
  "time-core",
@@ -5107,6 +5277,18 @@ name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
+
+[[package]]
+name = "vergen"
+version = "8.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2990d9ea5967266ea0ccf413a4aa5c42a93dbcfda9cb49a97de6931726b12566"
+dependencies = [
+ "anyhow",
+ "cfg-if",
+ "rustversion",
+ "time",
+]
 
 [[package]]
 name = "verkletree"
@@ -5566,6 +5748,7 @@ version = "0.1.0"
 name = "zkmemory"
 version = "0.1.1"
 dependencies = [
+ "arecibo",
  "bellpepper-core",
  "cargo-llvm-cov",
  "ethnum",

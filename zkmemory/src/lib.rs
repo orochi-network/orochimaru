@@ -27,6 +27,8 @@ pub mod error;
 pub mod machine;
 /// Memory consistency circuit using Nova proof system
 pub mod nova;
+///
+pub mod supernova;
 #[cfg(test)]
 mod tests {
     extern crate alloc;
