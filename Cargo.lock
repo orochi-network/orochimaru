@@ -5748,6 +5748,7 @@ version = "0.1.0"
 name = "zkmemory"
 version = "0.1.1"
 dependencies = [
+ "abomonation",
  "arecibo",
  "bellpepper-core",
  "cargo-llvm-cov",

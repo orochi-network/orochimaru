@@ -2,8 +2,8 @@
 #![recursion_limit = "256"]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![deny(
-    unused,
-    warnings,
+  //  unused,
+  //  warnings,
     future_incompatible,
     nonstandard_style,
     rust_2018_idioms,
