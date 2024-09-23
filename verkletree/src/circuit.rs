@@ -620,7 +620,6 @@ impl<S: Spec<Fr, W, R>, const W: usize, const R: usize, const A: usize> Commitme
                 panic!("invalid value")
             }
         }
-
         witness[witness.len() - 1]
     }
 
@@ -639,7 +638,7 @@ impl<S: Spec<Fr, W, R>, const W: usize, const R: usize, const A: usize> Commitme
 
     fn verify(
         &self,
-        _commitment: Self::Commitment,
+        commitment: Self::Commitment,
         opening: Self::Opening,
         witness: Self::Witness,
     ) -> bool {
@@ -647,7 +646,7 @@ impl<S: Spec<Fr, W, R>, const W: usize, const R: usize, const A: usize> Commitme
         let mut verifier = VerkleTreeVerifier::new(params, vk, true);
         let root = witness[witness.len() - 1];
 
-        verifier.verify(proof, self.leaf, root) && root == _commitment
+        verifier.verify(proof, self.leaf, root) && root == commitment
     }
 }
 

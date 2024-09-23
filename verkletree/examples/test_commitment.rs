@@ -8,10 +8,9 @@ fn main() {
     let circuit = VerkleTreeCircuit::<OrchardNullifier, 3, 2, 4>::setup(Some(k));
 
     let path_elements = circuit.path_elements.clone();
-
-    let commitment = circuit.commit(path_elements.clone());
-
     let witness = path_elements;
+
+    let commitment = circuit.commit(witness.clone());
 
     let opening = circuit.open(witness.clone());
 
