@@ -339,8 +339,9 @@ impl Spec<Fr, 3, 2> for OrchardNullifier {
 }
 
 /// A KZG struct for the purpose of testing the correctness of the Verkle tree circuit
+#[derive(Clone, Debug)]
 pub struct KZGStruct {
-    kzg_params: ParamsKZG<Bn256>,
+    pub kzg_params: ParamsKZG<Bn256>,
     domain: EvaluationDomain<Fr>,
 }
 

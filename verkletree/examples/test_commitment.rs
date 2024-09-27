@@ -6,9 +6,7 @@ extern crate alloc;
 fn main() {
     let k = 7;
     let circuit = VerkleTreeCircuit::<OrchardNullifier, 3, 2, 4>::setup(Some(k));
-
-    let path_elements = circuit.path_elements.clone();
-    let witness = path_elements;
+    let witness = circuit.path_elements.clone();
 
     let commitment = circuit.commit(witness.clone());
 
