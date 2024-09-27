@@ -194,12 +194,12 @@ mod test {
     #[test]
     fn test101() {
         let rng = thread_rng();
-        let elements: Vec<Fr> = (0..16).map(|_| Fr::random(rng.clone())).collect();
+        let elements: Vec<Fr> = (0..16 * 4).map(|_| Fr::random(rng.clone())).collect();
 
         let vk_commitment_scheme = VerkleTreeCommitmentScheme::setup(Some(2));
 
-        let indices: Vec<usize> = vec![3, 2];
-        let leaf = elements[11];
+        let indices: Vec<usize> = vec![0, 0, 0];
+        let leaf = elements[0];
 
         let witness = VerkleTreeWitness {
             leaf,
