@@ -71,6 +71,15 @@ impl CommitmentScheme<Fr> for VerkleTreeCommitmentScheme {
     fn open(&self, witness: Self::Witness) -> Self::Opening {
         let mut indices = witness.indices;
         let mut leaf_evaluations = witness.elements;
+
+        let n = indices.len().pow(4);
+
+        assert_eq!(
+            leaf_evaluations.len(),
+            n,
+            "number of leaf must be 4^len(indices)"
+        );
+
         let kzg_instance = self.kzg.clone();
 
         let mut evals = [Fr::from(0); 4];
@@ -192,14 +201,14 @@ mod test {
     use rand::thread_rng;
 
     #[test]
-    fn test101() {
+    fn test_valid_input() {
         let rng = thread_rng();
-        let elements: Vec<Fr> = (0..16 * 4).map(|_| Fr::random(rng.clone())).collect();
+        let elements: Vec<Fr> = (0..16 * 16).map(|_| Fr::random(rng.clone())).collect();
 
         let vk_commitment_scheme = VerkleTreeCommitmentScheme::setup(Some(2));
 
-        let indices: Vec<usize> = vec![0, 0, 0];
-        let leaf = elements[0];
+        let indices: Vec<usize> = vec![2, 1, 0, 0];
+        let leaf = elements[6];
 
         let witness = VerkleTreeWitness {
             leaf,
