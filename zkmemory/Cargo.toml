@@ -27,8 +27,7 @@ cargo-llvm-cov = { workspace = true }
 ethnum = { workspace = true }
 hex = { workspace = true }
 rbtree = { workspace = true }
-itertools = "0.12.1"
-abomonation = "0.7.3"
+itertools = "0.13.0"
 nova-snark = { workspace = true }
 bellpepper-core = { workspace = true }
 poseidon = { path = "../poseidon" }
