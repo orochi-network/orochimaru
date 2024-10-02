@@ -1,16 +1,22 @@
 extern crate alloc;
+use abomonation::Abomonation;
+//use alloc::format;
 use alloc::format;
+use alloc::vec;
 use alloc::vec::Vec;
+use arecibo::provider::Bn256EngineKZG;
 use arecibo::{
     supernova::*,
-    traits::{CurveCycleEquipped, Dual, Engine},
+    traits::{snark::default_ck_hint, CurveCycleEquipped, Dual, Engine},
 };
 use bellpepper_core::{num::AllocatedNum, ConstraintSystem, SynthesisError};
-use ff::PrimeField;
+use ff::{Field, PrimeField};
+use poseidon::poseidon_hash::Spec;
+extern crate std;
+use core::marker::PhantomData;
+use std::println;
 
-// Idea is simple: Create two circuits read and write such that:
-// Circuit receives two 
-
+use crate::supernova::poseidon_parameter::OrchardNullifierScalar;
 
 #[derive(Copy, Debug, Clone)]
 /// the trace record struct
@@ -21,15 +27,21 @@ pub struct TraceRecord<F: PrimeField> {
 
 #[derive(Debug, Clone)]
 ///
-pub struct ReadCircuit<F: PrimeField> {
-    next_instruction: Option<usize>,
+pub struct ReadCircuit<F: PrimeField, S: Spec<F, W, R> + Clone + core::marker::Sync + core::marker::Send,
+    const W: usize,
+    const R: usize,> {
     trace: Option<TraceRecord<F>>,
+    next_instruction: Option<F>,
     memory_size: Option<usize>,
+    _marker: PhantomData<S>,
 }
 
-impl<F: PrimeField> StepCircuit<F> for ReadCircuit<F> {
+impl<F: PrimeField, S: Spec<F, W, R> + Clone + core::marker::Sync + core::marker::Send,
+    const W: usize,
+    const R: usize,> StepCircuit<F> for ReadCircuit<F,S,W,R> {
     fn arity(&self) -> usize {
-        self.memory_size.expect("failed to get arity of read circuit")
+        self.memory_size
+            .expect("failed to get arity of read circuit")
     }
     fn circuit_index(&self) -> usize {
         0
@@ -40,15 +52,12 @@ impl<F: PrimeField> StepCircuit<F> for ReadCircuit<F> {
         _pc: Option<&AllocatedNum<F>>,
         z: &[AllocatedNum<F>],
     ) -> Result<(Option<AllocatedNum<F>>, Vec<AllocatedNum<F>>), SynthesisError> {
-          let trace=self.trace.expect("cannot unwrap trace");
-        let memory_size=self.memory_size.expect("cannot unwrap memory size");
-        let next_instruction=self.next_instruction.expect("cannot unwrap next_instruction");
+        let trace = self.trace.expect("cannot unwrap trace");
+        let memory_size = self.memory_size.expect("cannot unwrap memory size");
         // get lookup result to check whether address in 0..memory_len
         let mut lookup_res = 0;
         for i in 0..memory_size {
-            lookup_res += (F::from(i as u64) - trace.address)
-                .is_zero()
-                .unwrap_u8();
+            lookup_res += (F::from(i as u64) - trace.address).is_zero().unwrap_u8();
         }
         let lookup_res_alloc = AllocatedNum::alloc(cs.namespace(|| "lookup result"), || {
             Ok(F::from(lookup_res as u64))
@@ -57,17 +66,14 @@ impl<F: PrimeField> StepCircuit<F> for ReadCircuit<F> {
 
         // Get memory[address]
         let memory_address = AllocatedNum::alloc(cs.namespace(|| "get memory[address]"), || {
-            Ok(self
-                .clone()
-                .get_memory_address(z.to_vec(), trace.address))
+            Ok(self.clone().get_memory_address(z.to_vec(), memory_size, trace.address))
         })
         .expect("unable to get memory[address]");
 
         // The value variable
-        let value = AllocatedNum::alloc(cs.namespace(|| format!("value")), || {
-            Ok(trace.value)
-        })
-        .expect("unable to get value");
+        let value = AllocatedNum::alloc(cs.namespace(|| format!("value")), || Ok(trace.value))
+            .expect("unable to get value");
+        
 
         // address must be in 0..memory_len
         cs.enforce(
@@ -81,36 +87,26 @@ impl<F: PrimeField> StepCircuit<F> for ReadCircuit<F> {
         cs.enforce(
             || "if instruction=0 then memory[address] = value",
             |lc| lc + CS::one(),
-            |lc| lc + memory_address.get_variable() ,
-            |lc| lc +value.get_variable(),
+            |lc| lc + memory_address.get_variable(),
+            |lc| lc + value.get_variable(),
         );
 
-        let z_out = z.to_vec();
-        let memory = z_out.to_vec();
-      
-      // dummy alloc to make the two circuit having equal alloc() calls
-      // otherwise, the program will return a InvalidWitnessLength error.
-        for (_, _) in memory.iter().enumerate().take(memory_size) {
-            let _ = AllocatedNum::alloc(cs.namespace(|| "get new memory state"), || {
-                Ok(F::ZERO)
-            })
-            .expect("unable to get dummy witness");
-        }
-
-
         let pc_next = AllocatedNum::alloc_infallible(cs.namespace(|| "alloc"), || {
-            F::from(next_instruction as u64)
+            self.next_instruction
+                .expect("unable to get next instruction")
         });
 
-        Ok((Some(pc_next), z_out))
+        Ok((Some(pc_next), z.to_vec()))
     }
 }
 
-impl<F: PrimeField> ReadCircuit<F> {
-    fn get_memory_address(self, memory: Vec<AllocatedNum<F>>, address: F) -> F {
+impl<F: PrimeField,S: Spec<F, W, R> + Clone + core::marker::Sync + core::marker::Send,
+    const W: usize,
+    const R: usize,> ReadCircuit<F,S,W,R> {
+    fn get_memory_address(self, memory: Vec<AllocatedNum<F>>,memory_size:usize, address: F) -> F {
         let mut tmp = F::ZERO;
         let mut tmp2: u8;
-        for (i, item) in memory.iter().enumerate() {
+        for (i, item) in memory.iter().take(memory_size).enumerate() {
             tmp2 = (F::from(i as u64) - address).is_zero().unwrap_u8();
             tmp += F::from(tmp2 as u64) * item.get_value().expect("unable to get result");
         }
@@ -120,18 +116,24 @@ impl<F: PrimeField> ReadCircuit<F> {
 
 #[derive(Debug, Clone)]
 ///
-pub struct WriteCircuit<F: PrimeField> {
-    next_instruction: Option<usize>,
+pub struct WriteCircuit<F: PrimeField,S: Spec<F, W, R> + Clone + core::marker::Sync + core::marker::Send,
+    const W: usize,
+    const R: usize,> {
     trace: Option<TraceRecord<F>>,
+    next_instruction: Option<F>,
     memory_size: Option<usize>,
+    _marker: PhantomData<S>
 }
 
-impl<F: PrimeField> StepCircuit<F> for WriteCircuit<F> {
+impl<F: PrimeField,S: Spec<F, W, R> + Clone + core::marker::Sync + core::marker::Send,
+    const W: usize,
+    const R: usize> StepCircuit<F> for WriteCircuit<F,S,W,R> {
     fn arity(&self) -> usize {
-       self.memory_size.expect("failed to get arity of write circuit")
+        self.memory_size
+            .expect("failed to get arity of write circuit")
     }
     fn circuit_index(&self) -> usize {
-       1
+        1
     }
     fn synthesize<CS: bellpepper_core::ConstraintSystem<F>>(
         &self,
@@ -139,49 +141,33 @@ impl<F: PrimeField> StepCircuit<F> for WriteCircuit<F> {
         _pc: Option<&AllocatedNum<F>>,
         z: &[AllocatedNum<F>],
     ) -> Result<(Option<AllocatedNum<F>>, Vec<AllocatedNum<F>>), SynthesisError> {
-         let trace=self.trace.expect("cannot unwrap trace");
-        let memory_size=self.memory_size.expect("cannot unwrap memory size");
-        let next_instruction=self.next_instruction.expect("cannot unwrap next_instruction");
+        let trace = self.trace.expect("cannot unwrap trace");
+        let memory_size = self.memory_size.expect("cannot unwrap memory size");
         // get lookup result to check whether address in 0..memory_len
         let mut lookup_res = 0;
         for i in 0..memory_size {
-            lookup_res += (F::from(i as u64) - trace.address)
-                .is_zero()
-                .unwrap_u8();
+            lookup_res += (F::from(i as u64) - trace.address).is_zero().unwrap_u8();
         }
         let lookup_res_alloc = AllocatedNum::alloc(cs.namespace(|| "lookup result"), || {
             Ok(F::from(lookup_res as u64))
         })
         .expect("unable to get lookup result");
 
-         // again, get dummy alloc
-        let _ = AllocatedNum::alloc(cs.namespace(|| "get dummy alloc"), || {
-            Ok(self
-                .clone()
-                .get_memory_address(z.to_vec(), trace.address))
-        })
-        .expect("unable to get dummy alloc");
-
         // The value variable
-        let value = AllocatedNum::alloc(cs.namespace(|| format!("value")), || {
-            Ok(trace.value)
-        })
-        .expect("unable to get value");
+        let value = AllocatedNum::alloc(cs.namespace(|| format!("value")), || Ok(trace.value))
+            .expect("unable to get value");
 
         // address must be in 0..memory_len
-        cs.enforce(
+         cs.enforce(
             || "address must be in 0..memory_len",
             |lc| lc + lookup_res_alloc.get_variable(),
             |lc| lc + CS::one(),
             |lc| lc + CS::one(),
         );
 
-
         let mut z_out = z.to_vec();
         let memory = z_out.to_vec();
-        z_out = (0..memory_size)
-            .map(|i| memory[i].clone())
-            .collect();
+        z_out = (0..memory_size).map(|i| memory[i].clone()).collect();
         for (i, item) in memory.iter().enumerate().take(memory_size) {
             let tmp = AllocatedNum::alloc(cs.namespace(|| "get new memory state"), || {
                 Ok(self.clone().get_new_memory_cell(
@@ -194,28 +180,21 @@ impl<F: PrimeField> StepCircuit<F> for WriteCircuit<F> {
             .expect("unable to get new memory cells");
             z_out[i] = tmp;
         }
-        
 
         let pc_next = AllocatedNum::alloc_infallible(cs.namespace(|| "alloc"), || {
-            F::from(next_instruction as u64)
+            self.next_instruction
+                .expect("unable to get next instruction")
         });
 
-        Ok((Some(pc_next), z_out))
+        println!("{:?}", z_out);
 
+        Ok((Some(pc_next), z_out))
     }
 }
 
-impl<F: PrimeField> WriteCircuit<F> {
-    fn get_memory_address(self, memory: Vec<AllocatedNum<F>>, address: F) -> F {
-        let mut tmp = F::ZERO;
-        let mut tmp2: u8;
-        for (i, item) in memory.iter().enumerate() {
-            tmp2 = (F::from(i as u64) - address).is_zero().unwrap_u8();
-            tmp += F::from(tmp2 as u64) * item.get_value().expect("unable to get result");
-        }
-        tmp
-    }
-
+impl<F: PrimeField,S: Spec<F, W, R> + Clone + core::marker::Sync + core::marker::Send,
+    const W: usize,
+    const R: usize> WriteCircuit<F,S,W,R> {
     fn get_new_memory_cell(
         self,
         item: AllocatedNum<F>,
@@ -228,39 +207,46 @@ impl<F: PrimeField> WriteCircuit<F> {
         let d = (i - address).is_zero().unwrap_u8();
         F::from((1 - d) as u64) * item + F::from(d as u64) * value
     }
-
-
-
 }
 
 #[derive(Debug, Clone)]
-enum MemoryConsistencyCircuit<F: PrimeField> {
-    Read(ReadCircuit<F>),
-    Write(WriteCircuit<F>),
+enum MemoryConsistencyCircuit<F: PrimeField,S: Spec<F, W, R> + Clone + core::marker::Sync + core::marker::Send,
+    const W: usize,
+    const R: usize> {
+    Read(ReadCircuit<F,S,W,R>),
+    Write(WriteCircuit<F,S,W,R>),
 }
 
-impl<F: PrimeField> MemoryConsistencyCircuit<F> {
+impl<F: PrimeField,S: Spec<F, W, R> + Clone + core::marker::Sync + core::marker::Send,
+    const W: usize,
+    const R: usize> MemoryConsistencyCircuit<F,S,W,R> {
     ///
     pub fn new(
         trace_list: Vec<TraceRecord<F>>,
-        instructions: Vec<usize>,
+        instruction: Vec<usize>,
         num_steps: usize,
         memory_size: usize,
     ) -> Vec<Self> {
-        assert!(instructions.len() == num_steps+1);
+        // the instructions in the traces along with a terMination instruction
+        assert_eq!(instruction.len(),trace_list.len()+1);
+        // final instruction Must be terMination, which is equal to 2
+        assert_eq!(instruction[trace_list.len()],2);
+
         let mut circuits = Vec::new();
         for i in 0..num_steps {
-            if instructions[i] == 0 {
+            if instruction[i] == 0 {
                 circuits.push(Self::Read(ReadCircuit {
-                    next_instruction: Some(instructions[i + 1]),
                     trace: Some(trace_list[i]),
+                    next_instruction: Some(F::from(instruction[i + 1] as u64)),
                     memory_size: Some(memory_size),
+                    _marker : PhantomData
                 }));
             } else {
                 circuits.push(Self::Write(WriteCircuit {
-                    next_instruction: Some(instructions[i + 1]),
                     trace: Some(trace_list[i]),
+                    next_instruction: Some(F::from(instruction[i + 1] as u64)),
                     memory_size: Some(memory_size),
+                    _marker: PhantomData
                 }));
             }
         }
@@ -268,7 +254,9 @@ impl<F: PrimeField> MemoryConsistencyCircuit<F> {
     }
 }
 
-impl<F: PrimeField> StepCircuit<F> for MemoryConsistencyCircuit<F> {
+impl<F: PrimeField,S: Spec<F, W, R> + Clone + core::marker::Sync + core::marker::Send,
+    const W: usize,
+    const R: usize> StepCircuit<F> for MemoryConsistencyCircuit<F,S,W,R> {
     fn arity(&self) -> usize {
         match self {
             Self::Read(x) => x.arity(),
@@ -296,7 +284,9 @@ impl<F: PrimeField> StepCircuit<F> for MemoryConsistencyCircuit<F> {
     }
 }
 
-impl<E1> NonUniformCircuit<E1> for MemoryConsistencyCircuit<E1::Scalar>
+impl<E1,S: Spec<E1::Scalar, W, R> + Clone + core::marker::Sync + core::marker::Send,
+    const W: usize,
+    const R: usize> NonUniformCircuit<E1> for MemoryConsistencyCircuit<E1::Scalar,S,W,R>
 where
     E1: CurveCycleEquipped,
 {
@@ -310,69 +300,125 @@ where
     fn primary_circuit(&self, circuit_index: usize) -> Self::C1 {
         match circuit_index {
             0 => MemoryConsistencyCircuit::Read(ReadCircuit {
-                next_instruction: Some(0),
-                trace: Some(TraceRecord{address:E1::Scalar::from(0_64),value:E1::Scalar::from(0_64)}),
+                trace: Some(TraceRecord {
+                    address: E1::Scalar::from(0_64),
+                    value: E1::Scalar::from(0_64),
+                }),
+                next_instruction: Some(E1::Scalar::from(1_64)),
                 memory_size: Some(4),
+                 _marker: PhantomData
             }),
             1 => MemoryConsistencyCircuit::Write(WriteCircuit {
-                next_instruction: Some(0),
-                trace: Some(TraceRecord{address:E1::Scalar::from(0_64),value:E1::Scalar::from(0_64)}),
+                trace: Some(TraceRecord {
+                    address: E1::Scalar::from(0_64),
+                    value: E1::Scalar::from(0_64),
+                }),
+                next_instruction: Some(E1::Scalar::from(0_64)),
                 memory_size: Some(4),
+                 _marker: PhantomData
             }),
-            _ => panic!("unsupported primary circuit index"),
+            _ => unreachable!(),
         }
     }
 
     fn secondary_circuit(&self) -> Self::C2 {
-        Default::default()
+        TrivialSecondaryCircuit::<E1::Base>::default()
     }
 }
 
-#[cfg(test)]
-mod test {
-    extern crate std;
-    use std::println;
+///
 
-    use abomonation::Abomonation;
-    use arecibo::{
-        provider::Bn256EngineKZG,
-        supernova::{PublicParams, RecursiveSNARK, TrivialSecondaryCircuit},
-        traits::{snark::default_ck_hint, CurveCycleEquipped, Dual, Engine},
+type E1 = Bn256EngineKZG;
+type FF = <E1 as arecibo::traits::Engine>::Scalar;
+/// 
+   #[test]
+pub fn test_memory_consistency()
+{
+    let circuit_secondary = TrivialSecondaryCircuit::<<Dual<E1> as Engine>::Scalar>::default();
+    let trace = TraceRecord {
+        address: FF::from(0_u64),
+        value: FF::from(2_u64),
     };
-    use ff::{Field, PrimeField};
-    extern crate alloc;
-    use alloc::vec;
 
-    use super::{MemoryConsistencyCircuit, TraceRecord};
+    let trace2 = TraceRecord {
+        address: FF::from(0_u64),
+        value: FF::from(3_u64),
+    };
 
-    pub fn test_memory_consistency_with<E1>()
-    where
-        E1: CurveCycleEquipped,
-        // this is due to the reliance on Abomonation
-        <<E1 as Engine>::Scalar as PrimeField>::Repr: Abomonation,
-        <<Dual<E1> as Engine>::Scalar as PrimeField>::Repr: Abomonation,
-    {
-        let circuit_secondary = TrivialSecondaryCircuit::<<Dual<E1> as Engine>::Scalar>::default();
-        let trace = TraceRecord {
-            address: E1::Scalar::from(0_u64),
-            value: E1::Scalar::from(3_u64),
-        };
-        let trace_list = vec![trace];
-        let num_steps = 1;
-        let memory_size = 4;
-        let instructions = vec![1, 2];
-        let circuits =
-            MemoryConsistencyCircuit::new(trace_list, instructions, num_steps, memory_size);
-        let z0_secondary = vec![<Dual<E1> as Engine>::Scalar::ZERO];
+    let trace3 = TraceRecord {
+        address: FF::from(2_u64),
+        value: FF::from(5_u64),
+    };
 
-        let pp = PublicParams::<E1>::setup(&circuits[0], &*default_ck_hint(), &*default_ck_hint());
-        let circuit_primary = &circuits[0];
+    let trace4 = TraceRecord {
+        address: FF::from(2_u64),
+        value: FF::from(5_u64),
+    };
 
-        let mut recursive_snark = RecursiveSNARK::<E1>::new(
+
+   let trace5 = TraceRecord {
+        address: FF::from(3_u64),
+        value: FF::from(0_u64),
+    };
+
+    let trace6 = TraceRecord {
+        address: FF::from(3_u64),
+        value: FF::from(7_u64),
+    };
+
+     let trace7 = TraceRecord {
+        address: FF::from(1_u64),
+        value: FF::from(4_u64),
+    };
+
+     let trace8 = TraceRecord {
+        address: FF::from(1_u64),
+        value: FF::from(4_u64),
+    };
+
+     let trace9 = TraceRecord {
+        address: FF::from(0_u64),
+        value: FF::from(7_u64),
+    };
+
+     let trace10 = TraceRecord {
+        address: FF::from(1_u64),
+        value: FF::from(4_u64),
+    };
+   
+    let instruction = vec![0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 2];
+
+    let trace_list = vec![trace, trace2, trace3, trace4, trace5, trace6, trace7, trace8, trace9, trace10];
+    let memory_size = 4;
+    let num_steps = trace_list.len();
+    let circuits = MemoryConsistencyCircuit::<<E1 as Engine>::Scalar,OrchardNullifierScalar,3,2>::new(trace_list, instruction, num_steps, memory_size);
+    let z0_secondary = vec![<Dual<E1> as Engine>::Scalar::ZERO];
+
+    let pp = PublicParams::<E1>::setup(&circuits[0], &*default_ck_hint(), &*default_ck_hint());
+    let circuit_primary = &circuits[0];
+
+    let mut recursive_snark = RecursiveSNARK::<E1>::new(
+        &pp,
+        circuit_primary,
+        circuit_primary,
+        &circuit_secondary,
+        &[
+            <E1 as Engine>::Scalar::from(2_u64),
+            <E1 as Engine>::Scalar::from(0_u64),
+            <E1 as Engine>::Scalar::from(0_u64),
+            <E1 as Engine>::Scalar::from(0_u64),
+        ],
+        &z0_secondary,
+    )
+    .expect("cannot setup");
+
+    for circuit_primary in circuits.iter().take(num_steps) {
+        let _ = recursive_snark.prove_step(&pp, circuit_primary, &circuit_secondary);
+    }
+    // verify the recursive SNARK
+    let res = recursive_snark
+        .verify(
             &pp,
-            circuit_primary,
-            circuit_primary,
-            &circuit_secondary,
             &[
                 <E1 as Engine>::Scalar::from(2_u64),
                 <E1 as Engine>::Scalar::from(0_u64),
@@ -381,29 +427,13 @@ mod test {
             ],
             &z0_secondary,
         )
-        .expect("cannot run setup");
-
-        for circuit_primary in circuits.iter().take(num_steps) {
-            let _ = recursive_snark.prove_step(&pp, circuit_primary, &circuit_secondary);
-        }
-        // verify the recursive SNARK
-        let res=recursive_snark
-            .verify(
-                &pp,
-                &[
-                    <E1 as Engine>::Scalar::from(2_u64),
-                    <E1 as Engine>::Scalar::from(0_u64),
-                    <E1 as Engine>::Scalar::from(0_u64),
-                    <E1 as Engine>::Scalar::from(0_u64),
-                ],
-                &z0_secondary,
-            )
-            .expect("cannot verify");
-        println!("{:?}",res);
-    }
-
-    #[test]
-    fn test_nivc_nondet() {
-        test_memory_consistency_with::<Bn256EngineKZG>();
-    }
+        .expect("cannot verify");
+    println!("{:?}", res);
 }
+
+
+
+//pub fn test_mm_nivc_nondet() {
+ //   test_memory_consistency_with::<Bn256EngineKZG>();
+    //     test_memory_consistency_in_two_steps_with::<Bn256EngineKZG>();
+//}
