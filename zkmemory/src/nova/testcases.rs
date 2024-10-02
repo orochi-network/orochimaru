@@ -51,6 +51,9 @@ mod test {
     // and value=(value_i)_{i=1}^n, which are the address, instruction
     // and values representing the change of the memory from step 1 to n
     // which we have mentioned in the file memory_consistency_circuit.rs
+    // So to use this for applications, change z_primary with your
+    // initial memory state, and address, instruction and value with
+    // your trace record.
 
     fn test_memory_consistency_in_one_step() {
         let address = [0_u64].to_vec();

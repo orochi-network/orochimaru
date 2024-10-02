@@ -9,7 +9,6 @@ mod test {
     use arecibo::traits::Dual;
     use arecibo::traits::Engine;
     use arecibo::{supernova::*, traits::snark::default_ck_hint};
-    extern crate std;
     use ff::Field;
     type E1 = Bn256EngineKZG;
     type FF = <E1 as arecibo::traits::Engine>::Scalar;
@@ -38,10 +37,10 @@ mod test {
         root[0]
     }
 
-    // for simplicity, I will show a sample of a valid testcase
+    // For simplicity, I will show a sample of a valid testcase
     // in the testcase, you will have to input your initial memory
     // and the list of trace record, as mentioned in memory_consistency.rs
-    // of both Nova and Supernova
+    // of both Nova and Supernova. It will be shown in the test right below
     #[test]
     fn test_memory_consistency() {
         // input your initial memory here. Need its size to be a power
