@@ -65,6 +65,8 @@ mod test {
         let value = vec![
             0_u64, 3_u64, 5_u64, 5_u64, 0_u64, 7_u64, 4_u64, 4_u64, 7_u64, 4_u64,
         ];
+        // remember that the final instruction must be equal to 2, which is
+        // the terminating instruction. We do check that.
         let instruction = vec![
             1_u64, 1_u64, 1_u64, 0_u64, 0_u64, 1_u64, 1_u64, 0_u64, 1_u64, 0_u64, 2_u64,
         ];
