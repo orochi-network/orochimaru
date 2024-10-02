@@ -1,22 +1,25 @@
-//! The inplementation uses the Supernova iMpleMentation of 
+//! The inplementation uses the Supernova iMpleMentation of
 //! [here](https://github.com/argumentcomputer/arecibo/tree/dev/src)
+//! The idea is similar to our Nova's implementation
+//! [here](https://github.com/orochi-network/orochimaru/blob/main/zkmemory/src/nova/memory_consistency_circuit.rs)
+//! We let z_i to be the memory and each circuit Read or Write has
+//! a witness, which is the i-th trace (addr_i,val_i)
+//! The read circuit checks if z_i[add_i] == val_i, while the write
+//! circuit updates  z_i[add_i] := val_i
 extern crate alloc;
-use alloc::format;
 use alloc::vec::Vec;
 use arecibo::{
     supernova::*,
-    traits::{ CurveCycleEquipped, Dual, Engine},
+    traits::{CurveCycleEquipped, Dual, Engine},
 };
 use bellpepper_core::{num::AllocatedNum, ConstraintSystem, SynthesisError};
-use ff::{PrimeField};
+use ff::PrimeField;
 use poseidon::poseidon_hash::ConstantLength;
 use poseidon::poseidon_hash::Hash;
 use poseidon::poseidon_hash::Spec;
 extern crate std;
 use core::marker::PhantomData;
 use std::println;
-
-
 
 #[derive(Copy, Debug, Clone)]
 /// the trace record struct
@@ -82,16 +85,17 @@ impl<
         .expect("unable to get memory[address]");
 
         // The value variable
-        let value = AllocatedNum::alloc(cs.namespace(|| format!("value")), || Ok(trace.value))
+        let value = AllocatedNum::alloc(cs.namespace(|| "value"), || Ok(trace.value))
             .expect("unable to get value");
 
+        println!("{:?}", self.trace.unwrap());
         // get the Merkle commitment of the tree. We only do this in the
         // read circuit, since later we 1) Always start with the read circuit
         // 2) In the write circuit, we ALWAYS update a valid commitment.
         // So by induction, we can prove that the commitments are valid in
         // all steps.
 
-        let commitment = AllocatedNum::alloc(cs.namespace(|| format!("merkle root")), || {
+        let commitment = AllocatedNum::alloc(cs.namespace(|| "merkle root"), || {
             Ok(self.clone().merkle_tree_commit(z[0..memory_size].to_vec()))
         })
         .expect("unable to get commitment");
@@ -220,7 +224,7 @@ impl<
         .expect("unable to get lookup result");
 
         // The value variable
-        let value = AllocatedNum::alloc(cs.namespace(|| format!("value")), || Ok(trace.value))
+        let value = AllocatedNum::alloc(cs.namespace(|| "value"), || Ok(trace.value))
             .expect("unable to get value");
 
         // address must be in 0..memory_len
@@ -244,15 +248,15 @@ impl<
                 ))
             })
             .expect("unable to get new memory cells");
+
             z_out[i] = tmp;
         }
 
         // commitment to the new updated memory
-        let new_commitment =
-            AllocatedNum::alloc(cs.namespace(|| format!("new merkle root")), || {
-                Ok(self.clone().merkle_tree_commit(z_out.clone()))
-            })
-            .expect("unable to get new commitment");
+        let new_commitment = AllocatedNum::alloc(cs.namespace(|| "new merkle root"), || {
+            Ok(self.clone().merkle_tree_commit(z_out.clone()))
+        })
+        .expect("unable to get new commitment");
 
         z_out.push(new_commitment);
         assert_eq!(z_out.len(), memory_size + 1);
@@ -261,8 +265,6 @@ impl<
             self.next_instruction
                 .expect("unable to get next instruction")
         });
-
-        println!("{:?}", z_out);
 
         Ok((Some(pc_next), z_out))
     }
@@ -355,15 +357,15 @@ impl<
         // to be 0. So technically, we can view trace_list[0] to be a dummy
         //  trace, and trace_list[1..] is  the true trace record we want
 
-         circuits.push(Self::Read(ReadCircuit {
-                    trace: Some(TraceRecord {
-                        address: F::from(0),
-                        value: z_primary[0],
-                    }),
-                    next_instruction: Some(F::from(instruction[0])),
-                    memory_size: Some(memory_size),
-                    _marker: PhantomData,
-                }));
+        circuits.push(Self::Read(ReadCircuit {
+            trace: Some(TraceRecord {
+                address: F::from(0),
+                value: z_primary[0],
+            }),
+            next_instruction: Some(F::from(instruction[0])),
+            memory_size: Some(memory_size),
+            _marker: PhantomData,
+        }));
 
         for i in 0..num_steps {
             if instruction[i] == 0 {
@@ -448,19 +450,19 @@ where
         match circuit_index {
             0 => MemoryConsistencyCircuit::Read(ReadCircuit {
                 trace: Some(TraceRecord {
-                    address: E1::Scalar::from(0_64),
-                    value: E1::Scalar::from(0_64),
+                    address: E1::Scalar::from(0_u64),
+                    value: E1::Scalar::from(0_u64),
                 }),
-                next_instruction: Some(E1::Scalar::from(1_64)),
+                next_instruction: Some(E1::Scalar::from(1_u64)),
                 memory_size: Some(4),
                 _marker: PhantomData,
             }),
             1 => MemoryConsistencyCircuit::Write(WriteCircuit {
                 trace: Some(TraceRecord {
-                    address: E1::Scalar::from(0_64),
-                    value: E1::Scalar::from(0_64),
+                    address: E1::Scalar::from(0_u64),
+                    value: E1::Scalar::from(0_u64),
                 }),
-                next_instruction: Some(E1::Scalar::from(0_64)),
+                next_instruction: Some(E1::Scalar::from(0_u64)),
                 memory_size: Some(4),
                 _marker: PhantomData,
             }),
@@ -472,6 +474,3 @@ where
         TrivialSecondaryCircuit::<E1::Base>::default()
     }
 }
-
-
-

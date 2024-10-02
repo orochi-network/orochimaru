@@ -20,6 +20,9 @@ use poseidon::poseidon_hash::Spec;
 // are as follows:
 // 1) add_j<=|M|, 2) (instruction_j-1)*(M_j[addr_j]-val_j)=0
 // 3) instruction_j \in {0,1}
+// In the implementation, we let z_i to be the i-th memory state, and
+// the circuit has a witness input, the i-th trace record, consisting of
+// addr_i, instruction_i and value_i
 // We also introduce the commitment to the memory at the last cell of z_i
 // in application where one need to commit to the memory before proving.
 
