@@ -500,7 +500,7 @@ mod tests {
         let k = 10;
         let indices = [0u64, 0u64, 1u64, 1u64];
         let elements = [3u64, 4u64, 5u64, 6u64];
-        let witness = MerkleWitness::new(leaf.clone(), elements.clone(), indices.clone());
+        let witness = MerkleWitness::new(leaf, elements, indices);
         let prover = MerkleTreeProver::new(k, witness.clone());
         let proof = prover.create_proof();
         let root = prover.circuit.commit(witness.clone());
@@ -599,7 +599,7 @@ mod tests {
         let leaf = 0u64;
         let indices = [0u64, 0u64, 1u64, 1u64];
         let elements = [3u64, 4u64, 5u64, 6u64];
-        let witness = MerkleWitness::new(leaf.clone(), elements.clone(), indices.clone());
+        let witness = MerkleWitness::new(leaf, elements, indices);
 
         let circuit = MerkleTreeCircuit::<OrchardNullifier, Fp, 3, 2>::setup(None);
         let commitment = circuit.commit(witness.clone());
