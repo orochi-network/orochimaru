@@ -3,6 +3,7 @@
 //! [PSE 's KZG implementation](https://github.com/privacy-scaling-explorations/halo2/tree/main/halo2_backend/src/poly/kzg) to commit, open and verify the polynomial
 
 extern crate alloc;
+use crate::commitment::commitment_scheme::CommitmentScheme as CommitmentSchemeTrait;
 use crate::{base::Base, machine::MemoryInstruction, machine::TraceRecord};
 use alloc::vec;
 use alloc::vec::Vec;
@@ -14,7 +15,7 @@ use halo2_proofs::{
     halo2curves::bn256::{Bn256, Fr, G1Affine},
     plonk::Error,
     poly::{
-        commitment::{Blind, CommitmentScheme, ParamsProver, Prover, Verifier, Params},
+        commitment::{Blind, CommitmentScheme, Params, ParamsProver, Prover, Verifier},
         kzg::{
             commitment::{KZGCommitmentScheme, ParamsKZG},
             multiopen::{ProverSHPLONK, VerifierSHPLONK},
@@ -27,7 +28,6 @@ use halo2_proofs::{
         TranscriptWriterBuffer,
     },
 };
-use crate::commitment::commitment_scheme::CommitmentScheme as CommitmentSchemeTrait;
 use rand_core::OsRng;
 
 /// Omega power omega^0 to omega^7
@@ -327,7 +327,8 @@ pub fn verify_kzg_proof<
             .finalize()
 }
 
-impl<K, V, const S: usize, const T: usize> CommitmentSchemeTrait<Fr> for KZGMemoryCommitment<K, V, S, T>
+impl<K, V, const S: usize, const T: usize> CommitmentSchemeTrait<Fr>
+    for KZGMemoryCommitment<K, V, S, T>
 where
     K: Base<S>,
     V: Base<T>,
@@ -363,7 +364,7 @@ where
     }
 
     fn verify(
-        &self, 
+        &self,
         commitment: Self::Commitment,
         opening: Self::Opening,
         _witness: Self::Witness,
@@ -490,18 +491,30 @@ mod test {
         let trace = generate_trace_record();
 
         // Commit
-        let commitment = KZGMemoryCommitment::<B256, B256, 32, 32>::commit(&kzg_commitment_scheme,  trace);
+        let commitment =
+            KZGMemoryCommitment::<B256, B256, 32, 32>::commit(&kzg_commitment_scheme, trace);
 
         // Open
-        let opening = KZGMemoryCommitment::<B256, B256, 32, 32>::open(&kzg_commitment_scheme, trace);
+        let opening =
+            KZGMemoryCommitment::<B256, B256, 32, 32>::open(&kzg_commitment_scheme, trace);
 
         // Verify
-        let is_valid = KZGMemoryCommitment::<B256, B256, 32, 32>::verify(&kzg_commitment_scheme, commitment, opening.clone(), trace);
+        let is_valid = KZGMemoryCommitment::<B256, B256, 32, 32>::verify(
+            &kzg_commitment_scheme,
+            commitment,
+            opening.clone(),
+            trace,
+        );
         assert!(is_valid, "Verification should succeed for valid opening");
 
         // Test with incorrect trace
         let incorrect_trace = generate_trace_record();
-        let is_invalid = KZGMemoryCommitment::<B256, B256, 32, 32>::verify(&kzg_commitment_scheme, commitment, opening.clone(), incorrect_trace);
+        let is_invalid = KZGMemoryCommitment::<B256, B256, 32, 32>::verify(
+            &kzg_commitment_scheme,
+            commitment,
+            opening.clone(),
+            incorrect_trace,
+        );
         assert!(!is_invalid, "Verification should fail for invalid trace");
     }
 
@@ -512,9 +525,14 @@ mod test {
         let trace1 = generate_trace_record();
         let trace2 = generate_trace_record();
 
-        let commitment1 = KZGMemoryCommitment::<B256, B256, 32, 32>::commit(&kzg_commitment_scheme, trace1);
-        let commitment2 = KZGMemoryCommitment::<B256, B256, 32, 32>::commit(&kzg_commitment_scheme, trace2);
+        let commitment1 =
+            KZGMemoryCommitment::<B256, B256, 32, 32>::commit(&kzg_commitment_scheme, trace1);
+        let commitment2 =
+            KZGMemoryCommitment::<B256, B256, 32, 32>::commit(&kzg_commitment_scheme, trace2);
 
-        assert_ne!(commitment1, commitment2, "Different traces should produce different commitments");
+        assert_ne!(
+            commitment1, commitment2,
+            "Different traces should produce different commitments",
+        );
     }
 }

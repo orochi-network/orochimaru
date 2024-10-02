@@ -1,7 +1,7 @@
 use ff::PrimeField;
 
 /// A trait defining a common interface for commitment schemes with zk proving capabilities
-pub trait CommitmentScheme<F: PrimeField> { // TODO: add traitbound : Circuit<F> after kzg is finalized
+pub trait CommitmentScheme<F: PrimeField> {
     /// The commitment
     type Commitment;
     /// The type of the opening (proof)
@@ -22,7 +22,7 @@ pub trait CommitmentScheme<F: PrimeField> { // TODO: add traitbound : Circuit<F>
 
     /// Verify a commitment
     fn verify(
-        &self, 
+        &self,
         commitment: Self::Commitment,
         opening: Self::Opening,
         witness: Self::Witness,
