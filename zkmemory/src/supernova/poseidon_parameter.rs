@@ -1,7 +1,7 @@
 extern crate alloc;
 use alloc::vec::Vec;
-use ff::Field;
 use arecibo::provider::Bn256EngineKZG;
+use ff::Field;
 
 use poseidon::poseidon_hash::{Mtrx, Spec};
 type E1 = Bn256EngineKZG;

@@ -19,7 +19,9 @@ use poseidon::poseidon_hash::Spec;
 // Let M_j  denote the j-th state of the memory, then the constraints
 // are as follows:
 // 1) add_j<=|M|, 2) (instruction_j-1)*(M_j[addr_j]-val_j)=0
-// 3) instruction_j \in {0,1}.
+// 3) instruction_j \in {0,1}
+// We also introduce the commitment to the memory at the last cell of z_i
+// in application where one need to commit to the memory before proving.
 
 #[derive(Copy, Clone)]
 /// the trace record struct
@@ -132,7 +134,9 @@ impl<
                 || "commitment to the memory must be valid",
                 |lc| lc + commitment.get_variable(),
                 |lc| lc + CS::one(),
-                |lc| lc + z_out[self.memory_len].get_variable(),
+                |lc: bellpepper_core::LinearCombination<_>| {
+                    lc + z_out[self.memory_len].get_variable()
+                },
             );
 
             // if instruction = 0 then memory[address]=value
