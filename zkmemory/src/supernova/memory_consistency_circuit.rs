@@ -1,6 +1,8 @@
-//! The inplementation uses the Supernova iMpleMentation of
+//! The inplementation uses the Supernova implementation of
 //! [here](https://github.com/argumentcomputer/arecibo/tree/dev/src)
-//! The idea is similar to our Nova's implementation
+//! (They showed an example [here](https://github.com/argumentcomputer/arecibo/blob/dev/src/supernova/test.rs)
+//! but for other circuits. We adapt for our use case.)
+//! The idea using Supernova is similar to our Nova's implementation
 //! [here](https://github.com/orochi-network/orochimaru/blob/main/zkmemory/src/nova/memory_consistency_circuit.rs)
 //! We let z_i to be the memory and each circuit Read or Write has
 //! a witness, which is the i-th trace (addr_i,val_i)
