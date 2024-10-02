@@ -1,7 +1,7 @@
 //! The inplementation uses the Supernova implementation of
 //! [here](https://github.com/argumentcomputer/arecibo/tree/dev/src)
 //! (They showed an example [here](https://github.com/argumentcomputer/arecibo/blob/dev/src/supernova/test.rs)
-//! but for other circuits. We adapt for our use case.)
+//! but for other circuits, not memory consistency. We adapt for our use case.)
 //! The idea using Supernova is similar to our Nova's implementation
 //! [here](https://github.com/orochi-network/orochimaru/blob/main/zkmemory/src/nova/memory_consistency_circuit.rs)
 //! We let z_i to be the memory and each circuit Read or Write has
