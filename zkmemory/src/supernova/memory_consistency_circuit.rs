@@ -19,7 +19,6 @@ use poseidon::poseidon_hash::Hash;
 use poseidon::poseidon_hash::Spec;
 extern crate std;
 use core::marker::PhantomData;
-use std::println;
 
 #[derive(Copy, Debug, Clone)]
 /// the trace record struct
@@ -88,7 +87,6 @@ impl<
         let value = AllocatedNum::alloc(cs.namespace(|| "value"), || Ok(trace.value))
             .expect("unable to get value");
 
-        println!("{:?}", self.trace.unwrap());
         // get the Merkle commitment of the tree. We only do this in the
         // read circuit, since later we 1) Always start with the read circuit
         // 2) In the write circuit, we ALWAYS update a valid commitment.

@@ -39,6 +39,9 @@ mod test {
     }
 
     // for simplicity, I will show a sample of a valid testcase
+    // in the testcase, you will have to input your initial memory
+    // and the list of trace record, as mentioned in memory_consistency.rs
+    // of both Nova and Supernova
     #[test]
     fn test_memory_consistency() {
         // input your initial memory here. Need its size to be a power
@@ -95,9 +98,7 @@ mod test {
         .expect("cannot setup");
 
         for circuit_primary in circuits.iter().take(num_steps + 1) {
-            let _ = recursive_snark
-                .prove_step(&pp, circuit_primary, &circuit_secondary)
-                .expect("cannot prove");
+            let _ = recursive_snark.prove_step(&pp, circuit_primary, &circuit_secondary);
         }
         // verify the recursive SNARK
         let res = recursive_snark.verify(&pp, z0_primary, &z0_secondary);
@@ -149,9 +150,7 @@ mod test {
         .expect("cannot setup");
 
         for circuit_primary in circuits.iter().take(num_steps + 1) {
-            let _ = recursive_snark
-                .prove_step(&pp, circuit_primary, &circuit_secondary)
-                .expect("cannot prove");
+            let _ = recursive_snark.prove_step(&pp, circuit_primary, &circuit_secondary);
         }
         // verify the recursive SNARK
         let res = recursive_snark.verify(&pp, z0_primary, &z0_secondary);
@@ -203,9 +202,7 @@ mod test {
         .expect("cannot setup");
 
         for circuit_primary in circuits.iter().take(num_steps + 1) {
-            let _ = recursive_snark
-                .prove_step(&pp, circuit_primary, &circuit_secondary)
-                .expect("cannot prove");
+            let _ = recursive_snark.prove_step(&pp, circuit_primary, &circuit_secondary);
         }
         // verify the recursive SNARK
         let res = recursive_snark.verify(&pp, z0_primary, &z0_secondary);
@@ -256,9 +253,7 @@ mod test {
         .expect("cannot setup");
 
         for circuit_primary in circuits.iter().take(num_steps + 1) {
-            let _ = recursive_snark
-                .prove_step(&pp, circuit_primary, &circuit_secondary)
-                .expect("cannot prove");
+            let _ = recursive_snark.prove_step(&pp, circuit_primary, &circuit_secondary);
         }
         // verify the recursive SNARK
         let res = recursive_snark.verify(&pp, z0_primary, &z0_secondary);
@@ -310,12 +305,62 @@ mod test {
         .expect("cannot setup");
 
         for circuit_primary in circuits.iter().take(num_steps + 1) {
-            let _ = recursive_snark
-                .prove_step(&pp, circuit_primary, &circuit_secondary)
-                .expect("cannot prove");
+            let _ = recursive_snark.prove_step(&pp, circuit_primary, &circuit_secondary);
         }
         // verify the recursive SNARK
         let res = recursive_snark.verify(&pp, z0_primary, &z0_secondary);
         assert!(res.is_err());
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_invalid_instruction() {
+        let memory = [
+            <E1 as Engine>::Scalar::from(0_u64),
+            <E1 as Engine>::Scalar::from(0_u64),
+            <E1 as Engine>::Scalar::from(0_u64),
+            <E1 as Engine>::Scalar::from(0_u64),
+        ];
+        let commit = <E1 as Engine>::Scalar::from(0_u64);
+        let mut z0 = memory.to_vec();
+        z0.push(commit);
+        let z0_primary = z0.as_slice();
+
+        let circuit_secondary = TrivialSecondaryCircuit::<<Dual<E1> as Engine>::Scalar>::default();
+
+        let address = vec![0_u64];
+        let value = vec![4_u64];
+        let instruction = vec![2_u64, 2_u64];
+
+        let memory_size = 4;
+        let num_steps = address.len();
+        let circuits = MemoryConsistencyCircuit::<FF, OrchardNullifierScalar, 3, 2>::new(
+            z0_primary,
+            address,
+            value,
+            instruction,
+            num_steps,
+            memory_size,
+        );
+        let z0_secondary = vec![<Dual<E1> as Engine>::Scalar::ZERO];
+
+        let pp = PublicParams::<E1>::setup(&circuits[0], &*default_ck_hint(), &*default_ck_hint());
+        let circuit_primary = &circuits[0];
+
+        let mut recursive_snark = RecursiveSNARK::<E1>::new(
+            &pp,
+            circuit_primary,
+            circuit_primary,
+            &circuit_secondary,
+            z0_primary,
+            &z0_secondary,
+        )
+        .expect("cannot setup");
+
+        let mut res = Vec::new();
+        for circuit_primary in circuits.iter().take(num_steps + 1) {
+            res.push(recursive_snark.prove_step(&pp, circuit_primary, &circuit_secondary));
+        }
+        assert!(res[1].is_err());
     }
 }
