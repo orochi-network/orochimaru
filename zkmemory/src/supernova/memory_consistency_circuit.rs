@@ -7,7 +7,7 @@
 //! We let z_i to be the memory and each circuit Read or Write has
 //! a witness, which is the i-th trace (addr_i,val_i)
 //! The read circuit checks if z_i[add_i] == val_i, while the write
-//! circuit updates  z_i[add_i] := val_i
+//! circuit updates  z_i[add_i] := val_i and the commitment
 extern crate alloc;
 use alloc::vec::Vec;
 use arecibo::{
@@ -22,14 +22,14 @@ use poseidon::poseidon_hash::Spec;
 extern crate std;
 use core::marker::PhantomData;
 
-#[derive(Copy, Debug, Clone)]
+#[derive(Copy, Clone)]
 /// the trace record struct
 pub struct TraceRecord<F: PrimeField> {
     address: F,
     value: F,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 /// The read circuit, used when the instruction equal to 0
 pub struct ReadCircuit<
     F: PrimeField,
@@ -175,7 +175,7 @@ impl<
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 /// The write circuit, used when instruction equal to 1
 pub struct WriteCircuit<
     F: PrimeField,
@@ -317,7 +317,7 @@ impl<
 
 /// The MeMory consistency circuit, consisting of a read circuit
 /// and a write circuit, depends on the current instruction
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum MemoryConsistencyCircuit<
     F: PrimeField,
     S: Spec<F, W, R> + Clone + core::marker::Sync + core::marker::Send,

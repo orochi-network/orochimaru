@@ -73,7 +73,7 @@ mod test {
 
         // input the size of the memory here, and let the SNARK
         // do the rest
-        let memory_size = 4;
+        let memory_size = memory.len();
         let num_steps = address.len();
         let circuits = MemoryConsistencyCircuit::<FF, OrchardNullifierScalar, 3, 2>::new(
             z0_primary,
@@ -125,7 +125,7 @@ mod test {
         let value = vec![0_u64, 0_u64, 0_u64, 0_u64, 0_u64];
         let instruction = vec![0_u64, 0_u64, 0_u64, 0_u64, 0_u64, 2_u64];
 
-        let memory_size = 4;
+        let memory_size = memory.len();
         let num_steps = address.len();
         let circuits = MemoryConsistencyCircuit::<FF, OrchardNullifierScalar, 3, 2>::new(
             z0_primary,
@@ -177,7 +177,7 @@ mod test {
         let value = vec![4_u64, 5_u64, 6_u64, 7_u64];
         let instruction = vec![1_u64, 1_u64, 1_u64, 1_u64, 2_u64];
 
-        let memory_size = 4;
+        let memory_size = memory.len();
         let num_steps = address.len();
         let circuits = MemoryConsistencyCircuit::<FF, OrchardNullifierScalar, 3, 2>::new(
             z0_primary,
@@ -229,7 +229,7 @@ mod test {
         let value = vec![4_u64, 3_u64];
         let instruction = vec![1_u64, 0_u64, 2_u64];
 
-        let memory_size = 4;
+        let memory_size = memory.len();
         let num_steps = address.len();
         let circuits = MemoryConsistencyCircuit::<FF, OrchardNullifierScalar, 3, 2>::new(
             z0_primary,
@@ -280,7 +280,7 @@ mod test {
         let value = vec![4_u64];
         let instruction = vec![0_u64, 2_u64];
 
-        let memory_size = 4;
+        let memory_size = memory.len();
         let num_steps = address.len();
         let circuits = MemoryConsistencyCircuit::<FF, OrchardNullifierScalar, 3, 2>::new(
             z0_primary,
@@ -333,7 +333,7 @@ mod test {
         let value = vec![4_u64];
         let instruction = vec![2_u64, 2_u64];
 
-        let memory_size = 4;
+        let memory_size = memory.len();
         let num_steps = address.len();
         let circuits = MemoryConsistencyCircuit::<FF, OrchardNullifierScalar, 3, 2>::new(
             z0_primary,
