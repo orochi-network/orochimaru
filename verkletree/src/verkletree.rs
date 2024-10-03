@@ -205,15 +205,13 @@ mod test {
     use rand::thread_rng;
 
     #[test]
-    fn test_valid_input() {
+    fn test_valid_commitment_shemes() {
         let rng = thread_rng();
         let elements: Vec<Fr> = (0..16 * 4).map(|_| Fr::random(rng.clone())).collect();
-
         let vk_commitment_scheme = VerkleTreeCommitmentScheme::setup(Some(2));
 
         let indices: Vec<usize> = vec![3, 3, 3];
         let leaf = elements[16 * 4 - 1];
-
         let witness = VerkleTreeWitness {
             leaf,
             elements,
@@ -221,9 +219,65 @@ mod test {
         };
 
         let root = vk_commitment_scheme.commit(witness.clone());
+        let opening = vk_commitment_scheme.open(witness.clone());
+        assert!(vk_commitment_scheme.verify(root, opening, witness))
+    }
+
+    #[test]
+    fn test_wrong_leaf() {
+        let rng = thread_rng();
+        let elements: Vec<Fr> = (0..16 * 4).map(|_| Fr::random(rng.clone())).collect();
+        let vk_commitment_scheme = VerkleTreeCommitmentScheme::setup(Some(2));
+
+        let indices: Vec<usize> = vec![3, 3, 3];
+        let leaf = elements[0];
+        let witness = VerkleTreeWitness {
+            leaf,
+            elements,
+            indices,
+        };
+
+        let root = vk_commitment_scheme.commit(witness.clone());
+        let opening = vk_commitment_scheme.open(witness.clone());
+        assert!(!vk_commitment_scheme.verify(root, opening, witness))
+    }
+
+    #[test]
+    fn test_wrong_root() {
+        let rng = thread_rng();
+        let elements: Vec<Fr> = (0..16 * 16).map(|_| Fr::random(rng.clone())).collect();
+        let vk_commitment_scheme = VerkleTreeCommitmentScheme::setup(Some(2));
+
+        let indices: Vec<usize> = vec![3, 3, 3, 3];
+        let leaf = elements[16 * 16 - 1];
+        let witness = VerkleTreeWitness {
+            leaf,
+            elements,
+            indices,
+        };
+        let root = Fr::random(rng.clone());
 
         let opening = vk_commitment_scheme.open(witness.clone());
+        assert!(!vk_commitment_scheme.verify(root, opening, witness))
+    }
 
-        assert!(vk_commitment_scheme.verify(root, opening, witness))
+    #[test]
+    #[should_panic]
+    fn test_invalid_number_of_leaf() {
+        let rng = thread_rng();
+        let elements: Vec<Fr> = (0..16 * 16).map(|_| Fr::random(rng.clone())).collect();
+        let vk_commitment_scheme = VerkleTreeCommitmentScheme::setup(Some(2));
+
+        let indices: Vec<usize> = vec![3, 3, 3];
+        let leaf = elements[16 * 16 - 1];
+        let witness = VerkleTreeWitness {
+            leaf,
+            elements,
+            indices,
+        };
+
+        let root = vk_commitment_scheme.commit(witness.clone());
+        let opening = vk_commitment_scheme.open(witness.clone());
+        assert!(!vk_commitment_scheme.verify(root, opening, witness))
     }
 }
