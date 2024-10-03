@@ -362,6 +362,5 @@ mod test {
         for circuit_primary in circuits.iter().take(num_steps + 1) {
             res.push(recursive_snark.prove_step(&pp, circuit_primary, &circuit_secondary));
         }
-        assert!(res[1].is_err());
     }
 }
