@@ -130,8 +130,6 @@ impl CommitmentScheme<Fr> for VerkleTreeCommitmentScheme {
             tree_size = parent_evaluations.len();
         }
 
-        println!("{:?}", parent_evaluations);
-
         // Initialize commitment and path lists
         let mut final_commitments: Vec<G1Affine> = Vec::with_capacity(indices.len());
         let mut path_evaluations: Vec<Fr> = Vec::with_capacity(indices.len());
