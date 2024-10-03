@@ -7,12 +7,12 @@ use rand::thread_rng;
 
 fn main() {
     let rng = thread_rng();
-    let elements: Vec<Fr> = (0..16 * 4).map(|_| Fr::random(rng.clone())).collect();
+    let elements: Vec<Fr> = (0..16 * 16).map(|_| Fr::random(rng.clone())).collect();
 
     let vk_commitment_scheme = VerkleTreeCommitmentScheme::setup(Some(2));
 
-    let indices: Vec<usize> = vec![0, 0, 0];
-    let leaf = elements[0];
+    let indices: Vec<usize> = vec![2, 3, 3, 3];
+    let leaf = elements[16 * 4 - 2];
 
     let witness = VerkleTreeWitness {
         leaf,

@@ -6,10 +6,9 @@ use core::marker::PhantomData;
 
 use halo2_proofs::{
     halo2curves::bn256::{Bn256, Fr, G1Affine},
-    plonk::{keygen_pk, keygen_vk, VerifyingKey},
+    plonk::VerifyingKey,
     poly::{kzg::commitment::ParamsKZG, Coeff, Polynomial},
 };
-use rand_core::OsRng;
 
 pub(crate) const OMEGA_POWER: [Fr; 5] = [
     Fr::from_raw([0x01, 0, 0, 0]),
@@ -69,16 +68,20 @@ impl CommitmentScheme<Fr> for VerkleTreeCommitmentScheme {
     }
 
     fn open(&self, witness: Self::Witness) -> Self::Opening {
-        let mut indices = witness.indices;
+        let indices = witness.indices;
         let mut leaf_evaluations = witness.elements;
 
-        let n = indices.len().pow(4);
-
+        let n = 4_usize.pow(indices.len() as u32);
         assert_eq!(
             leaf_evaluations.len(),
             n,
             "number of leaf must be 4^len(indices)"
         );
+
+        let mut index = leaf_evaluations
+            .iter()
+            .position(|&x| x == witness.leaf)
+            .expect("Leaf not found in leaf_evaluations");
 
         let kzg_instance = self.kzg.clone();
 
@@ -127,27 +130,33 @@ impl CommitmentScheme<Fr> for VerkleTreeCommitmentScheme {
             tree_size = parent_evaluations.len();
         }
 
+        println!("{:?}", parent_evaluations);
+
         // Initialize commitment and path lists
         let mut final_commitments: Vec<G1Affine> = Vec::with_capacity(indices.len());
         let mut path_evaluations: Vec<Fr> = Vec::with_capacity(indices.len());
         let mut polynomial_list: Vec<Polynomial<Fr, Coeff>> = Vec::with_capacity(indices.len());
 
-        indices.push(0);
+        index /= 4;
 
         // Iterate over parent elements, commitments, and polynomials to collect proof data
-        for (((commitments, evaluations), polynomials), &id) in parent_commitment_list
+        for ((commitments, evaluations), polynomials) in parent_commitment_list
             .iter()
             .zip(parent_evaluations.iter())
             .zip(tree_polynomials.iter())
-            .zip(indices.iter().skip(1))
         {
-            let commitment = commitments.get(id).expect("Cannot get commitment's value");
-            let evaluation = evaluations.get(id).expect("can not get node value's");
-            let poly = polynomials.get(id).expect("can not get polynomial's value");
+            let commitment = commitments
+                .get(index)
+                .expect("Cannot get commitment's value");
+            let evaluation = evaluations.get(index).expect("can not get node value's");
+            let poly = polynomials
+                .get(index)
+                .expect("can not get polynomial's value");
 
             final_commitments.push(*commitment);
             path_evaluations.push(*evaluation);
             polynomial_list.push(poly.clone());
+            index /= 4
         }
 
         // Generate the proof
@@ -169,14 +178,11 @@ impl CommitmentScheme<Fr> for VerkleTreeCommitmentScheme {
         };
 
         let verkle_root = *path_evaluations.last().unwrap();
-
-        // Set up the prover
         let k = 10;
-        let params = ParamsKZG::<Bn256>::setup(k, OsRng);
-        let vk = keygen_vk(&params, &circuit).expect("Cannot initialize verify key");
-        let pk = keygen_pk(&params, vk.clone(), &circuit).expect("Cannot initialize proving key");
 
-        let mut prover = VerkleTreeProver::new(params.clone(), pk, circuit.clone(), true);
+        let mut prover = VerkleTreeProver::new(k, circuit, true);
+        let (params, vk) = prover.get_verifier_params();
+
         let proof = prover.create_proof(witness.leaf, verkle_root);
         (params, vk, proof)
     }
@@ -203,12 +209,12 @@ mod test {
     #[test]
     fn test_valid_input() {
         let rng = thread_rng();
-        let elements: Vec<Fr> = (0..16 * 16).map(|_| Fr::random(rng.clone())).collect();
+        let elements: Vec<Fr> = (0..16 * 4).map(|_| Fr::random(rng.clone())).collect();
 
         let vk_commitment_scheme = VerkleTreeCommitmentScheme::setup(Some(2));
 
-        let indices: Vec<usize> = vec![2, 1, 0, 0];
-        let leaf = elements[6];
+        let indices: Vec<usize> = vec![3, 3, 3];
+        let leaf = elements[16 * 4 - 1];
 
         let witness = VerkleTreeWitness {
             leaf,

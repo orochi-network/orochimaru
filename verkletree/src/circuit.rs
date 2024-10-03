@@ -16,8 +16,8 @@ use halo2_proofs::{
         CurveAffineExt,
     },
     plonk::{
-        create_proof, verify_proof, Advice, Circuit, Column, ConstraintSystem, Error, Expression,
-        Fixed, Instance, ProvingKey, Selector, VerifyingKey,
+        create_proof, keygen_pk, keygen_vk, verify_proof, Advice, Circuit, Column,
+        ConstraintSystem, Error, Expression, Fixed, Instance, ProvingKey, Selector, VerifyingKey,
     },
     poly::{
         commitment::{Blind, ParamsProver},
@@ -491,18 +491,22 @@ impl<S: Spec<Fr, W, R>, const W: usize, const R: usize, const A: usize>
     VerkleTreeProver<S, W, R, A>
 {
     /// initialize the prover
-    pub fn new(
-        params: ParamsKZG<Bn256>,
-        pk: ProvingKey<G1Affine>,
-        circuit: VerkleTreeCircuit<S, W, R, A>,
-        expected: bool,
-    ) -> Self {
+    pub fn new(k: u32, circuit: VerkleTreeCircuit<S, W, R, A>, expected: bool) -> Self {
+        let params = ParamsKZG::<Bn256>::setup(k, OsRng);
+        let vk = keygen_vk(&params, &circuit).expect("Cannot initialize verify key");
+        let pk = keygen_pk(&params, vk.clone(), &circuit).expect("Cannot initialize proving key");
+
         Self {
             params,
             pk,
             circuit,
             expected,
         }
+    }
+
+    // params to create VerkleTreeVerifier
+    pub fn get_verifier_params(&self) -> (ParamsKZG<Bn256>, VerifyingKey<G1Affine>) {
+        (self.params.clone(), self.pk.get_vk().clone())
     }
 
     /// Create proof for the permutation circuit
