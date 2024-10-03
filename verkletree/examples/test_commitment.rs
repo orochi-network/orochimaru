@@ -12,7 +12,7 @@ fn main() {
     let vk_commitment_scheme = VerkleTreeCommitmentScheme::setup(Some(2));
 
     let indices: Vec<usize> = vec![2, 3, 3, 3];
-    let leaf = elements[16 * 4 - 2];
+    let leaf = elements[16 * 16 - 2];
 
     let witness = VerkleTreeWitness {
         leaf,

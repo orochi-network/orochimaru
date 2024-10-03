@@ -176,7 +176,7 @@ impl CommitmentScheme<Fr> for VerkleTreeCommitmentScheme {
         };
 
         let verkle_root = *path_evaluations.last().unwrap();
-        let k = 10;
+        let k: u32 = 10;
 
         let mut prover = VerkleTreeProver::new(k, circuit, true);
         let (params, vk) = prover.get_verifier_params();
