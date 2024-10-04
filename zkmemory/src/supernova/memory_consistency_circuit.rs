@@ -50,14 +50,19 @@ impl<
         const R: usize,
     > StepCircuit<F> for ReadCircuit<F, S, W, R>
 {
+    // the size of the input z_i
     fn arity(&self) -> usize {
         self.memory_size
             .expect("failed to get arity of read circuit")
             + 1
     }
+
+    // the index of the circuit, here the read circuit is indexed 0
     fn circuit_index(&self) -> usize {
         0
     }
+
+    // add the constraints for the read circuit and update the memory
     fn synthesize<CS: bellpepper_core::ConstraintSystem<F>>(
         &self,
         cs: &mut CS,
@@ -196,14 +201,19 @@ impl<
         const R: usize,
     > StepCircuit<F> for WriteCircuit<F, S, W, R>
 {
+    // the size of the input z_i
     fn arity(&self) -> usize {
         self.memory_size
             .expect("failed to get arity of write circuit")
             + 1
     }
+
+    // the index of the write circuit, here the write circuit is equal to 1
     fn circuit_index(&self) -> usize {
         1
     }
+
+    // add the constraints for the read circuit and update the memory
     fn synthesize<CS: bellpepper_core::ConstraintSystem<F>>(
         &self,
         cs: &mut CS,
@@ -277,6 +287,8 @@ impl<
         const R: usize,
     > WriteCircuit<F, S, W, R>
 {
+    // get z_i[addr_i] where z_i is the i-th state of the memory
+    // and addr_i is the address
     fn get_new_memory_cell(
         self,
         item: AllocatedNum<F>,
@@ -403,6 +415,7 @@ impl<
         const R: usize,
     > StepCircuit<F> for MemoryConsistencyCircuit<F, S, W, R>
 {
+    // the size of the input z_i
     fn arity(&self) -> usize {
         match self {
             Self::Read(x) => x.arity(),
@@ -410,6 +423,7 @@ impl<
         }
     }
 
+    // the index of the circuit, 0 for read and 1 for write
     fn circuit_index(&self) -> usize {
         match self {
             Self::Read(x) => x.circuit_index(),
@@ -417,6 +431,7 @@ impl<
         }
     }
 
+    // use synthesize corresponding to the circuit
     fn synthesize<CS: ConstraintSystem<F>>(
         &self,
         cs: &mut CS,
@@ -442,10 +457,13 @@ where
     type C1 = Self;
     type C2 = TrivialSecondaryCircuit<<Dual<E1> as Engine>::Scalar>;
 
+    // the number of circuits in the MemoryConsistencyCircuit enum
     fn num_circuits(&self) -> usize {
         2
     }
 
+    // the primary circuit, not needed in our implementation but we have
+    // to use it anyway since it is a method in SuperNova's trait
     fn primary_circuit(&self, circuit_index: usize) -> Self::C1 {
         match circuit_index {
             0 => MemoryConsistencyCircuit::Read(ReadCircuit {
@@ -470,6 +488,7 @@ where
         }
     }
 
+    // the secondary circuit
     fn secondary_circuit(&self) -> Self::C2 {
         TrivialSecondaryCircuit::<E1::Base>::default()
     }
