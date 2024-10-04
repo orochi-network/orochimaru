@@ -1,5 +1,5 @@
-use verkletree::commitment::CommitmentScheme;
 use verkletree::verkletree::*;
+use zkmemory::commitment::commitment_scheme::CommitmentScheme;
 extern crate alloc;
 use ff::Field;
 use halo2_proofs::halo2curves::bn256::Fr;

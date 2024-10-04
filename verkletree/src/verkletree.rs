@@ -1,8 +1,8 @@
 extern crate alloc;
 use crate::circuit::*;
-use crate::commitment::CommitmentScheme;
 use alloc::vec::Vec;
 use core::marker::PhantomData;
+use zkmemory::commitment::commitment_scheme::CommitmentScheme;
 
 use halo2_proofs::{
     halo2curves::bn256::{Bn256, Fr, G1Affine},
