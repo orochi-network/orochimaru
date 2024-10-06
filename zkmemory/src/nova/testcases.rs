@@ -44,8 +44,17 @@ mod test {
     }
 
     #[test]
-    // test correct memory consistency in one step
-    // for simplicity we experiment with a memory of size 4 only
+    // To check memory consistency, customize the inputs (z0_primary, address,
+    // instruction, value) as the example below, where:
+    // z0_primary consists of the initial memory (M[0]) and its commitment, and
+    // address=(addr_i)_{i=1}^n, instruction=(instruction_i)_{i=1}^n
+    // and value=(value_i)_{i=1}^n, which are the address, instruction
+    // and values representing the change of the memory from step 1 to n
+    // which we have mentioned in the file memory_consistency_circuit.rs
+    // So to use this for applications, change z_primary with your
+    // initial memory state, and address, instruction and value with
+    // your trace record.
+
     fn test_memory_consistency_in_one_step() {
         let address = [0_u64].to_vec();
         let instruction = [1_u64].to_vec();
