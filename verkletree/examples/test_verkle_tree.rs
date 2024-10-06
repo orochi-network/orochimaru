@@ -9,7 +9,13 @@ fn main() {
     let (circuit, root) = create_verkle_tree_proof(leaf, indices);
 
     let k = 10;
+
     let mut prover = VerkleTreeProver::new(k, circuit, true);
+    let (params, vk) = prover.get_verifier_params();
+
+    let mut verifier = VerkleTreeVerifier::new(params, vk, true);
+
     let proof = prover.create_proof(leaf, root);
-    assert!(prover.verify(proof, leaf, root))
+
+    assert!(verifier.verify(proof, leaf, root))
 }
