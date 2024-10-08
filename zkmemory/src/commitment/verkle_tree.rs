@@ -12,7 +12,6 @@ use ff::Field;
 use halo2_proofs::{
     circuit::{Layouter, Region, SimpleFloorPlanner, Value},
     halo2curves::bn256::{Bn256, Fr, G1Affine},
-    halo2curves::CurveAffineExt,
     plonk::{
         Advice, Circuit, Column, ConstraintSystem, Error, Expression, Fixed, Instance, Selector,
     },
@@ -275,9 +274,9 @@ impl<S: Spec<Fr, W, R>, const W: usize, const R: usize, const A: usize>
         )?;
 
         // hash the commitment into a scalar value. We use Poseidon hash function
-        let (x, y) = commitment.into_coordinates();
-        let x_fr = Fr::from_bytes(&x.to_bytes()).unwrap();
-        let y_fr = Fr::from_bytes(&y.to_bytes()).unwrap();
+
+        let x_fr = Fr::from_bytes(&commitment.x.to_bytes()).unwrap();
+        let y_fr = Fr::from_bytes(&commitment.y.to_bytes()).unwrap();
         let next_value = Hash::<Fr, S, ConstantLength<2>, W, R>::init().hash([x_fr, y_fr]);
 
         // assign the current path node
@@ -341,7 +340,6 @@ mod tests {
     use halo2_proofs::{
         arithmetic::lagrange_interpolate,
         dev::MockProver,
-        halo2curves::CurveAffineExt,
         poly::{
             commitment::Blind, kzg::multiopen::ProverSHPLONK, Coeff, EvaluationDomain, Polynomial,
         },
@@ -398,11 +396,10 @@ mod tests {
             &self,
             commitment: G1Affine,
         ) -> Fr {
-            let (x_coordinate, y_coordinate) = commitment.into_coordinates();
             let x_coordinate_fr =
-                Fr::from_bytes(&x_coordinate.to_bytes()).expect("Cannot convert x into Fr");
+                Fr::from_bytes(&commitment.x.to_bytes()).expect("Cannot convert x into Fr");
             let y_coordinate_fr =
-                Fr::from_bytes(&y_coordinate.to_bytes()).expect("Cannot convert y into Fr");
+                Fr::from_bytes(&commitment.y.to_bytes()).expect("Cannot convert y into Fr");
             Hash::<Fr, S, ConstantLength<2>, W, R>::init().hash([x_coordinate_fr, y_coordinate_fr])
         }
     }
