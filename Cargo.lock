@@ -730,6 +730,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "blake2"
+version = "0.10.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46502ad458c9a52b69d4d4d32775c788b7a1b85e8bc9d482d92250fc0e3f8efe"
+dependencies = [
+ "digest 0.10.7",
+]
+
+[[package]]
 name = "blake2b_simd"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1759,56 +1768,18 @@ dependencies = [
 
 [[package]]
 name = "halo2_proofs"
-version = "0.2.0"
-source = "git+https://github.com/orochi-network/halo2?tag=v0_0_2#8270a67b0a847221a21bcd31b099462346674189"
+version = "0.3.0"
+source = "git+https://github.com/privacy-scaling-explorations/halo2?tag=v0.3.0#73408a140737d8336490452193b21f5a7a94e7de"
 dependencies = [
  "blake2b_simd",
  "ff",
  "group",
- "halo2curves 0.1.0",
- "maybe-rayon",
+ "halo2curves 0.6.1",
  "rand_chacha",
  "rand_core",
+ "rayon",
  "sha3 0.9.1",
  "tracing",
-]
-
-[[package]]
-name = "halo2curves"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6b1142bd1059aacde1b477e0c80c142910f1ceae67fc619311d6a17428007ab"
-dependencies = [
- "blake2b_simd",
- "ff",
- "group",
- "lazy_static",
- "num-bigint 0.4.6",
- "num-traits",
- "pasta_curves",
- "paste",
- "rand",
- "rand_core",
- "static_assertions",
- "subtle",
-]
-
-[[package]]
-name = "halo2curves"
-version = "0.3.2"
-source = "git+https://github.com/privacy-scaling-explorations/halo2curves?tag=0.3.2#9f5c50810bbefe779ee5cf1d852b2fe85dc35d5e"
-dependencies = [
- "ff",
- "group",
- "lazy_static",
- "num-bigint 0.4.6",
- "num-traits",
- "pasta_curves",
- "paste",
- "rand",
- "rand_core",
- "static_assertions",
- "subtle",
 ]
 
 [[package]]
@@ -1834,6 +1805,45 @@ dependencies = [
  "serde_arrays",
  "static_assertions",
  "subtle",
+]
+
+[[package]]
+name = "halo2curves"
+version = "0.7.0"
+source = "git+https://github.com/privacy-scaling-explorations/halo2curves?tag=v0.7.0#b753a832e92d5c86c5c997327a9cf9de86a18851"
+dependencies = [
+ "blake2",
+ "digest 0.10.7",
+ "ff",
+ "group",
+ "halo2derive",
+ "lazy_static",
+ "num-bigint 0.4.6",
+ "num-integer",
+ "num-traits",
+ "pairing",
+ "pasta_curves",
+ "paste",
+ "rand",
+ "rand_core",
+ "rayon",
+ "sha2 0.10.8",
+ "static_assertions",
+ "subtle",
+ "unroll",
+]
+
+[[package]]
+name = "halo2derive"
+version = "0.1.0"
+source = "git+https://github.com/privacy-scaling-explorations/halo2curves?tag=v0.7.0#b753a832e92d5c86c5c997327a9cf9de86a18851"
+dependencies = [
+ "num-bigint 0.4.6",
+ "num-integer",
+ "num-traits",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -2368,16 +2378,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8263075bb86c5a1b1427b5ae862e8889656f126e9f77c484496e8b47cf5c5558"
 dependencies = [
  "regex-automata 0.1.10",
-]
-
-[[package]]
-name = "maybe-rayon"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ea1f30cedd69f0a2954655f7188c6a834246d2bcf1e315e2ac40c4b24dc9519"
-dependencies = [
- "cfg-if",
- "rayon",
 ]
 
 [[package]]
@@ -2950,7 +2950,7 @@ version = "0.1.1"
 dependencies = [
  "ff",
  "halo2_proofs",
- "halo2curves 0.3.2",
+ "halo2curves 0.7.0",
  "rand",
  "rand_core",
 ]
@@ -4677,6 +4677,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39ec24b3121d976906ece63c9daad25b85969647682eee313cb5779fdd69e14e"
 
 [[package]]
+name = "unroll"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5ad948c1cb799b1a70f836077721a92a35ac177d4daddf4c20a633786d4cf618"
+dependencies = [
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "untrusted"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4765,7 +4775,7 @@ dependencies = [
  "ff",
  "group",
  "halo2_proofs",
- "halo2curves 0.3.2",
+ "halo2curves 0.7.0",
  "poseidon",
  "rand",
  "rand_core",
@@ -5200,7 +5210,7 @@ dependencies = [
  "ff",
  "group",
  "halo2_proofs",
- "halo2curves 0.3.2",
+ "halo2curves 0.7.0",
  "hex",
  "itertools 0.13.0",
  "nova-snark",
