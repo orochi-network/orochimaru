@@ -11,10 +11,7 @@ use group::Curve;
 use halo2_proofs::{
     arithmetic::lagrange_interpolate,
     circuit::{Layouter, Region, SimpleFloorPlanner, Value},
-    halo2curves::{
-        bn256::{Bn256, Fr, G1Affine},
-        CurveAffineExt,
-    },
+    halo2curves::bn256::{Bn256, Fr, G1Affine},
     plonk::{
         create_proof, keygen_pk, keygen_vk, verify_proof, Advice, Circuit, Column,
         ConstraintSystem, Error, Expression, Fixed, Instance, ProvingKey, Selector,
@@ -281,9 +278,8 @@ impl<S: Spec<Fr, W, R>, const W: usize, const R: usize, const A: usize>
         )?;
 
         // hash the commitment into a scalar value. We use Poseidon hash function
-        let (x, y) = commitment.into_coordinates();
-        let x_fr = Fr::from_bytes(&x.to_bytes()).unwrap();
-        let y_fr = Fr::from_bytes(&y.to_bytes()).unwrap();
+        let x_fr = Fr::from_bytes(&commitment.x.to_bytes()).unwrap();
+        let y_fr = Fr::from_bytes(&commitment.y.to_bytes()).unwrap();
         let next_value = Hash::<Fr, S, ConstantLength<2>, W, R>::init().hash([x_fr, y_fr]);
 
         // assign the current path node
@@ -458,11 +454,10 @@ impl KZGStruct {
         &self,
         commitment: G1Affine,
     ) -> Fr {
-        let (x_coordinate, y_coordinate) = commitment.into_coordinates();
         let x_coordinate_fr =
-            Fr::from_bytes(&x_coordinate.to_bytes()).expect("Cannot convert x into Fr");
+            Fr::from_bytes(&commitment.x.to_bytes()).expect("Cannot convert x into Fr");
         let y_coordinate_fr =
-            Fr::from_bytes(&y_coordinate.to_bytes()).expect("Cannot convert y into Fr");
+            Fr::from_bytes(&commitment.y.to_bytes()).expect("Cannot convert y into Fr");
         Hash::<Fr, S, ConstantLength<2>, W, R>::init().hash([x_coordinate_fr, y_coordinate_fr])
     }
 }
