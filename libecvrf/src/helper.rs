@@ -67,26 +67,18 @@ pub fn projective_ec_add(a: &Affine, b: &Affine) -> Jacobian {
     r
 }
 
-/// Quick transform a Jacobian to Affine and also normalize it
-pub fn jacobian_to_affine(j: &Jacobian) -> Affine {
-    let mut ra = Affine::from_gej(j);
-    ra.x.normalize();
-    ra.y.normalize();
-    ra
-}
-
 /// Perform multiplication between a point and a scalar: a * P
 pub fn ecmult(context: &ECMultContext, a: &Affine, na: &Scalar) -> Affine {
     let mut rj = Jacobian::default();
     context.ecmult(&mut rj, &Jacobian::from_ge(a), na, &Scalar::from_int(0));
-    jacobian_to_affine(&rj)
+    Affine::from_jacobian(&rj)
 }
 
 /// Perform multiplication between a value and G: a * G
 pub fn ecmult_gen(context: &ECMultGenContext, ng: &Scalar) -> Affine {
     let mut rj = Jacobian::default();
     context.ecmult_gen(&mut rj, ng);
-    jacobian_to_affine(&rj)
+    Affine::from_jacobian(&rj)
 }
 
 /// Calculate witness address from a Affine
@@ -97,8 +89,8 @@ pub fn calculate_witness_address(witness: &Affine) -> [u8; 20] {
 }
 
 /// Has a Public Key and return a Ethereum address
-pub fn get_address(pub_key: PublicKey) -> [u8; 20] {
-    let mut affine_pub: Affine = pub_key.into();
+pub fn get_address(pub_key: &PublicKey) -> [u8; 20] {
+    let mut affine_pub: Affine = (*pub_key).into();
     affine_pub.x.normalize();
     affine_pub.y.normalize();
     calculate_witness_address(&affine_pub)
