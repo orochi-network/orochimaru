@@ -24,7 +24,7 @@ pub trait Zeroable {
     fn is_zero(&self) -> bool;
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 /// Key pair
 pub struct KeyPair {
     /// Public key
@@ -33,7 +33,7 @@ pub struct KeyPair {
     pub secret_key: SecretKey,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 /// Raw key pair
 pub struct RawKeyPair {
     /// Raw public key
@@ -116,8 +116,8 @@ impl From<String> for KeyPair {
     }
 }
 
-impl From<KeyPair> for RawKeyPair {
-    fn from(value: KeyPair) -> Self {
+impl From<&KeyPair> for RawKeyPair {
+    fn from(value: &KeyPair) -> Self {
         RawKeyPair {
             public_key: value.public_key.serialize(),
             secret_key: value.secret_key.serialize(),
@@ -184,7 +184,7 @@ pub struct ECVRF<'a> {
     ctx_gen: &'a ECMultGenContext,
 }
 
-impl ECVRF<'_> {
+impl<'a> ECVRF<'a> {
     /// Create new instance of ECVRF from a secret key
     pub fn new(secret_key: SecretKey) -> Self {
         ECVRF {
@@ -371,8 +371,8 @@ impl ECVRF<'_> {
             &h,
             &pub_affine,
             &vrf_proof.gamma,
-            &jacobian_to_affine(&u),
-            &jacobian_to_affine(&v),
+            &Affine::from_jacobian(&u),
+            &Affine::from_jacobian(&v),
         );
 
         // y = keccak256(gama.encode())

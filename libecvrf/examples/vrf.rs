@@ -1,5 +1,5 @@
 use libecvrf::{
-    extends::ScalarExtend,
+    extends::{AffineExtend, ScalarExtend},
     helper::{calculate_witness_address, get_address},
     secp256k1::{curve::Scalar, SecretKey},
     util::thread_rng,
@@ -9,7 +9,12 @@ use libsecp256k1::curve::{Affine, Field};
 
 fn main() {
     let key_pair = KeyPair::new();
-    let address = get_address(key_pair.public_key);
+    let address = get_address(&key_pair.public_key);
+    println!(
+        "PublicKey: {:#?}",
+        key_pair.public_key.serialize_compressed()
+    );
+
     println!("Address: {}", hex::encode(address));
 
     let affine = Affine::new(Field::from_int(4), Field::from_int(95));
@@ -23,7 +28,7 @@ fn main() {
     let proof = ecvrf
         .prove(&alpha)
         .expect("Failed to prove ECVRF randomness");
-    println!("result: {:#?}", proof);
+    println!("result: {:#?} {:#?}", &alpha, proof);
 
     println!("{:?}", ecvrf.verify(&alpha, &proof));
 
