@@ -5,8 +5,8 @@ use tokio::sync::Mutex;
 use crate::postgres_sql::Postgres;
 
 /// Node context
-pub struct NodeContext {
-    ecvrf: ECVRF<'static>,
+pub struct NodeContext<'a> {
+    ecvrf: ECVRF<'a>,
     is_testnet: bool,
     postgres: Postgres,
     key_id: i64,
@@ -16,7 +16,7 @@ pub struct NodeContext {
     pub sync: Mutex<bool>,
 }
 
-impl NodeContext {
+impl<'a> NodeContext<'a> {
     /// Create a new instance of node context
     pub fn new(key_id: i64, keypair: KeyPair, is_testnet: bool, postgres: Postgres) -> Arc<Self> {
         let ecvrf = ECVRF::new(keypair.secret_key);
@@ -41,7 +41,7 @@ impl NodeContext {
     }
 
     /// Get ECVRF instance
-    pub fn ecvrf(&self) -> &ECVRF<'static> {
+    pub fn ecvrf(&self) -> &ECVRF<'_> {
         &self.ecvrf
     }
 

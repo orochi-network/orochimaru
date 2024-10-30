@@ -57,7 +57,7 @@ async fn orand_get_epoch(
     network: i64,
     address: String,
     epoch: i64,
-    context: Arc<NodeContext>,
+    context: Arc<NodeContext<'_>>,
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
     let postgres = context.postgres();
     let randomness = postgres.table_randomness();
@@ -79,7 +79,7 @@ async fn orand_get_epoch(
 }
 
 async fn orand_new_epoch(
-    context: Arc<NodeContext>,
+    context: Arc<NodeContext<'_>>,
     username: String,
     network: i64,
     address: String,
@@ -100,7 +100,7 @@ async fn orand_new_epoch(
 /// path, and returns a Future of a Response.
 async fn orand(
     req: Request<hyper::body::Incoming>,
-    context: Arc<NodeContext>,
+    context: Arc<NodeContext<'_>>,
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
     let (header, body) = req.into_parts();
     match (&header.method, header.uri.path()) {
@@ -248,7 +248,7 @@ async fn orand(
                                 // Generate hmac key if it didn't exist
                                 let mut hmac_secret = [0u8; ORAND_HMAC_KEY_SIZE];
                                 random_bytes(&mut hmac_secret);
-                                let mut raw_keypair = RawKeyPair::from(KeyPair::new());
+                                let mut raw_keypair = RawKeyPair::from(&KeyPair::new());
                                 let insert_result = keyring
                                     .insert(json!({
                                     "username": username,
@@ -418,7 +418,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 // Generate new secret
                 Err(_) => KeyPair::new(),
             };
-            let mut raw_keypair = RawKeyPair::from(new_keypair);
+            let mut raw_keypair = RawKeyPair::from(&new_keypair);
             let insert_result = keyring
                 .insert(json!({
                 "username": ORAND_KEYRING_NAME,
@@ -443,7 +443,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     );
     log::info!(
         "Address of public key: 0x{}",
-        hex::encode(get_address(keypair.public_key))
+        hex::encode(get_address(&keypair.public_key))
     );
 
     // Create new node context

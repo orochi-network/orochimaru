@@ -137,7 +137,7 @@ impl<'a> RandomnessTable<'a> {
     /// Find randomness record by its network and address
     pub async fn safe_insert(
         &self,
-        context: Arc<NodeContext>,
+        context: Arc<NodeContext<'_>>,
         username: String,
         network: i64,
         address: String,
