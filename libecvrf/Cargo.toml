@@ -20,7 +20,7 @@ path = "src/lib.rs"
 tiny-keccak = { version = "2.0.2", default-features = false, features = [
     "keccak",
 ] }
-tiny-ec = { path = "/Users/chiro/Git/tiny-ec" }
+tiny-ec = { version = "0.1.3" }
 rand = { workspace = true }
 hex = { workspace = true }
 
