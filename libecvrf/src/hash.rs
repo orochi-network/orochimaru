@@ -1,8 +1,5 @@
-use crate::{
-    extends::{AffineExtend, ScalarExtend},
-    helper::FIELD_SIZE,
-};
-use libsecp256k1::{
+use crate::helper::FIELD_SIZE;
+use tiny_ec::{
     curve::{Affine, Field, Jacobian, Scalar},
     ECMULT_GEN_CONTEXT,
 };
@@ -67,8 +64,8 @@ pub fn field_hash(b: &[u8]) -> Field {
     let mut hasher = Keccak::v256();
     hasher.update(b);
     hasher.finalize(&mut output);
-    let mut s = Scalar::from_bytes(&output);
-    if s.gte(&FIELD_SIZE) {
+    let mut s = Scalar::from(&output);
+    if s >= FIELD_SIZE {
         let mut hasher = Keccak::v256();
         hasher.update(&output);
         hasher.finalize(&mut output);
@@ -98,7 +95,7 @@ pub fn hash_points(
         hasher.update(point.y.b32().as_ref());
     }
     hasher.finalize(&mut output);
-    Scalar::from_bytes(&output)
+    Scalar::from(&output)
 }
 
 /// Hash points with prefix
@@ -121,7 +118,7 @@ pub fn hash_points_prefix(
     }
     hasher.update(u_witness);
     hasher.finalize(&mut output);
-    Scalar::from_bytes(&output)
+    Scalar::from(&output)
 }
 
 /// Hash to curve
@@ -135,17 +132,16 @@ pub fn hash_to_curve(alpha: &Scalar, y: Option<&Affine>) -> Affine {
         }
         None => r,
     };
-    Affine::from_jacobian(&r)
+    Affine::from(&r)
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{
-        extends::ScalarExtend,
         hash::{is_on_curve, new_candidate_point},
         helper::random_bytes,
     };
-    use libsecp256k1::curve::Scalar;
+    use tiny_ec::curve::Scalar;
 
     #[test]
     fn point_must_be_on_curve() {
@@ -176,7 +172,7 @@ mod tests {
         for x in 0..data_set.len() {
             for y in 0..data_set.len() {
                 assert!(
-                    data_set[x].gte(&data_set[y]) == require_output[x * data_set.len() + y],
+                    (data_set[x] >= data_set[y]) == require_output[x * data_set.len() + y],
                     "scalar_is_gte() is broken"
                 );
             }

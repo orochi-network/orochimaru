@@ -1,9 +1,10 @@
-use crate::extends::AffineExtend;
-use libsecp256k1::{
+use crate::extend::Hashable;
+use rand::{thread_rng, RngCore};
+use tiny_ec::{
     curve::{Affine, ECMultContext, ECMultGenContext, Field, Jacobian, Scalar},
     PublicKey,
 };
-use rand::{thread_rng, RngCore};
+use tiny_keccak::{Hasher, Keccak};
 
 /// Field size 2^256 - 0x1000003D1
 /// [FIELD_SIZE](crate::helper::FIELD_SIZE) = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F;
@@ -16,6 +17,15 @@ pub const FIELD_SIZE: Scalar = Scalar([
 pub const GROUP_ORDER: Scalar = Scalar([
     0xD0364141, 0xBFD25E8C, 0xAF48A03B, 0xBAAEDCE6, 0xFFFFFFFE, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
 ]);
+
+/// Hash data with Keccak256
+pub fn hash_keccak256(data: &[u8]) -> [u8; 32] {
+    let mut output = [0u8; 32];
+    let mut hasher = Keccak::v256();
+    hasher.update(data);
+    hasher.finalize(&mut output);
+    output
+}
 
 /// Projective sub, cost optimization for EVM
 pub fn projective_sub(a: &Affine, b: &Affine) -> Affine {
@@ -71,14 +81,14 @@ pub fn projective_ec_add(a: &Affine, b: &Affine) -> Jacobian {
 pub fn ecmult(context: &ECMultContext, a: &Affine, na: &Scalar) -> Affine {
     let mut rj = Jacobian::default();
     context.ecmult(&mut rj, &Jacobian::from_ge(a), na, &Scalar::from_int(0));
-    Affine::from_jacobian(&rj)
+    Affine::from(&rj)
 }
 
 /// Perform multiplication between a value and G: a * G
 pub fn ecmult_gen(context: &ECMultGenContext, ng: &Scalar) -> Affine {
     let mut rj = Jacobian::default();
     context.ecmult_gen(&mut rj, ng);
-    Affine::from_jacobian(&rj)
+    Affine::from(&rj)
 }
 
 /// Calculate witness address from a Affine

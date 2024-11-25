@@ -19,7 +19,7 @@ pub use ecvrf::*;
 pub mod error;
 
 /// Extended Affine, Jacobian, Scalar, Field
-pub mod extends;
+pub mod extend;
 
 /// Curve hash
 pub mod hash;
@@ -28,9 +28,7 @@ pub mod hash;
 pub mod helper;
 
 /// Re-export libsecp256k1
-pub mod secp256k1 {
-    pub use libsecp256k1::*;
-}
+pub use tiny_ec::*;
 
 /// Re-export rand::thread_rng
 pub mod util {

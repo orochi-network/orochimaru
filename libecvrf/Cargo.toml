@@ -1,6 +1,6 @@
 [package]
 name = "libecvrf"
-version = "1.1.2"
+version = "1.2.1-beta.0"
 description = "A ECVRF that's friendly with EVM, based on curve secp256k1 and keccak256"
 authors.workspace = true
 edition.workspace = true
@@ -20,7 +20,7 @@ path = "src/lib.rs"
 tiny-keccak = { version = "2.0.2", default-features = false, features = [
     "keccak",
 ] }
-libsecp256k1 = "0.7.1"
+tiny-ec = { path = "/Users/chiro/Git/tiny-ec" }
 rand = { workspace = true }
 hex = { workspace = true }
 

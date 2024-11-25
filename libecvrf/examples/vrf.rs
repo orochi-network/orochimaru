@@ -1,19 +1,16 @@
 use libecvrf::{
-    extends::{AffineExtend, ScalarExtend},
+    curve::Scalar,
+    curve::{Affine, Field},
+    extend::Randomize,
     helper::{calculate_witness_address, get_address},
-    secp256k1::{curve::Scalar, SecretKey},
-    util::thread_rng,
-    KeyPair, ECVRF,
+    KeyPair, SecretKey, ECVRF,
 };
-use libsecp256k1::curve::{Affine, Field};
+use tiny_ec::PublicKey;
 
 fn main() {
     let key_pair = KeyPair::new();
     let address = get_address(&key_pair.public_key);
-    println!(
-        "PublicKey: {:#?}",
-        key_pair.public_key.serialize_compressed()
-    );
+    println!("PublicKey: {:#?}", key_pair.public_key.serialize());
 
     println!("Address: {}", hex::encode(address));
 
@@ -21,16 +18,17 @@ fn main() {
     let address = calculate_witness_address(&affine);
     println!("Address: {}", hex::encode(address));
 
-    let secret_key = SecretKey::random(&mut thread_rng());
+    let secret_key = SecretKey::random();
+    let public_key = PublicKey::from_secret_key(&secret_key);
     let ecvrf = ECVRF::new(secret_key);
-    let alpha = Scalar::randomize();
+    let alpha = Scalar::random();
 
     let proof = ecvrf
         .prove(&alpha)
         .expect("Failed to prove ECVRF randomness");
     println!("result: {:#?} {:#?}", &alpha, proof);
 
-    println!("{:?}", ecvrf.verify(&alpha, &proof));
+    println!("{:?}", ecvrf.verify(&public_key, &proof));
 
     let smart_contract_proof = ecvrf.prove_contract(&alpha);
 

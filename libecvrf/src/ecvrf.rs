@@ -1,17 +1,16 @@
 extern crate alloc;
 use crate::{
     error,
-    extends::{AffineExtend, ScalarExtend},
+    extend::{Hashable, Randomize},
     hash::{hash_points, hash_points_prefix, hash_to_curve, hash_to_curve_prefix},
     helper::*,
 };
 use alloc::string::String;
-use libsecp256k1::{
+use tiny_ec::{
     curve::{Affine, ECMultContext, ECMultGenContext, Field, Jacobian, Scalar, AFFINE_G},
     util::{FULL_PUBLIC_KEY_SIZE, SECRET_KEY_SIZE},
     PublicKey, SecretKey, ECMULT_CONTEXT, ECMULT_GEN_CONTEXT,
 };
-use rand::thread_rng;
 
 /// Max retries for randomize scalar or repeat hash
 pub const MAX_RETRIES: u32 = 100;
@@ -51,8 +50,7 @@ impl Default for KeyPair {
 impl KeyPair {
     /// Generate a new key pair
     pub fn new() -> Self {
-        let mut rng = thread_rng();
-        let secret_key = SecretKey::random(&mut rng);
+        let secret_key = SecretKey::random();
         let public_key = PublicKey::from_secret_key(&secret_key);
         KeyPair {
             public_key,
@@ -147,8 +145,8 @@ pub struct ECVRFProof {
     pub s: Scalar,
     /// y is the result
     pub y: Scalar,
-    /// Public key
-    pub pk: PublicKey,
+    /// Alpha seed
+    pub alpha: Scalar,
 }
 
 /// EC-VRF contract proof that compatible and verifiable with Solidity contract
@@ -216,13 +214,13 @@ impl<'a> ECVRF<'a> {
 
         // k = random()
         // We need to make sure that k < GROUP_ORDER
-        let mut k = Scalar::randomize();
+        let mut k = Scalar::random();
         let mut retries = 0;
-        while k.gte(&GROUP_ORDER) || k.is_zero() {
+        while k >= GROUP_ORDER || k.is_zero() {
             if retries > MAX_RETRIES {
                 return Err(error::Error::RetriesExceeded);
             }
-            k = Scalar::randomize();
+            k = Scalar::random();
             retries += 1;
         }
 
@@ -266,15 +264,17 @@ impl<'a> ECVRF<'a> {
         // We need to normalize it after we done the inverse
         let mut inverse_z = v.z.inv();
         inverse_z.normalize();
+        let mut tmp_u_witness = [0u8; 32];
+        tmp_u_witness[12..32].copy_from_slice(&u_witness);
 
         Ok(ECVRFContractProof {
             pk: self.public_key,
             gamma,
             c,
             s,
-            y: Scalar::from_bytes(&gamma.keccak256()),
+            y: Scalar::from(&gamma.keccak256()),
             alpha: *alpha,
-            witness_address: Scalar::from_bytes(&u_witness),
+            witness_address: Scalar::from(&tmp_u_witness),
             witness_gamma,
             witness_hash,
             inverse_z,
@@ -296,13 +296,13 @@ impl<'a> ECVRF<'a> {
 
         // k = random()
         // We need to make sure that k < GROUP_ORDER
-        let mut k = Scalar::randomize();
+        let mut k = Scalar::random();
         let mut retries = 0;
-        while k.gte(&GROUP_ORDER) || k.is_zero() {
+        while k >= GROUP_ORDER || k.is_zero() {
             if retries > MAX_RETRIES {
                 return Err(error::Error::RetriesExceeded);
             }
-            k = Scalar::randomize();
+            k = Scalar::random();
             retries += 1;
         }
 
@@ -322,20 +322,20 @@ impl<'a> ECVRF<'a> {
         secret_key.clear();
 
         // y = keccak256(gama.encode())
-        let y = Scalar::from_bytes(&gamma.keccak256());
+        let y = Scalar::from(&gamma.keccak256());
 
         Ok(ECVRFProof {
             gamma,
             c,
             s,
             y,
-            pk: self.public_key,
+            alpha: *alpha,
         })
     }
 
     /// Ordinary verifier
-    pub fn verify(&self, alpha: &Scalar, vrf_proof: &ECVRFProof) -> bool {
-        let mut pub_affine: Affine = self.public_key.into();
+    pub fn verify(&self, public_key: &PublicKey, vrf_proof: &ECVRFProof) -> bool {
+        let mut pub_affine: Affine = (*public_key).into();
         pub_affine.x.normalize();
         pub_affine.y.normalize();
 
@@ -343,7 +343,7 @@ impl<'a> ECVRF<'a> {
         assert!(vrf_proof.gamma.is_valid_var());
 
         // H = ECVRF_hash_to_curve(alpha, pk)
-        let h = hash_to_curve(alpha, Some(&pub_affine));
+        let h = hash_to_curve(&vrf_proof.alpha, Some(&pub_affine));
         let mut jh = Jacobian::default();
         jh.set_ge(&h);
 
@@ -371,12 +371,12 @@ impl<'a> ECVRF<'a> {
             &h,
             &pub_affine,
             &vrf_proof.gamma,
-            &Affine::from_jacobian(&u),
-            &Affine::from_jacobian(&v),
+            &Affine::from(&u),
+            &Affine::from(&v),
         );
 
         // y = keccak256(gama.encode())
-        let computed_y = Scalar::from_bytes(&vrf_proof.gamma.keccak256());
+        let computed_y = Scalar::from(&vrf_proof.gamma.keccak256());
 
         // computed values should equal to the real one
         computed_c.eq(&vrf_proof.c) && computed_y.eq(&vrf_proof.y)
@@ -385,26 +385,24 @@ impl<'a> ECVRF<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{extends::ScalarExtend, ECVRF};
-    use libsecp256k1::{curve::Scalar, SecretKey};
-    use rand::thread_rng;
+    use crate::{extend::Randomize, ECVRF};
+    use tiny_ec::{curve::Scalar, PublicKey, SecretKey};
 
     #[test]
     fn we_should_able_to_prove_and_verify() {
-        let mut r = thread_rng();
-        let secret_key = SecretKey::random(&mut r);
-
+        let secret_key = SecretKey::random();
+        let public_key = PublicKey::from_secret_key(&secret_key);
         // Create new instance of ECVRF
         let ecvrf = ECVRF::new(secret_key);
 
         // Random an alpha value
-        let alpha = Scalar::randomize();
+        let alpha = Scalar::random();
 
         //Prove
         let r1 = ecvrf.prove(&alpha);
 
         // Verify
-        let r2 = ecvrf.verify(&alpha, &r1.expect("Can not prove the randomness"));
+        let r2 = ecvrf.verify(&public_key, &r1.expect("Can not prove the randomness"));
 
         assert!(r2);
     }
