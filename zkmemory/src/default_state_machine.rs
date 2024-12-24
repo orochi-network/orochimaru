@@ -1,10 +1,9 @@
-use rand::Rng;
-use rbtree::RBTree;
-use std::{marker::PhantomData, println};
-use zkmemory::{
-    base::{Base, B256},
-    config::{AllocatedSection, Config, ConfigArgs, DefaultConfig},
-    constraints::helper::build_and_test_circuit,
+extern crate alloc; // Import the alloc crate
+use alloc::vec::Vec;
+
+use crate::{
+    base::Base,
+    config::{AllocatedSection, Config, ConfigArgs},
     error::Error,
     impl_register_machine, impl_stack_machine, impl_state_machine,
     machine::{
@@ -12,10 +11,12 @@ use zkmemory::{
         TraceRecord,
     },
 };
+use core::marker::PhantomData;
+use rbtree::RBTree;
 
 /// My instruction set for the machine
 #[derive(Debug, Clone, Copy)]
-pub enum MyInstruction<M, K, V, const S: usize, const T: usize>
+pub enum StandardInstruction<M, K, V, const S: usize, const T: usize>
 where
     K: Base<S>,
     V: Base<T>,
@@ -42,12 +43,9 @@ where
     Add(Register<K>, Register<K>),
 }
 
-/// Type alias Instruction
-pub type Instruction = MyInstruction<StateMachine<B256, B256, 32, 32>, B256, B256, 32, 32>;
-
 /// RAM Machine
 #[derive(Debug, Clone)]
-pub struct StateMachine<K, V, const S: usize, const T: usize>
+pub struct StandardStateMachine<K, V, const S: usize, const T: usize>
 where
     K: Base<S>,
     V: Base<T>,
@@ -80,14 +78,15 @@ where
     execution_trace: RBTree<TraceRecord<K, V, S, T>, PhantomData<()>>,
 }
 
-impl<M, K, V, const S: usize, const T: usize> AbstractContext<M, K, V> for StateMachine<K, V, S, T>
+impl<M, K, V, const S: usize, const T: usize> AbstractContext<M, K, V>
+    for StandardStateMachine<K, V, S, T>
 where
     Self: core::fmt::Debug
         + Sized
         + AbstractMachine<K, V, Context = M::Context, Instruction = M::Instruction>,
     K: Base<S>,
     V: Base<T>,
-    M: AbstractMachine<K, V, Machine = StateMachine<K, V, S, T>>,
+    M: AbstractMachine<K, V, Machine = StandardStateMachine<K, V, S, T>>,
 {
     fn set_stack_depth(&mut self, stack_depth: u64) {
         self.stack_depth = stack_depth;
@@ -119,26 +118,26 @@ where
 }
 
 impl<M, K, V, const S: usize, const T: usize> AbstractInstruction<M, K, V>
-    for MyInstruction<M, K, V, S, T>
+    for StandardInstruction<M, K, V, S, T>
 where
     Self: core::fmt::Debug + Sized,
     K: Base<S>,
     V: Base<T>,
-    M: AbstractMachine<K, V, Machine = StateMachine<K, V, S, T>>,
+    M: AbstractMachine<K, V, Machine = StandardStateMachine<K, V, S, T>>,
 {
     fn exec(&self, machine: &mut M::Machine) {
         match self {
-            MyInstruction::Invalid(_) => {
+            StandardInstruction::Invalid(_) => {
                 panic!("Invalid instruction")
             }
-            MyInstruction::Read(addr) => {
+            StandardInstruction::Read(addr) => {
                 if !machine.memory_allocated.contain(*addr) {
                     panic!("{}", Error::MemoryAccessDeinied);
                 } else {
                     machine.read(*addr).expect("Unable to read to memory");
                 }
             }
-            MyInstruction::Write(addr, val) => {
+            StandardInstruction::Write(addr, val) => {
                 if !machine.memory_allocated.contain(*addr) {
                     panic!("{}", Error::MemoryAccessDeinied);
                 } else {
@@ -147,13 +146,13 @@ where
                         .expect("Unable to write to memory");
                 }
             }
-            MyInstruction::Push(value) => {
+            StandardInstruction::Push(value) => {
                 machine.push(*value).expect("Unable to push value to stack");
             }
-            MyInstruction::Pop(_) => {
+            StandardInstruction::Pop(_) => {
                 machine.pop().expect("Unable to pop value from stack");
             }
-            MyInstruction::Mov(reg1, reg2) => {
+            StandardInstruction::Mov(reg1, reg2) => {
                 match machine.get(*reg2).expect("Unable to access register 1") {
                     CellInteraction::SingleCell(_, _, value) => {
                         machine.set(*reg1, value).expect("Unable to set register 2");
@@ -162,7 +161,7 @@ where
                 }
                 // Mov value from register 2 to register 1
             }
-            MyInstruction::Swap(reg) => {
+            StandardInstruction::Swap(reg) => {
                 match machine.pop().expect("Unable to pop value from stack") {
                     (_, CellInteraction::SingleCell(_op, _addr, value)) => {
                         machine
@@ -173,7 +172,7 @@ where
                     _ => panic!("Stack unable to be two cells"),
                 };
             }
-            MyInstruction::Load(reg, addr) => {
+            StandardInstruction::Load(reg, addr) => {
                 match machine.read(*addr).expect("Unable to read memory") {
                     CellInteraction::SingleCell(_, _, value) => {
                         machine.set(*reg, value).expect("Unable to set register");
@@ -183,7 +182,7 @@ where
                     }
                 };
             }
-            MyInstruction::Save(address, reg) => {
+            StandardInstruction::Save(address, reg) => {
                 match machine.get(*reg).expect("Unable to access register") {
                     CellInteraction::SingleCell(_, _, value) => {
                         machine
@@ -193,7 +192,7 @@ where
                     _ => panic!("Register unable to be two cells"),
                 }
             }
-            MyInstruction::Add(reg1, reg2) => {
+            StandardInstruction::Add(reg1, reg2) => {
                 match machine.get(*reg1).expect("Unable to access register 1") {
                     CellInteraction::SingleCell(_, _, value1) => {
                         match machine.get(*reg2).expect("Unable to access register 2") {
@@ -212,7 +211,7 @@ where
     }
 }
 
-impl<K, V, const S: usize, const T: usize> StateMachine<K, V, S, T>
+impl<K, V, const S: usize, const T: usize> StandardStateMachine<K, V, S, T>
 where
     K: Base<S>,
     V: Base<T>,
@@ -244,35 +243,28 @@ where
             execution_trace: RBTree::new(),
         }
     }
-
     /// Show address maps of memory, stack and registers sections
-    pub fn show_sections_maps(&self) {
-        println!(
-            "Memory section map: from {} to {}",
-            self.memory_allocated.low(),
-            self.memory_allocated.high()
-        );
-        println!(
-            "Register section map: from {} to {}",
-            self.register_allocated.low(),
-            self.register_allocated.high()
-        );
-        println!(
-            "Stack section map: from {} to {}",
-            self.stack_allocated.low(),
-            self.stack_allocated.high()
-        );
+    pub fn get_sections_maps(&self) -> [(K, K); 3] {
+        [
+            (self.memory_allocated.low(), self.memory_allocated.high()),
+            (
+                self.register_allocated.low(),
+                self.register_allocated.high(),
+            ),
+            (self.stack_allocated.low(), self.stack_allocated.high()),
+        ]
     }
 }
 
-impl<K, V, const S: usize, const T: usize> AbstractMachine<K, V> for StateMachine<K, V, S, T>
+impl<K, V, const S: usize, const T: usize> AbstractMachine<K, V>
+    for StandardStateMachine<K, V, S, T>
 where
     K: Base<S>,
     V: Base<T>,
 {
     type Machine = Self;
     type Context = Self;
-    type Instruction = MyInstruction<Self, K, V, S, T>;
+    type Instruction = StandardInstruction<Self, K, V, S, T>;
     type TraceRecord = TraceRecord<K, V, S, T>;
 
     fn context(&mut self) -> &'_ mut Self::Context {
@@ -320,76 +312,109 @@ where
     }
 }
 
-impl_register_machine!(StateMachine);
-impl_stack_machine!(StateMachine);
-impl_state_machine!(StateMachine);
+impl_register_machine!(StandardStateMachine);
+impl_stack_machine!(StandardStateMachine);
+impl_state_machine!(StandardStateMachine);
 
-fn main() {
-    // Define the desired machine configuration
-    let mut machine = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default_config());
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{base::B256, config::DefaultConfig, constraints::helper::build_and_test_circuit};
+    use alloc::vec;
+    use ethnum::U256;
+    use rand::Rng;
 
-    // Show the section map
-    machine.show_sections_maps();
+    #[test]
+    fn base_struct_test() {
+        // Define the desired machine configuration
+        type MyMachine = StandardStateMachine<B256, B256, 32, 32>;
+        type Instruction = StandardInstruction<MyMachine, B256, B256, 32, 32>;
+        let mut machine = MyMachine::new(DefaultConfig::default_config());
 
-    // Get the base address of the memory section
-    let base = machine.base_address();
-    println!("{}", base);
+        // Show the section map
+        let sections = machine.get_sections_maps();
 
-    let mut randomize = rand::thread_rng();
-    randomize.gen_range(u64::MAX / 2..u64::MAX);
-    // Define your desired program
-    let program = vec![
-        Instruction::Write(
-            base + B256::from(16),
-            B256::from(randomize.gen_range(u64::MAX / 2..u64::MAX)),
-        ),
-        Instruction::Write(
-            base + B256::from(48),
-            B256::from(randomize.gen_range(u64::MAX / 2..u64::MAX)),
-        ),
-        Instruction::Write(
-            base + B256::from(80),
-            B256::from(randomize.gen_range(u64::MAX / 2..u64::MAX)),
-        ),
-        Instruction::Write(
-            base + B256::from(112),
-            B256::from(randomize.gen_range(u64::MAX / 2..u64::MAX)),
-        ),
-        Instruction::Write(
-            base + B256::from(320),
-            B256::from(randomize.gen_range(u64::MAX / 2..u64::MAX)),
-        ),
-        Instruction::Read(base + B256::from(16)),
-        Instruction::Write(
-            base + B256::from(10000),
-            B256::from(randomize.gen_range(u64::MAX / 2..u64::MAX)),
-        ),
-        Instruction::Read(base + B256::from(48)),
-        Instruction::Read(base + B256::from(320)),
-        Instruction::Write(
-            base + B256::from(10016),
-            B256::from(randomize.gen_range(u64::MAX / 2..u64::MAX)),
-        ),
-        Instruction::Write(
-            base + B256::from(10032),
-            B256::from(randomize.gen_range(u64::MAX / 2..u64::MAX)),
-        ),
-        Instruction::Read(base + B256::from(16)),
-        Instruction::Read(base + B256::from(48)),
-    ];
-    let mut trace_record = vec![];
-    // Execute the program
-    for instruction in program {
-        machine.exec(&instruction);
+        assert_eq!(sections.len(), 3);
+
+        //   Memory section: (33856, 115792089237316195423570985008687907853269984665640564039457584007913129639935)
+        assert_eq!(sections[0].0, B256::from(33856));
+        assert_eq!(
+            sections[0].1,
+            B256::from(U256::from_str_radix("115792089237316195423570985008687907853269984665640564039457584007913129639935", 10).unwrap().to_be_bytes())
+        );
+        // Register section: (32800, 33824)
+        assert_eq!(sections[1].0, B256::from(32800));
+        assert_eq!(sections[1].1, B256::from(33824));
+        // Stack section: (0, 32768)
+        assert_eq!(sections[2].0, B256::zero());
+        assert_eq!(sections[2].1, B256::from(32768));
+
+        // Get the base address of the memory section
+        let base = machine.base_address();
+
+        let mut randomize = rand::thread_rng();
+        randomize.gen_range(u64::MAX / 2..u64::MAX);
+        // Define your desired program
+        let program = vec![
+            Instruction::Write(
+                base + B256::from(16),
+                B256::from(randomize.gen_range(u64::MAX / 2..u64::MAX)),
+            ),
+            Instruction::Write(
+                base + B256::from(48),
+                B256::from(randomize.gen_range(u64::MAX / 2..u64::MAX)),
+            ),
+            Instruction::Write(
+                base + B256::from(80),
+                B256::from(randomize.gen_range(u64::MAX / 2..u64::MAX)),
+            ),
+            Instruction::Write(
+                base + B256::from(112),
+                B256::from(randomize.gen_range(u64::MAX / 2..u64::MAX)),
+            ),
+            Instruction::Write(
+                base + B256::from(320),
+                B256::from(randomize.gen_range(u64::MAX / 2..u64::MAX)),
+            ),
+            Instruction::Read(base + B256::from(16)),
+            Instruction::Write(
+                base + B256::from(10000),
+                B256::from(randomize.gen_range(u64::MAX / 2..u64::MAX)),
+            ),
+            Instruction::Read(base + B256::from(48)),
+            Instruction::Read(base + B256::from(320)),
+            Instruction::Write(
+                base + B256::from(10016),
+                B256::from(randomize.gen_range(u64::MAX / 2..u64::MAX)),
+            ),
+            Instruction::Write(
+                base + B256::from(10032),
+                B256::from(randomize.gen_range(u64::MAX / 2..u64::MAX)),
+            ),
+            Instruction::Read(base + B256::from(16)),
+            Instruction::Read(base + B256::from(48)),
+            Instruction::Push(B256::from(777)),
+            Instruction::Swap(machine.r0),
+            Instruction::Mov(machine.r1, machine.r0),
+            Instruction::Write(base + B256::from(16), B256::from(1025)),
+            Instruction::Write(base + B256::from(48), B256::from(1111)),
+            Instruction::Write(base + B256::from(80), B256::from(1000)),
+            Instruction::Write(base + B256::from(112), B256::from(9999)),
+            Instruction::Load(machine.r0, base + B256::from(16)),
+            Instruction::Push(B256::from(3735013596u64)),
+            Instruction::Swap(machine.r1),
+        ];
+        let mut trace_record = vec![];
+        // Execute the program
+        for instruction in program {
+            machine.exec(&instruction);
+        }
+        // Print the trace record (prettified), sorted by ascending time by default
+        for x in machine.trace().into_iter() {
+            trace_record.push(x);
+        }
+
+        // If build_and_test_circuit does not panic, then the trace is valid.
+        build_and_test_circuit(trace_record, 10);
     }
-    // Print the trace record (prettified), sorted by ascending time by default
-    for x in machine.trace().into_iter() {
-        println!("{:?}", x);
-        trace_record.push(x);
-    }
-
-    println!("Verifying memory consistency...");
-    // If build_and_test_circuit does not panic, then the trace is valid.
-    build_and_test_circuit(trace_record, 10);
-    println!("Memory consistency check done. The execution trace is valid.");
 }

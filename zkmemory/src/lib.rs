@@ -21,6 +21,8 @@ pub mod commitment;
 pub mod config;
 /// Constraints for checking the lexicographic ordering
 pub mod constraints;
+/// Default state machine implementation
+pub mod default_state_machine;
 /// Define all errors of `StateMachine`
 pub mod error;
 /// Definition of abstract machine (instruction, trace and context)
@@ -29,6 +31,7 @@ pub mod machine;
 pub mod nova;
 /// Memory consistency circuit using Supernova proof system
 pub mod supernova;
+
 #[cfg(test)]
 mod tests {
     extern crate alloc;
