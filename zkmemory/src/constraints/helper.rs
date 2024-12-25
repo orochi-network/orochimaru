@@ -10,8 +10,8 @@ use alloc::{vec, vec::Vec};
 use halo2_proofs::dev::MockProver;
 use halo2curves::pasta::Fp;
 
-// Sort the trace by address -> time_log as keys
-fn sort_trace<K, V, const S: usize, const T: usize>(
+/// Sort the trace by address -> time_log as keys
+pub fn sort_trace<K, V, const S: usize, const T: usize>(
     trace: Vec<TraceRecord<K, V, S, T>>,
 ) -> Vec<TraceRecord<K, V, S, T>>
 where

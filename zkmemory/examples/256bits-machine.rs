@@ -1,12 +1,15 @@
 // Example: 256-bits RAM program using Halo2 proof engine
 extern crate alloc;
+use std::marker::PhantomData;
+
 use alloc::vec;
 use ethnum::U256;
+use halo2_proofs::dev::MockProver;
+use halo2curves::pasta::Fp;
 use rand::Rng;
-use zkmemory::{
-    base::B256, config::DefaultConfig, constraints::helper::build_and_test_circuit,
-    default_state_machine::StandardStateMachine,
-};
+use zkmemory::constraints::consistency_check_circuit::MemoryConsistencyCircuit;
+use zkmemory::constraints::helper::sort_trace;
+use zkmemory::{base::B256, config::DefaultConfig, default_state_machine::StandardStateMachine};
 
 use zkmemory::{base::Base, default_state_machine::StandardInstruction, machine::AbstractMachine};
 type CustomStateMachine = StandardStateMachine<B256, B256, 32, 32>;
@@ -118,6 +121,19 @@ fn main() {
         trace_record.push(x);
     }
 
-    // If build_and_test_circuit does not panic, then the trace is valid.
-    build_and_test_circuit(trace_record, 10);
+    // generate and verify memory consistency for the program execution
+    // this whole part can be replaced with build_and_test_circuit(trace_record, log2_number_of_ir_value_rows) for short
+
+    let log2_number_of_ir_value_rows = 10;
+    let sorted_trace = sort_trace::<B256, B256, 32, 32>(trace_record.clone());
+
+    let circuit = MemoryConsistencyCircuit::<Fp> {
+        input: trace_record.clone(),
+        shuffle: sorted_trace.clone(),
+        marker: PhantomData,
+    };
+
+    let prover = MockProver::run(log2_number_of_ir_value_rows, &circuit, vec![])
+        .expect("Cannot run the circuit");
+    assert_eq!(prover.verify(), Ok(()));
 }
