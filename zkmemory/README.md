@@ -1,4 +1,4 @@
-# An universal memory prover in Zero-Knowledge Proof
+# A universal memory prover in Zero-Knowledge Proof
 
 ## Testing and Coverage
 
@@ -53,24 +53,24 @@ TOTAL                             224                43    80.80%          99   
 
 ## Overview
 
-The idea is to create an independent module that can be used by any zkVM. You might aware that the memory can be constructed as a simple state machine with `2` instructions `READ` and `WRITE`, and configurable `WORD_SIZE`. Our memory state machine is only able access the exactly `WORD_SIZE` for every executed instruction. That is, if you want to access arbitrary data size, it must be translated to multiple accesses.
+The idea is to create an independent module that can be used by any zkVM. You might be aware that the memory can be constructed as a simple state machine with `2` instructions `READ` and `WRITE`, and a configurable `WORD_SIZE`. Our memory state machine is only able to access exactly `WORD_SIZE` bits for every executed instruction. That is, if you want to access arbitrary data sizes, it must be translated to multiple accesses.
 
-These instructions need to be satisfied following conditions:
+These instructions need to satisfy the following conditions:
 
 - **`READ` instruction**
-  - `READ` on a memory was not wrote should return `0`
-  - Every`READ` access for the same location, must have the value to be equal to the previous `WRITE`.
+  - `READ` on a memory location that has not been written to should return `0`
+  - Every `READ` access for the same location must return a value equal to the previous `WRITE`
 - **`WRITE` instruction**
-  - Every `WRITE` access must write on writable memory chunks _(some areas of the memory might be read only)_.
+  - Every `WRITE` access must write to writable memory chunks _(some areas of the memory might be read-only)_
 
 ## Features
 
 ### Configurable Word Size
 
-For now we support `U256`, `u64`, and `u32` word size.
+For now, we support `U256`, `u64`, and `u32` word sizes.
 
-- `U256` word size with this feature it can be generate the execution trace for the following for zkEVM.
-- `u64` and `u32` word size allow us to emulate wide range of VM namely RISC-V, x86, ARM, etc.
+- `U256` word size: with this feature, it can generate the execution trace for zkEVMs
+- `u64` and `u32` word sizes allow us to emulate a wide range of VMs namely RISC-V, x86, ARM, etc.
 
 ### Memory Layout
 
@@ -140,10 +140,10 @@ cargo llvm-cov --html --open
 
 ## For more detail check `256bits-machine` example
 
-In this example we tried to simulate a 256bits machine with 256bits word size.
+In this example, we tried to simulate a 256-bit machine with a 256-bit word size.
 
 ```text
-cargo run --example 256bits-machine.rs
+cargo run --example 256bits-machine
 ```
 
 ## License

@@ -22,7 +22,7 @@ use rand::thread_rng;
 
 /// Config for consistency check circuit
 #[derive(Clone)]
-pub(crate) struct ConsistencyConfig<F: Field + PrimeField> {
+pub struct ConsistencyConfig<F: Field + PrimeField> {
     // the config of the original memory
     pub(crate) original_memory_config: OriginalMemoryConfig<F>,
     // the config of the sorted memory
@@ -63,13 +63,13 @@ impl<F: Field + PrimeField> ConsistencyConfig<F> {
 
 /// Define the memory consistency circuit
 #[derive(Default)]
-pub(crate) struct MemoryConsistencyCircuit<F: Field + PrimeField + From<B256>> {
+pub struct MemoryConsistencyCircuit<F: Field + PrimeField + From<B256>> {
     /// input_trace: Array of trace records before sorting (sorted by time_log)
-    pub(crate) input: Vec<TraceRecord<B256, B256, 32, 32>>,
+    pub input: Vec<TraceRecord<B256, B256, 32, 32>>,
     /// shuffle_trace: Array after permutations (sorted by address and time_log)
-    pub(crate) shuffle: Vec<TraceRecord<B256, B256, 32, 32>>,
+    pub shuffle: Vec<TraceRecord<B256, B256, 32, 32>>,
     /// A marker since these fields do not use trait F
-    pub(crate) marker: PhantomData<F>,
+    pub marker: PhantomData<F>,
 }
 
 /// Implement the circuit extension for memory consistency circuit
