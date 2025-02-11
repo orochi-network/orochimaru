@@ -1,5 +1,6 @@
 use crate::base::Base;
 use crate::machine::Register;
+extern crate std;
 
 /// Memory section
 #[derive(Debug, Clone, Copy)]
@@ -51,7 +52,7 @@ pub struct ConfigArgs<T> {
     pub stack_depth: T,
     /// Number of registers
     pub no_register: T,
-    /// Buffer size
+    /// Buffer size in words
     pub buffer_size: T,
 }
 
@@ -77,11 +78,12 @@ where
     /// Create a new config for given arguments
     pub fn new(word_size: T, args: ConfigArgs<T>) -> Self {
         if args.head_layout {
+            // [stack - buffer - register - buffer - memory]
             let stack_lo = T::MIN;
             let stack_hi = stack_lo + (args.stack_depth * word_size);
-            let register_lo = stack_hi + args.buffer_size;
+            let register_lo = stack_hi + args.buffer_size * word_size;
             let register_hi = register_lo + (args.no_register * word_size);
-            let memory_lo = register_hi + args.buffer_size;
+            let memory_lo = register_hi + args.buffer_size * word_size;
             let memory_hi = T::MAX;
             Self {
                 word_size,
@@ -92,17 +94,18 @@ where
                 memory: AllocatedSection(memory_lo, memory_hi),
             }
         } else {
-            let length =
+            // [memory - buffer - stack - buffer - register]
+            let stack_register_buffer_total_size =
                 (args.stack_depth + args.no_register + args.buffer_size + args.buffer_size)
                     * word_size;
-            let stack_lo = T::MAX - length;
+            let stack_lo = T::MAX - stack_register_buffer_total_size;
             let remain = stack_lo % word_size;
-            let stack_lo = stack_lo - remain + word_size;
+            let stack_lo = stack_lo - remain; // Align to the nearest previous word-aligned address to ensure sufficient allocation for stack and register sections.
             let stack_hi = stack_lo + (args.stack_depth * word_size);
-            let register_lo = stack_hi + args.buffer_size;
+            let register_lo = stack_hi + args.buffer_size * word_size;
             let register_hi = register_lo + (args.no_register * word_size);
             let memory_lo = T::MIN;
-            let memory_hi = T::MAX - length;
+            let memory_hi = stack_lo - args.buffer_size * word_size;
 
             Self {
                 word_size,
@@ -122,6 +125,11 @@ where
             self.register.low() + (T::from(index) * self.word_size),
         )
     }
+
+    /// Get the buffer size in bytes
+    pub fn buffer_size_in_bytes(&self) -> T {
+        self.buffer_size * self.word_size
+    }
 }
 
 #[cfg(test)]
@@ -129,6 +137,7 @@ mod tests {
     use super::ConfigArgs;
     use crate::base::{Base, B256};
     use crate::config::{Config, DefaultConfig};
+    extern crate std;
 
     impl PartialEq for ConfigArgs<B256> {
         fn eq(&self, other: &Self) -> bool {
@@ -156,17 +165,42 @@ mod tests {
         let config = Config::<B256, 32>::new(B256::from(32), DefaultConfig::default_config());
         assert!(config.memory.contain(B256::MAX - B256::from(1)));
 
+        assert_eq!(config.stack.low(), B256::from(0));
+        assert_eq!(
+            config.register.low(),
+            B256::from(config.stack.high() + config.buffer_size_in_bytes())
+        );
+        assert_eq!(
+            config.memory.low(),
+            B256::from(config.register.high() + config.buffer_size_in_bytes())
+        );
+        assert_eq!(config.memory.high(), B256::MAX);
+
+        let no_register = B256::from(32);
         // Test tail layout
         let config = Config::<B256, 32>::new(
             B256::from(32),
             ConfigArgs {
                 head_layout: false,
                 stack_depth: B256::from(1024),
-                no_register: B256::from(32),
+                no_register,
                 buffer_size: B256::from(32),
             },
         );
         assert!(config.memory.contain(B256::from(0x10000f)));
+        assert_eq!(config.memory.low(), B256::from(0));
+        assert_eq!(
+            config.memory.high(),
+            B256::from(config.stack.low() - config.buffer_size_in_bytes())
+        );
+        assert_eq!(
+            config.stack.high(),
+            B256::from(config.register.low() - config.buffer_size_in_bytes())
+        );
+        assert_eq!(
+            config.register.high(),
+            config.register.low() + no_register * config.word_size
+        );
 
         // Test register
         config.create_register(0);

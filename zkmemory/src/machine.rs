@@ -1,4 +1,5 @@
 extern crate alloc;
+extern crate std;
 use crate::{base::Base, error::Error};
 use alloc::vec::Vec;
 use rbtree::RBTree;
@@ -264,7 +265,7 @@ where
         if remain.is_zero() {
             let time_log = self.ro_context().time_log();
             // Write on a cell
-            self.context().memory().insert(address, value);
+            self.context().memory().replace_or_insert(address, value);
             self.track(Self::TraceRecord::new(
                 time_log,
                 self.ro_context().stack_depth(),
@@ -581,13 +582,14 @@ mod tests {
         error::Error,
         machine::{
             AbstractContext, AbstractInstruction, AbstractMachine, AbstractMemoryMachine,
-            AbstractRegisterMachine, AbstractStackMachine, CellInteraction, Register, TraceRecord,
+            AbstractRegisterMachine, AbstractStackMachine, AbstractTraceRecord, CellInteraction,
+            MemoryInstruction, Register, TraceRecord,
         },
     };
     extern crate alloc;
     extern crate std;
     use alloc::{vec, vec::Vec};
-    use core::marker::PhantomData;
+    use core::{cmp::Ordering, marker::PhantomData};
     use rbtree::RBTree;
 
     /// My instruction set for the machine
@@ -743,11 +745,18 @@ mod tests {
                 }
                 MyInstruction::Swap(reg) => {
                     match machine.pop().expect("Unable to pop value from stack") {
-                        (_, CellInteraction::SingleCell(_op, _addr, value)) => {
-                            machine
-                                .push(value)
-                                .expect("Unable to push register's value to stack");
-                            machine.set(*reg, value).expect("Unable to set register");
+                        (_, CellInteraction::SingleCell(_op, _addr, stack_top_value)) => {
+                            let register_cell =
+                                machine.get(*reg).expect("Unable to access register");
+                            if let CellInteraction::SingleCell(_, _, register_value) = register_cell
+                            {
+                                machine
+                                    .push(register_value)
+                                    .expect("Unable to push register's value to stack");
+                                machine
+                                    .set(*reg, stack_top_value)
+                                    .expect("Unable to set register");
+                            }
                         }
                         _ => panic!("Stack unable to be two cells"),
                     };
@@ -927,6 +936,8 @@ mod tests {
         for instruction in program {
             sm.exec(&instruction);
         }
+        assert_eq!(sm.get_memory_address().0, B256::from(35840));
+        assert_eq!(write_chunk, sm.dummy_read(base + B256::from(32)));
         assert_eq!(write_chunk, sm.dummy_read(base + B256::from(32)));
     }
 
@@ -1012,6 +1023,18 @@ mod tests {
             sm.exec(&instruction);
         }
 
+        let first_trace_record = *sm.trace().first().unwrap();
+        let last_trace_record = *sm.trace().last().unwrap();
+        assert_eq!(last_trace_record.stack_depth(), 0);
+        assert_eq!(last_trace_record.value(), B256::from(170));
+        assert_eq!(last_trace_record.address, base + B256::from(192));
+        assert_eq!(last_trace_record.instruction(), MemoryInstruction::Write);
+        assert_eq!(
+            last_trace_record.partial_cmp(&first_trace_record),
+            Some(Ordering::Greater)
+        );
+        assert_eq!(sm.get_stack_depth(), 0);
+
         assert_eq!(sm.dummy_read(base + B256::from(128)), B256::from(170));
         assert_eq!(sm.dummy_read(base + B256::from(160)), B256::from(1000));
         assert_eq!(sm.dummy_read(base + B256::from(192)), B256::from(170));
@@ -1054,6 +1077,52 @@ mod tests {
 
         for instruction in program {
             sm.exec(&instruction);
+        }
+    }
+
+    #[test]
+    fn test_register_machine() {
+        let mut sm = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default_config()); // by default there are 32 registers allocated
+
+        assert_eq!(sm.register_start(), B256::from(33792));
+        assert_eq!(sm.base_address(), B256::from(35840));
+        assert_eq!(sm.stack_allocated.low(), B256::zero()); // 256 * 4 = 1024, buffer size = 32
+        assert_eq!(sm.word_size(), B256::from(32));
+
+        let r5 = sm.new_register(5).expect("Failed to create register");
+
+        assert_eq!(r5.index(), 5);
+        sm.set(sm.r1, B256::from(70))
+            .expect("Failed to set register");
+        assert_eq!(sm.dummy_read(sm.r1.address()), B256::from(70));
+        assert_eq!(sm.dummy_read(r5.address()), B256::from(0));
+
+        let program = vec![
+            Instruction::Push(B256::from(1000)),
+            Instruction::Swap(sm.r1),
+            Instruction::Swap(r5),
+        ];
+        // Execute program1
+        for instruction in program {
+            sm.exec(&instruction);
+        }
+
+        let r5_cell_interaction = sm.get(r5).expect("Failed to get register");
+        if let CellInteraction::SingleCell(MemoryInstruction::Read, address, value) =
+            r5_cell_interaction
+        {
+            assert_eq!((address, value), (r5.address(), B256::from(70)));
+        } else {
+            panic!("Unexpected CellInteraction variant");
+        }
+
+        let r1_cell_interaction = sm.get(sm.r1).expect("Failed to get register");
+        if let CellInteraction::SingleCell(MemoryInstruction::Read, address, value) =
+            r1_cell_interaction
+        {
+            assert_eq!((address, value), (sm.r1.address(), B256::from(1000)));
+        } else {
+            panic!("Unexpected CellInteraction variant");
         }
     }
 }
