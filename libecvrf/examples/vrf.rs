@@ -1,5 +1,5 @@
 use libecvrf::{
-    extends::{AffineExtend, ScalarExtend},
+    extends::ScalarExtend,
     helper::{calculate_witness_address, get_address},
     secp256k1::{curve::Scalar, SecretKey},
     util::thread_rng,

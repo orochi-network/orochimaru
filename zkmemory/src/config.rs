@@ -1,6 +1,5 @@
 use crate::base::Base;
 use crate::machine::Register;
-extern crate std;
 
 /// Memory section
 #[derive(Debug, Clone, Copy)]
@@ -125,11 +124,6 @@ where
             self.register.low() + (T::from(index) * self.word_size),
         )
     }
-
-    /// Get the buffer size in bytes
-    pub fn buffer_size_in_bytes(&self) -> T {
-        self.buffer_size * self.word_size
-    }
 }
 
 #[cfg(test)]
@@ -137,7 +131,6 @@ mod tests {
     use super::ConfigArgs;
     use crate::base::{Base, B256};
     use crate::config::{Config, DefaultConfig};
-    extern crate std;
 
     impl PartialEq for ConfigArgs<B256> {
         fn eq(&self, other: &Self) -> bool {
@@ -168,11 +161,11 @@ mod tests {
         assert_eq!(config.stack.low(), B256::from(0));
         assert_eq!(
             config.register.low(),
-            B256::from(config.stack.high() + config.buffer_size_in_bytes())
+            B256::from(config.stack.high() + config.buffer_size * config.word_size)
         );
         assert_eq!(
             config.memory.low(),
-            B256::from(config.register.high() + config.buffer_size_in_bytes())
+            B256::from(config.register.high() + config.buffer_size * config.word_size)
         );
         assert_eq!(config.memory.high(), B256::MAX);
 
@@ -187,15 +180,16 @@ mod tests {
                 buffer_size: B256::from(32),
             },
         );
+
         assert!(config.memory.contain(B256::from(0x10000f)));
         assert_eq!(config.memory.low(), B256::from(0));
         assert_eq!(
             config.memory.high(),
-            B256::from(config.stack.low() - config.buffer_size_in_bytes())
+            B256::from(config.stack.low() - config.buffer_size * config.word_size)
         );
         assert_eq!(
             config.stack.high(),
-            B256::from(config.register.low() - config.buffer_size_in_bytes())
+            B256::from(config.register.low() - config.buffer_size * config.word_size)
         );
         assert_eq!(
             config.register.high(),

@@ -1,5 +1,4 @@
 extern crate alloc;
-extern crate std;
 use crate::{base::Base, error::Error};
 use alloc::vec::Vec;
 use rbtree::RBTree;
@@ -587,7 +586,6 @@ mod tests {
         },
     };
     extern crate alloc;
-    extern crate std;
     use alloc::{vec, vec::Vec};
     use core::{cmp::Ordering, marker::PhantomData};
     use rbtree::RBTree;
@@ -936,7 +934,7 @@ mod tests {
         for instruction in program {
             sm.exec(&instruction);
         }
-        assert_eq!(sm.get_memory_address().0, B256::from(35840));
+        assert_eq!(sm.get_memory_address(), (B256::from(35840), B256::MAX));
         assert_eq!(write_chunk, sm.dummy_read(base + B256::from(32)));
         assert_eq!(write_chunk, sm.dummy_read(base + B256::from(32)));
     }
