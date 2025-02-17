@@ -923,7 +923,7 @@ mod tests {
 
     #[test]
     fn test_read_write_one_cell() {
-        let mut sm = StateMachine::<B256, B256, 32, 32>::new(ConfigArgs::default());
+        let mut sm = StateMachine::<B256, B256, 32, 32>::new(ConfigArgs::default_config());
         let base = sm.base_address();
         let write_chunk = B256::from(1025);
         let program = vec![
@@ -941,7 +941,7 @@ mod tests {
 
     #[test]
     fn test_read_write_two_cells() {
-        let mut sm = StateMachine::<B256, B256, 32, 32>::new(ConfigArgs::default());
+        let mut sm = StateMachine::<B256, B256, 32, 32>::new(ConfigArgs::default_config());
         let base = sm.base_address();
         let write_chunk = [5u8; 32];
         let program = vec![
@@ -979,7 +979,7 @@ mod tests {
         let chunk2 = [190u8; 32];
         let add_chunk = [195u8; 32];
 
-        let mut sm = StateMachine::<B256, B256, 32, 32>::new(ConfigArgs::default());
+        let mut sm = StateMachine::<B256, B256, 32, 32>::new(ConfigArgs::default_config());
 
         let base = sm.base_address();
         let program = vec![
@@ -1000,7 +1000,7 @@ mod tests {
 
     #[test]
     fn test_stack_machine() {
-        let mut sm = StateMachine::<B256, B256, 32, 32>::new(ConfigArgs::default());
+        let mut sm = StateMachine::<B256, B256, 32, 32>::new(ConfigArgs::default_config());
 
         assert_eq!(sm.stack_allocated.low(), B256::zero());
         let base = sm.base_address();
@@ -1040,7 +1040,7 @@ mod tests {
 
     #[test]
     fn test_stack_machine_part_two() {
-        let mut sm = StateMachine::<B256, B256, 32, 32>::new(ConfigArgs::default());
+        let mut sm = StateMachine::<B256, B256, 32, 32>::new(ConfigArgs::default_config());
 
         assert_eq!(sm.stack_allocated.low(), B256::zero());
         let base = sm.base_address();
@@ -1070,7 +1070,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_invalid_instruction() {
-        let mut sm = StateMachine::<B256, B256, 32, 32>::new(ConfigArgs::default());
+        let mut sm = StateMachine::<B256, B256, 32, 32>::new(ConfigArgs::default_config());
         let program = vec![Instruction::Invalid(PhantomData)];
 
         for instruction in program {
@@ -1080,7 +1080,7 @@ mod tests {
 
     #[test]
     fn test_register_machine() {
-        let mut sm = StateMachine::<B256, B256, 32, 32>::new(ConfigArgs::default()); // by default there are 32 registers allocated
+        let mut sm = StateMachine::<B256, B256, 32, 32>::new(ConfigArgs::default_config()); // by default there are 32 registers allocated
 
         assert_eq!(sm.register_start(), B256::from(33792));
         assert_eq!(sm.base_address(), B256::from(35840));

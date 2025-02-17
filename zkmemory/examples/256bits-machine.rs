@@ -324,7 +324,7 @@ impl_state_machine!(StateMachine);
 
 fn main() {
     // Define the desired machine configuration
-    let mut machine = StateMachine::<B256, B256, 32, 32>::new(ConfigArgs::default());
+    let mut machine = StateMachine::<B256, B256, 32, 32>::new(ConfigArgs::default_config());
 
     // Show the section map
     machine.show_sections_maps();

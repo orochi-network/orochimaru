@@ -60,7 +60,7 @@ pub struct ConfigArgs {
 
 impl ConfigArgs {
     /// Default configuration
-    pub fn default() -> Self {
+    pub fn default_config() -> Self {
         ConfigArgs {
             head_layout: true,
             stack_depth: 1024,
@@ -86,7 +86,7 @@ where
     pub fn new(word_size: T, no_buffer: usize) -> Self {
         MemoryAllocation {
             section: Vec::new(),
-            word_size: word_size,
+            word_size,
             buffer_size: T::from(no_buffer) * word_size,
         }
     }
@@ -180,7 +180,7 @@ mod tests {
     #[test]
     fn test_config_sections() {
         // Test memory section
-        let config = Config::<B256, 32>::new(B256::from(32), ConfigArgs::default());
+        let config = Config::<B256, 32>::new(B256::from(32), ConfigArgs::default_config());
         assert!(config.memory.contain(B256::MAX - B256::from(1)));
 
         assert_eq!(config.stack.low(), B256::from(0));
