@@ -3,7 +3,7 @@ use rbtree::RBTree;
 use std::{marker::PhantomData, println};
 use zkmemory::{
     base::{Base, B256},
-    config::{AllocatedSection, Config, ConfigArgs, DefaultConfig},
+    config::{Config, ConfigArgs, Section},
     constraints::helper::build_and_test_circuit,
     error::Error,
     impl_register_machine, impl_stack_machine, impl_state_machine,
@@ -54,18 +54,18 @@ where
 {
     // Memory
     memory: RBTree<K, V>,
-    memory_allocated: AllocatedSection<K>,
+    memory_allocated: Section<K>,
     word_size: K,
     time_log: u64,
 
     // Stack
-    stack_allocated: AllocatedSection<K>,
+    stack_allocated: Section<K>,
     max_stack_depth: u64,
     stack_depth: u64,
     stack_ptr: K,
 
     // Register
-    register_allocated: AllocatedSection<K>,
+    register_allocated: Section<K>,
 
     /// Register r0
     pub r0: Register<K>,
@@ -218,7 +218,7 @@ where
     V: Base<T>,
 {
     /// Create a new RAM machine
-    pub fn new(config: ConfigArgs<K>) -> Self {
+    pub fn new(config: ConfigArgs) -> Self {
         let config = Config::new(K::WORD_SIZE, config);
         Self {
             // Memory section
@@ -326,7 +326,7 @@ impl_state_machine!(StateMachine);
 
 fn main() {
     // Define the desired machine configuration
-    let mut machine = StateMachine::<B256, B256, 32, 32>::new(DefaultConfig::default_config());
+    let mut machine = StateMachine::<B256, B256, 32, 32>::new(ConfigArgs::default_config());
 
     // Show the section map
     machine.show_sections_maps();

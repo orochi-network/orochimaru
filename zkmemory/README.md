@@ -15,41 +15,60 @@ $ cargo install cargo-llvm-cov
 $ cargo llvm-cov --html --open
 ```
 
-Right now, our code coverage is `80%`:
+Right now, our code line coverage is `96.10%`:
 
 ```text
-running 17 tests
-test tests::sm256_read_empty_cell ... ok
-test tests::sm256_write_one_cell_read_two_cell ... ok
-test tests::sm256_write_read_one_cell ... ok
-test tests::sm256_write_two_cell_read_one_cell ... ok
-test tests::sm32_read_empty_cell ... ok
-test tests::sm32_read_prohibited_cell - should panic ... ok
-test tests::sm32_write_one_cell_read_two_cells ... ok
-test tests::sm32_write_read_one_cell ... ok
-test tests::sm32_write_two_cells_read_one_cells ... ok
-test tests::u256_arithmetic_test ... ok
-test tests::u256_test ... ok
-test tests::u32_register_functional ... ok
-test tests::u32_stack_functional ... ok
-test tests::u32_stack_overflow - should panic ... ok
-test tests::u32_stack_underflow - should panic ... ok
-test tests::u32_test ... ok
-test tests::u64_test ... ok
+running 86 tests
+test constraints::original_memory_circuit::tests::also_test_invalid_time_order - should panic ... ok
+test constraints::original_memory_circuit::tests::test_identical_trace - should panic ... ok
+test constraints::original_memory_circuit::tests::test_invalid_time_order - should panic ... ok
+test constraints::original_memory_circuit::tests::test_multiple_traces ... ok
+test constraints::original_memory_circuit::tests::test_one_trace ... ok
+test constraints::original_memory_circuit::tests::test_wrong_starting_time - should panic ... ok
+test constraints::permutation_circuit::tests::check_permutation_with_trace_records ... ok
+test constraints::permutation_circuit::tests::check_trace_record_mapping ... ok
+test constraints::permutation_circuit::tests::check_wrong_permutation - should panic ... ok
+test constraints::permutation_circuit::tests::test_functionality ... ok
+test constraints::permutation_circuit::tests::test_inequal_lengths - should panic ... ok
+test constraints::sorted_memory_circuit::test::equal_address_and_time_log - should panic ... ok
+test constraints::sorted_memory_circuit::test::invalid_read - should panic ... ok
+test constraints::sorted_memory_circuit::test::invalid_read2 - should panic ... ok
+test constraints::sorted_memory_circuit::test::invalid_read3 - should panic ... ok
+test constraints::sorted_memory_circuit::test::non_first_write_access_for_two_traces - should panic ... ok
+test constraints::sorted_memory_circuit::test::test_error_invalid_instruction - should panic ... ok
+...
 
-test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 85 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6738.79s
 
-Filename                      Regions    Missed Regions     Cover   Functions  Missed Functions  Executed       Lines      Missed Lines     Cover    Branches   Missed Branches     Cover
------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-base.rs                            18                 0   100.00%          18                 0   100.00%          54                 0   100.00%           0                 0         -
-config.rs                          14                 5    64.29%           9                 4    55.56%          55                22    60.00%           0                 0         -
-error.rs                           13                11    15.38%           4                 3    25.00%          13                12     7.69%           0                 0         -
-lib.rs                             87                 1    98.85%          34                 0   100.00%         172                 1    99.42%           0                 0         -
-machine.rs                         74                24    67.57%          25                 8    68.00%         144                25    82.64%           0                 0         -
-memory.rs                          18                 2    88.89%           9                 2    77.78%          91                 4    95.60%           0                 0         -
------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-TOTAL                             224                43    80.80%          99                17    82.83%         529                64    87.90%           0                 0         -
 ```
+
+| Filename | Function Coverage | Line Coverage | Region Coverage |
+| :---: | :---: | :---: | :---: |
+| poseidon/src/circuit.rs | 78.79 \%(52/66) | 82.55 \%(388/470) | 79.33 \%(165/208)|
+| poseidon/src/gadgets.rs | 80.70 \%(46/57) | 91.54 \%(292/319) | 81.10 \%(133/164)|
+| poseidon/src/poseidon hash.rs | 92.00 \%(23/25) | 87.68 \%(178/203) | 92.05 \%(81/88) |
+| zkmemory/src/base.rs | 100.00% (30/30) | 100.00% (94/94) | 100.00% (30/30) |
+| zkmemory/src/commitment/extends.rs | 100.00% (2/2) | 100.00% (17/17) | 100.00% (6/6) |
+| zkmemory/src/commitment/kzg.rs | 95.83% (23/24) | 99.45% (364/366) | 94.52% (69/73) |
+| zkmemory/src/commitment/merkle tree.rs | 84.06% (58/69) | 96.33% (473/491) | 84.83% (151/178) |
+| zkmemory/src/commitment/verkle tree.rs | 85.71% (48/56) | 96.37% (478/496) | 84.93% (124/146) |
+| zkmemory/src/config.rs | 100.00% (10/10) | 100.00% (117/117) | 100.00% (31/31) |
+| zkmemory/src/constraints/consistency check circuit.rs | 80.00% (4/5) | 96.97% (96/99) | 82.61% (19/23) |
+| zkmemory/src/constraints/gadgets.rs | 95.24% (40/42) | 99.40% (331/333) | 95.41% (104/109) |
+| zkmemory/src/constraints/helper.rs | 100.00% (13/13) | 99.70% (336/337) | 94.74% (18/19) |
+| zkmemory/src/constraints/original memory circuit. rs | 69.23% (27/39) | 95.87% (325/339) | 76.56 \%(98/128) |
+| zkmemory/src/constraints/permutation circuit.rs | 83.33% (35/42) | 97.09% (334/344) | 84.85% (112/132) |
+| zkmemory/src/constraints/sorted memory circuit.rs | 75.81% (47/62) | 97.01% (551/568) | 80.54% (149/185) |
+| zkmemory/src/error.rs | 100.00% (2/2) | 100.00% (34/34) | 100.00% (17/17) |
+| zkmemory/src/lib.rs | 100.00% (4/4) | 100.00% (119/119) | 100.00% (47/47) |
+| zkmemory/src/machine.rs | 100.00% (48/48) | 96.98% (545/562) | 90.30% (149/165) |
+| zkmemory/src/nova/memory consistency circuit.rs | 71.05% (27/38) | 94.95% (207/218) | 89.11% (90/101) |
+| zkmemory/src/nova/poseidon parameters.rs | 100.00% (4/4) | 100.00% (16/16) | 100.00% (4/4) |
+| zkmemory/src/nova/testcases.rs | 100.00% (12/12) | 100.00% (513/513) | 100.00% (37/37) |
+| zkmemory/src/supernova/memory consistency circuit.rs | 75.00% (42/56) | 95.79% (341/356) | 89.80% (132/147) |
+| zkmemory/src/supernova/poseidon_parameter.rs | 100.00% (4/4) | 100.00% (16/16) | 100.00% (4/4) |
+| zkmemory/src/supernova/testcases.rs | 100.00% (7/7) | 99.69% (318/319) | 97.62% (41/42) |
+| Totals | 84.91% (608/716) | 96.10% (6483/6746) | 86.90% (1811/2084) |
 
 ## Overview
 
@@ -61,7 +80,7 @@ These instructions need to be satisfied following conditions:
   - `READ` on a memory was not wrote should return `0`
   - Every`READ` access for the same location, must have the value to be equal to the previous `WRITE`.
 - **`WRITE` instruction**
-  - Every `WRITE` access must write on writable memory chunks _(some areas of the memory might be read only)_.
+- Every `WRITE` access must write on writable memory chunks _(some areas of the memory might be read only)_.
 
 ## Features
 
