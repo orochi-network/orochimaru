@@ -70,6 +70,7 @@ impl<const A: usize> VerkleTreeConfig<A> {
         let selector = meta.fixed_column();
         let selector_check = meta.selector();
         let indices = meta.advice_column();
+
         for i in advice {
             meta.enable_equality(i);
         }

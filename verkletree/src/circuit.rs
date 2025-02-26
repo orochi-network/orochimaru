@@ -14,7 +14,7 @@ use halo2_proofs::{
     halo2curves::bn256::{Bn256, Fr, G1Affine},
     plonk::{
         create_proof, keygen_pk, keygen_vk, verify_proof, Advice, Circuit, Column,
-        ConstraintSystem, Error, Expression, Fixed, Instance, ProvingKey, Selector,
+        ConstraintSystem, Error, Expression, Fixed, Instance, ProvingKey, Selector, VerifyingKey,
     },
     poly::{
         commitment::{Blind, ParamsProver},
@@ -34,9 +34,10 @@ use poseidon::{
     poseidon_constants::{MDS_FR, MDS_INV_FR, ROUND_CONSTANTS_FR},
     poseidon_hash::Mtrx,
 };
+use rand::thread_rng;
 use rand_core::OsRng;
-use zkmemory::commitment::kzg::create_kzg_proof;
-use zkmemory::commitment::kzg::verify_kzg_proof;
+
+use zkmemory::commitment::kzg::{create_kzg_proof, verify_kzg_proof};
 use zkmemory::constraints;
 
 pub(crate) const OMEGA_POWER: [Fr; 5] = [
@@ -46,7 +47,6 @@ pub(crate) const OMEGA_POWER: [Fr; 5] = [
     Fr::from_raw([0x0157, 0, 0, 0]),
     Fr::from_raw([0x0961, 0, 0, 0]),
 ];
-use rand::thread_rng;
 
 #[derive(Clone, Copy)]
 /// Verkle tree config
@@ -333,81 +333,10 @@ impl Spec<Fr, 3, 2> for OrchardNullifier {
     }
 }
 
-pub struct VerkleTreeProver<S: Spec<Fr, W, R>, const W: usize, const R: usize, const A: usize> {
-    params: ParamsKZG<Bn256>,
-    pk: ProvingKey<G1Affine>,
-    circuit: VerkleTreeCircuit<S, W, R, A>,
-    expected: bool,
-}
-
-impl<S: Spec<Fr, W, R>, const W: usize, const R: usize, const A: usize>
-    VerkleTreeProver<S, W, R, A>
-{
-    /// initialize the parameters for the prover
-    pub fn new(k: u32, circuit: VerkleTreeCircuit<S, W, R, A>, expected: bool) -> Self {
-        let params = ParamsKZG::<Bn256>::setup(k, OsRng);
-        let vk = keygen_vk(&params, &circuit).expect("Cannot initialize verify key");
-        let pk = keygen_pk(&params, vk.clone(), &circuit).expect("Cannot initialize proving key");
-
-        Self {
-            params,
-            pk,
-            circuit,
-            expected,
-        }
-    }
-
-    /// Create proof for the permutation circuit
-    pub fn create_proof(&mut self, leaf: Fr, root: Fr) -> Vec<u8> {
-        let mut transcript =
-            Blake2bWrite::<Vec<u8>, G1Affine, Challenge255<G1Affine>>::init(vec![]);
-        create_proof::<
-            KZGCommitmentScheme<Bn256>,
-            ProverSHPLONK<'_, Bn256>,
-            Challenge255<G1Affine>,
-            OsRng,
-            Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>,
-            VerkleTreeCircuit<S, W, R, A>,
-        >(
-            &self.params,
-            &self.pk,
-            &[self.circuit.clone()],
-            &[&[&[leaf, root]]],
-            OsRng,
-            &mut transcript,
-        )
-        .expect("Fail to create proof.");
-        transcript.finalize()
-    }
-
-    /// Verify the proof (by comparing the result with expected value)
-    pub fn verify(&mut self, proof: Vec<u8>, leaf: Fr, root: Fr) -> bool {
-        let strategy = SingleStrategy::new(&self.params);
-        let mut transcript =
-            Blake2bRead::<&[u8], G1Affine, Challenge255<G1Affine>>::init(&proof[..]);
-        let result = verify_proof::<
-            KZGCommitmentScheme<Bn256>,
-            VerifierSHPLONK<'_, Bn256>,
-            Challenge255<G1Affine>,
-            Blake2bRead<&[u8], G1Affine, Challenge255<G1Affine>>,
-            SingleStrategy<'_, Bn256>,
-        >(
-            &self.params,
-            self.pk.get_vk(),
-            strategy,
-            &[&[&[leaf, root]]],
-            &mut transcript,
-        );
-        match result {
-            Ok(()) => self.expected,
-            Err(_) => !self.expected,
-        }
-    }
-}
-
 /// A KZG struct for the purpose of testing the correctness of the Verkle tree circuit
+#[derive(Clone, Debug)]
 pub struct KZGStruct {
-    kzg_params: ParamsKZG<Bn256>,
+    pub kzg_params: ParamsKZG<Bn256>,
     domain: EvaluationDomain<Fr>,
 }
 
@@ -503,6 +432,124 @@ pub fn create_verkle_tree_proof(
         _marker: PhantomData,
     };
     (circuit, root)
+}
+
+pub struct VerkleTreeVerifier {
+    params: ParamsKZG<Bn256>,
+    pub vk: VerifyingKey<G1Affine>,
+    expected: bool,
+}
+
+impl VerkleTreeVerifier {
+    /// initialize the verfier
+    pub fn new(params: ParamsKZG<Bn256>, vk: VerifyingKey<G1Affine>, expected: bool) -> Self {
+        Self {
+            params,
+            vk,
+            expected,
+        }
+    }
+
+    /// Verify the proof (by comparing the result with expected value)
+    pub fn verify(&mut self, proof: Vec<u8>, leaf: Fr, root: Fr) -> bool {
+        let strategy = SingleStrategy::new(&self.params);
+        let mut transcript =
+            Blake2bRead::<&[u8], G1Affine, Challenge255<G1Affine>>::init(&proof[..]);
+        let result = verify_proof::<
+            KZGCommitmentScheme<Bn256>,
+            VerifierSHPLONK<'_, Bn256>,
+            Challenge255<G1Affine>,
+            Blake2bRead<&[u8], G1Affine, Challenge255<G1Affine>>,
+            SingleStrategy<'_, Bn256>,
+        >(
+            &self.params,
+            &self.vk,
+            strategy,
+            &[&[&[leaf, root]]],
+            &mut transcript,
+        );
+        match result {
+            Ok(()) => self.expected,
+            Err(_) => !self.expected,
+        }
+    }
+}
+
+pub struct VerkleTreeProver<S: Spec<Fr, W, R>, const W: usize, const R: usize, const A: usize> {
+    params: ParamsKZG<Bn256>,
+    pk: ProvingKey<G1Affine>,
+    circuit: VerkleTreeCircuit<S, W, R, A>,
+    expected: bool,
+}
+
+impl<S: Spec<Fr, W, R>, const W: usize, const R: usize, const A: usize>
+    VerkleTreeProver<S, W, R, A>
+{
+    /// initialize the prover
+    pub fn new(k: u32, circuit: VerkleTreeCircuit<S, W, R, A>, expected: bool) -> Self {
+        let params = ParamsKZG::<Bn256>::setup(k, OsRng);
+        let vk = keygen_vk(&params, &circuit).expect("Cannot initialize verify key");
+        let pk = keygen_pk(&params, vk.clone(), &circuit).expect("Cannot initialize proving key");
+
+        Self {
+            params,
+            pk,
+            circuit,
+            expected,
+        }
+    }
+
+    // params to create VerkleTreeVerifier
+    pub fn get_verifier_params(&self) -> (ParamsKZG<Bn256>, VerifyingKey<G1Affine>) {
+        (self.params.clone(), self.pk.get_vk().clone())
+    }
+
+    /// Create proof for the permutation circuit
+    pub fn create_proof(&mut self, leaf: Fr, root: Fr) -> Vec<u8> {
+        let mut transcript: Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>> =
+            Blake2bWrite::<Vec<u8>, G1Affine, Challenge255<G1Affine>>::init(vec![]);
+        create_proof::<
+            KZGCommitmentScheme<Bn256>,
+            ProverSHPLONK<'_, Bn256>,
+            Challenge255<G1Affine>,
+            OsRng,
+            Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>,
+            VerkleTreeCircuit<S, W, R, A>,
+        >(
+            &self.params,
+            &self.pk,
+            &[self.circuit.clone()],
+            &[&[&[leaf, root]]],
+            OsRng,
+            &mut transcript,
+        )
+        .expect("Fail to create proof.");
+        transcript.finalize()
+    }
+
+    /// Verify the proof (by comparing the result with expected value)
+    pub fn verify(&mut self, proof: Vec<u8>, leaf: Fr, root: Fr) -> bool {
+        let strategy = SingleStrategy::new(&self.params);
+        let mut transcript =
+            Blake2bRead::<&[u8], G1Affine, Challenge255<G1Affine>>::init(&proof[..]);
+        let result = verify_proof::<
+            KZGCommitmentScheme<Bn256>,
+            VerifierSHPLONK<'_, Bn256>,
+            Challenge255<G1Affine>,
+            Blake2bRead<&[u8], G1Affine, Challenge255<G1Affine>>,
+            SingleStrategy<'_, Bn256>,
+        >(
+            &self.params,
+            self.pk.get_vk(),
+            strategy,
+            &[&[&[leaf, root]]],
+            &mut transcript,
+        );
+        match result {
+            Ok(()) => self.expected,
+            Err(_) => !self.expected,
+        }
+    }
 }
 
 #[cfg(test)]
