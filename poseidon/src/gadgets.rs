@@ -8,8 +8,8 @@ use halo2_proofs::circuit::{AssignedCell, Region, Value};
 use halo2_proofs::plonk::Selector;
 use halo2_proofs::{circuit::Layouter, plonk::Error};
 
-use super::circuit::PoseidonConfig;
 use super::poseidon_hash::{Absorbing, ConstantLength, Domain, Spec, SpongeMode, Squeezing, State};
+use super::chip::PoseidonChip;
 
 #[derive(Clone, Debug)]
 /// A word from the padded input to a Poseidon sponge.
@@ -33,10 +33,10 @@ impl<F: PrimeField, S: Spec<F, T, R>, D: Domain<F, R>, const T: usize, const R: 
 {
     /// Initializes a new hasher.
     pub fn init(
-        config: PoseidonConfig<F, T, R>,
+        chip: PoseidonChip<F, T, R>,
         layouter: impl Layouter<F>,
     ) -> Result<Self, Error> {
-        Sponge::new(config, layouter).map(|sponge| Hash { sponge })
+        Sponge::new(chip, layouter).map(|sponge| Hash { sponge })
     }
 }
 
@@ -74,7 +74,7 @@ pub struct Sponge<
     const T: usize,
     const R: usize,
 > {
-    config: PoseidonConfig<F, T, R>,
+    chip: PoseidonChip<F, T, R>,
     mode: M,
     state: State<StateWord<F>, T>,
     _marker: PhantomData<D>,
@@ -86,13 +86,12 @@ impl<F: PrimeField, S: Spec<F, T, R>, D: Domain<F, R>, const T: usize, const R: 
 {
     /// Constructs a new duplex sponge for the given Poseidon specification.
     pub fn new(
-        config: PoseidonConfig<F, T, R>,
+        chip: PoseidonChip<F, T, R>,
         mut layouter: impl Layouter<F>,
     ) -> Result<Self, Error> {
-        config
-            .initial_state::<D>(&mut layouter)
+        chip.initial_state::<D>(&mut layouter)
             .map(|state| Sponge {
-                config,
+                chip,
                 mode: Absorbing(
                     (0..R)
                         .map(|_| None)
@@ -121,7 +120,7 @@ impl<F: PrimeField, S: Spec<F, T, R>, D: Domain<F, R>, const T: usize, const R: 
 
         // We've already absorbed as many elements as we can
         let _ = poseidon_sponge::<F, D, T, R>(
-            &self.config,
+            &self.chip,
             layouter.namespace(|| "PoseidonSponge"),
             &mut self.state,
             Some(&self.mode),
@@ -136,14 +135,14 @@ impl<F: PrimeField, S: Spec<F, T, R>, D: Domain<F, R>, const T: usize, const R: 
         mut layouter: impl Layouter<F>,
     ) -> Result<Sponge<F, S, Sqz<F, R>, D, T, R>, Error> {
         let mode = poseidon_sponge::<F, D, T, R>(
-            &self.config,
+            &self.chip,
             layouter.namespace(|| "PoseidonSponge"),
             &mut self.state,
             Some(&self.mode),
         )?;
 
         Ok(Sponge {
-            config: self.config,
+            chip: self.chip,
             mode,
             state: self.state,
             _marker: PhantomData,
@@ -164,7 +163,7 @@ impl<F: PrimeField, S: Spec<F, T, R>, D: Domain<F, R>, const T: usize, const R: 
             }
             // We've already squeezed out all available elements
             self.mode = poseidon_sponge::<F, D, T, R>(
-                &self.config,
+                &self.chip,
                 layouter.namespace(|| "PoseidonSponge"),
                 &mut self.state,
                 None,
@@ -174,16 +173,16 @@ impl<F: PrimeField, S: Spec<F, T, R>, D: Domain<F, R>, const T: usize, const R: 
 }
 
 fn poseidon_sponge<F: PrimeField, D: Domain<F, R>, const T: usize, const R: usize>(
-    config: &PoseidonConfig<F, T, R>,
+    chip: &PoseidonChip<F, T, R>,
     mut layouter: impl Layouter<F>,
     state: &mut State<StateWord<F>, T>,
     input: Option<&Absorbing<PaddedWord<F>, R>>,
 ) -> Result<Squeezing<StateWord<F>, R>, Error> {
     if let Some(input) = input {
-        *state = config.add_input(&mut layouter, state, input)?;
+        *state = chip.add_input(&mut layouter, state, input)?;
     }
-    *state = config.permute::<D>(&mut layouter, state)?;
-    Ok(PoseidonConfig::<F, T, R>::get_output(state))
+    *state = chip.permute::<D>(&mut layouter, state)?;
+    Ok(PoseidonChip::<F, T, R>::get_output(state))
 }
 
 #[derive(Clone, Debug)]
@@ -203,13 +202,13 @@ impl<F: PrimeField, const T: usize> PoseidonState<F, T> {
     /// Load the initial state into the circuit.
     pub fn load<D: Domain<F, R>, const R: usize>(
         region: &mut Region<'_, F>,
-        config: &PoseidonConfig<F, T, R>,
+        chip: &PoseidonChip<F, T, R>,
         initial_state: &State<StateWord<F>, T>,
     ) -> Result<Self, Error> {
         let load_state_word = |i: usize| {
             initial_state[i]
                 .0
-                .copy_advice(|| format!("load state_{}", i), region, config.state[i], 0)
+                .copy_advice(|| format!("load state_{}", i), region, chip.config.state[i], 0)
                 .map(StateWord)
         };
 
@@ -219,7 +218,7 @@ impl<F: PrimeField, const T: usize> PoseidonState<F, T> {
 
     fn round<const R: usize>(
         region: &mut Region<'_, F>,
-        config: &PoseidonConfig<F, T, R>,
+        chip: &PoseidonChip<F, T, R>,
         round: usize,
         offset: usize,
         round_gate: Selector,
@@ -232,9 +231,9 @@ impl<F: PrimeField, const T: usize> PoseidonState<F, T> {
         let mut load_round_constant = |i: usize| {
             region.assign_fixed(
                 || format!("round_{} rc_{}", round, i),
-                config.rc_a[i],
+                chip.config.rc_a[i],
                 offset,
-                || Value::known(config.round_constants[round][i]),
+                || Value::known(chip.config.round_constants[round][i]),
             )
         };
         for i in 0..T {
@@ -248,7 +247,7 @@ impl<F: PrimeField, const T: usize> PoseidonState<F, T> {
             let value = next_state[i];
             let var = region.assign_advice(
                 || format!("round_{} state_{}", next_round, i),
-                config.state[i],
+                chip.config.state[i],
                 offset + 1,
                 || value,
             )?;
@@ -265,18 +264,18 @@ impl<F: PrimeField, const T: usize> PoseidonState<F, T> {
     pub fn full_round<D: Domain<F, R>, const R: usize>(
         self,
         region: &mut Region<'_, F>,
-        config: &PoseidonConfig<F, T, R>,
+        chip: &PoseidonChip<F, T, R>,
         round: usize,
         offset: usize,
     ) -> Result<Self, Error> {
-        Self::round::<R>(region, config, round, offset, config.sel_full_round, |_| {
+        Self::round::<R>(region, chip, round, offset, chip.config.sel_full_round, |_| {
             let q = self.0.iter().enumerate().map(|(idx, word)| {
                 word.0
                     .value()
-                    .map(|v| *v + config.round_constants[round][idx])
+                    .map(|v| *v + chip.config.round_constants[round][idx])
             });
-            let r: Value<Vec<F>> = q.map(|q| q.map(|q| q.pow(config.alpha))).collect();
-            let m = &config.m_reg;
+            let r: Value<Vec<F>> = q.map(|q| q.map(|q| q.pow(chip.config.alpha))).collect();
+            let m = &chip.config.m_reg;
             let state = m.iter().map(|m_i| {
                 r.as_ref().map(|r| {
                     r.iter()
@@ -295,31 +294,31 @@ impl<F: PrimeField, const T: usize> PoseidonState<F, T> {
     pub fn partial_round<D: Domain<F, R>, const R: usize>(
         self,
         region: &mut Region<'_, F>,
-        config: &PoseidonConfig<F, T, R>,
+        chip: &PoseidonChip<F, T, R>,
         round: usize,
         offset: usize,
     ) -> Result<Self, Error> {
         Self::round::<R>(
             region,
-            config,
+            chip,
             round,
             offset,
-            config.sel_partial_round,
+            chip.config.sel_partial_round,
             |region| {
-                let m = &config.m_reg;
+                let m = &chip.config.m_reg;
                 let p: Value<Vec<F>> = self.0.iter().map(|word| word.0.value().cloned()).collect();
                 let r: Value<Vec<F>> = p.map(|p| {
-                    let r_0 = (p[0] + config.round_constants[round][0]).pow(config.alpha);
+                    let r_0 = (p[0] + chip.config.round_constants[round][0]).pow(chip.config.alpha);
                     let r_i = p[1..]
                         .iter()
                         .enumerate()
-                        .map(|(i, p_i)| *p_i + config.round_constants[round][i + 1]);
+                        .map(|(i, p_i)| *p_i + chip.config.round_constants[round][i + 1]);
                     core::iter::empty().chain(Some(r_0)).chain(r_i).collect()
                 });
 
                 region.assign_advice(
                     || format!("round_{} partial_sbox", round),
-                    config.partial_sbox,
+                    chip.config.partial_sbox,
                     offset,
                     || r.as_ref().map(|r| r[0]),
                 )?;
@@ -339,20 +338,20 @@ impl<F: PrimeField, const T: usize> PoseidonState<F, T> {
                 let mut load_round_constant = |i: usize| {
                     region.assign_fixed(
                         || format!("round_{} rc_{}", round + 1, i),
-                        config.rc_b[i],
+                        chip.config.rc_b[i],
                         offset,
-                        || Value::known(config.round_constants[round + 1][i]),
+                        || Value::known(chip.config.round_constants[round + 1][i]),
                     )
                 };
                 for i in 0..T {
                     load_round_constant(i)?;
                 }
                 let r_mid: Value<Vec<F>> = p_mid.map(|p| {
-                    let r_0 = (p[0] + config.round_constants[round + 1][0]).pow(config.alpha);
+                    let r_0 = (p[0] + chip.config.round_constants[round + 1][0]).pow(chip.config.alpha);
                     let r_i = p[1..]
                         .iter()
                         .enumerate()
-                        .map(|(i, p_i)| *p_i + config.round_constants[round + 1][i + 1]);
+                        .map(|(i, p_i)| *p_i + chip.config.round_constants[round + 1][i + 1]);
                     core::iter::empty().chain(Some(r_0)).chain(r_i).collect()
                 });
 
