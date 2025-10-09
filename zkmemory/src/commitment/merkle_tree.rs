@@ -1,16 +1,17 @@
 //! Circuit for proving the correctness of the Merkle tree commitment.
 
 extern crate alloc;
-use crate::commitment::commitment_scheme::CommitmentScheme;
+use alloc::format;
 use alloc::{vec, vec::Vec};
+use halo2_proofs::plonk::Instance;
 use core::marker::PhantomData;
 use ff::{Field, PrimeField};
 use halo2_proofs::{
-    circuit::{Layouter, Region, SimpleFloorPlanner, Value},
+    circuit::{Layouter, SimpleFloorPlanner, Value},
     halo2curves::pasta::{EqAffine, Fp},
     plonk::{
         create_proof, keygen_pk, keygen_vk, verify_proof, Advice, Circuit, Column,
-        ConstraintSystem, Error, Expression, Fixed, Instance, ProvingKey, Selector,
+        ConstraintSystem, Error, Expression, Fixed, ProvingKey, Selector,
     },
     poly::{
         commitment::ParamsProver,
@@ -25,79 +26,143 @@ use halo2_proofs::{
         Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
     },
 };
-use poseidon::poseidon_hash::{ConstantLength, Hash, OrchardNullifier, Spec};
+use poseidon::chip::{PoseidonChip, PoseidonConfig};
+use poseidon::gadgets::Hash;
+use poseidon::poseidon_hash::{
+    ConstantLength, Domain, Hash as PoseidonHash, OrchardNullifier, Spec,
+};
+
 use rand_core::OsRng;
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 /// Merkle tree config
-pub struct MerkleTreeConfig<F: Field + PrimeField> {
-    /// advice has 3 columns, the first column is the left input of the hash,
-    /// the right column is the right input of the hash, and the last column
-    /// is the output of the hash
-    advice: [Column<Advice>; 3],
+pub struct MerkleTreeConfig<
+    S: Spec<F, T, R> + Clone,
+    F: Field + PrimeField,
+    const T: usize,
+    const R: usize,
+> {
+    /// the left input of the hash
+    left_input: Column<Advice>,
+    /// the right input of the hash
+    right_input: Column<Advice>,
+    /// output of the hash
+    output: Column<Advice>,
+    /// indices indicating whether the current node is a left or right child
     indices: Column<Advice>,
-    /// the instance of the config, consisting of the leaf we would like to
-    /// open, and the merkle root.
+    /// the instance of the config, consisting of the leaf and the merkle root.
     pub instance: Column<Instance>,
-    /// the selectors
-    selector: Column<Fixed>,
-    selector_zero: Selector,
+    /// Selector for enabling the check `indices[i] = 0/1` (it will always enable)
+    indices_selector: Selector,
+    /// Selector for enabling the check that output of previous level is the
+    /// left or right input of the current level (it will not enable at the first row)
+    linking_selector: Selector,
+    /// Selector for enabling the check that the leaf is equal to the first left or right input
+    leaf_selector: Selector,
+    /// the poseidon config
+    pub poseidon_config: PoseidonConfig<F, T, R>,   
+
     _marker0: PhantomData<F>,
+    _marker1: PhantomData<S>,
 }
 
-impl<F: Field + PrimeField> MerkleTreeConfig<F> {
+impl<S: Spec<F, T, R> + Clone, F: Field + PrimeField, const T: usize, const R: usize>
+    MerkleTreeConfig<S, F, T, R>
+{
     fn configure(meta: &mut ConstraintSystem<F>, instance: Column<Instance>) -> Self {
-        let advice = [0; 3].map(|_| meta.advice_column());
+        let left_input = meta.advice_column();
+        let right_input = meta.advice_column();
+        let output = meta.advice_column();
         let indices = meta.advice_column();
-        let selector = meta.fixed_column();
-        let selector_zero = meta.selector();
-        for i in advice {
-            meta.enable_equality(i);
-        }
+        let indices_selector = meta.selector();
+        let linking_selector = meta.selector();
+        let leaf_selector = meta.selector();
+
+        meta.enable_equality(left_input);
+        meta.enable_equality(right_input);
+        meta.enable_equality(output);
 
         let one = Expression::Constant(F::ONE);
 
-        // for i=0 indices[i] is equal to zero or one
-        // we handle i=0 seperately with selector_zero, since we are using
-        // a common selector for the other gates.
-        meta.create_gate("indices must be 0 or 1", |meta| {
-            let selector_zero = meta.query_selector(selector_zero);
-            let indices = meta.query_advice(indices, Rotation::cur());
-            vec![selector_zero * indices.clone() * (one.clone() - indices)]
-        });
-
-        // for all i>=1 indices[i] is equal to zero or one
+        // for all i, indices[i] is equal to zero or one
         meta.create_gate("indices must be 0 or 1", |meta| {
             let indices = meta.query_advice(indices, Rotation::cur());
-            let selector = meta.query_fixed(selector, Rotation::cur());
+            // selector is always enabled
+            let selector = meta.query_selector(indices_selector);
+            // indices * (1 - indices) = 0
             vec![selector * indices.clone() * (one.clone() - indices)]
         });
 
-        // if indices[i]=0 then advice_cur[i][0]=advice_cur[i-1][2]
-        // otherwise advice_cur[i][1]=advice_cur[i-1][2]
-        meta.create_gate(
-            "output of the current layer is equal to the left or right input of the next layer",
-            |meta| {
-                let advice_cur = advice.map(|x| meta.query_advice(x, Rotation::cur()));
-                let advice_prev = advice.map(|x| meta.query_advice(x, Rotation::prev()));
-                let indices = meta.query_advice(indices, Rotation::cur());
-                let selector = meta.query_fixed(selector, Rotation::cur());
-                vec![
-                    selector
-                        * ((one - indices.clone())
-                            * (advice_cur[0].clone() - advice_prev[2].clone())
-                            + indices * (advice_cur[1].clone() - advice_prev[2].clone())),
-                ]
-            },
+        // for all i = 1..len-1, if indices[i] = 0, then left_input[i] = output[i-1]
+        // else right_input[i] = output[i-1]
+        meta.create_gate("linking between levels", |meta| {
+            let left_input = meta.query_advice(left_input, Rotation::cur());
+            let right_input = meta.query_advice(right_input, Rotation::cur());
+            let output_prev = meta.query_advice(output, Rotation::prev());
+            let indices = meta.query_advice(indices, Rotation::cur());
+            let selector = meta.query_selector(linking_selector);
+            // (1 - indices) * (left_input - output_prev) + indices * (right_input - output_prev) = 0
+            vec![
+                selector
+                    * ((one.clone() - indices.clone()) * (left_input - output_prev.clone())
+                        + indices * (right_input - output_prev)),
+            ]
+        });
+
+        // the leaf is assigned to the first left or right input
+        // we enforce the first instance (which contain the leaf) to be equal to the first left or right input
+        // i.e. if indices[0] = 0, then left_input[0] = instance[0]
+        // else right_input[0] = instance[0]
+        // the `leaf_selector` = 1 only at the first row
+        // (we cannot reuse `linking_selector` here although `leaf_selector` = !`linking_selector`
+        // because halo2 does not allow (`1 - selector`), `selector` is must not be subtracted)
+        meta.create_gate("linking leaf to instance", |meta| {
+            let left_input = meta.query_advice(left_input, Rotation::cur());
+            let right_input = meta.query_advice(right_input, Rotation::cur());
+            let instance = meta.query_instance(instance, Rotation::cur());
+            let indices = meta.query_advice(indices, Rotation::cur());
+            let selector = meta.query_selector(leaf_selector);
+            // selector * [(1 - indices) * (left_input - instance) + indices * (right_input - instance)] = 0
+            vec![
+                selector
+                    * ((one.clone() - indices.clone()) * (left_input - instance.clone())
+                        + indices * (right_input - instance)),
+            ]
+        });
+
+        // configure the poseidon chip
+        let state = (0..T)
+            .map(|_| meta.advice_column())
+            .collect::<Vec<Column<Advice>>>();
+        let partial_sbox = meta.advice_column();
+        let rc_a = (0..T)
+            .map(|_| meta.fixed_column())
+            .collect::<Vec<Column<Fixed>>>();
+        let rc_b = (0..T)
+            .map(|_| meta.fixed_column())
+            .collect::<Vec<Column<Fixed>>>();
+        meta.enable_constant(rc_b[0]);
+
+        let poseidon_chip = PoseidonChip::configure::<S>(
+            meta,
+            state.clone().try_into().expect("could not load state"),
+            partial_sbox,
+            rc_a.clone().try_into().expect("could not load rc_a"),
+            rc_b.clone().try_into().expect("could not load rc_b"),
         );
 
         MerkleTreeConfig {
-            advice,
-            indices,
+            left_input,
+            right_input,
+            output,
             instance,
-            selector,
-            selector_zero,
+            indices,
+            indices_selector,
+            linking_selector,
+            leaf_selector,
+            poseidon_config: poseidon_chip.config,
             _marker0: PhantomData,
+            _marker1: PhantomData,
         }
     }
 }
@@ -105,155 +170,159 @@ impl<F: Field + PrimeField> MerkleTreeConfig<F> {
 #[derive(Default, Debug, Clone)]
 /// Merkle tree circuit
 pub struct MerkleTreeCircuit<
-    S: Spec<F, W, R> + Clone,
+    S: Spec<F, T, R> + Clone,
     F: Field + PrimeField,
-    const W: usize,
+    D: Domain<F, R> + Clone,
+    const T: usize,
     const R: usize,
 > {
-    /// the leaf node we would like to open
-    pub(crate) leaf: F,
-    /// the values of the sibling nodes in the path
-    pub(crate) elements: Vec<F>,
-    /// the index of the path from the leaf to the merkle root
+    /// the values of the left nodes in the path
+    pub(crate) lefts: Vec<F>,
+    /// the values of the right nodes in the path
+    pub(crate) rights: Vec<F>,
+    /// the outputs of hash(left,right)
+    pub(crate) outputs: Vec<F>,
+    /// the indices of the path, 0 for left, 1 for right
     pub(crate) indices: Vec<F>,
-    _marker: PhantomData<S>,
+
+    pub(crate) _marker0: PhantomData<S>,
+    pub(crate) _marker1: PhantomData<D>,
 }
-impl<S: Spec<F, W, R> + Clone, F: Field + PrimeField, const W: usize, const R: usize> Circuit<F>
-    for MerkleTreeCircuit<S, F, W, R>
+
+impl<
+        S: Spec<F, T, R> + Clone,
+        F: Field + PrimeField,
+        D: Domain<F, R> + Clone,
+        const T: usize,
+        const R: usize,
+    > Circuit<F> for MerkleTreeCircuit<S, F, D, T, R>
 {
-    type Config = MerkleTreeConfig<F>;
+    type Config = MerkleTreeConfig<S, F, T, R>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
         Self {
-            leaf: F::ZERO,
-            elements: vec![F::ZERO],
-            indices: vec![F::ZERO],
-            _marker: PhantomData,
+            lefts: vec![F::ZERO; self.lefts.len()],
+            rights: vec![F::ZERO; self.rights.len()],
+            outputs: vec![F::ZERO; self.outputs.len()],
+            indices: vec![F::ZERO; self.indices.len()],
+            _marker0: PhantomData,
+            _marker1: PhantomData,
         }
     }
 
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
+        // instance column will contain the leaf and the merkle root
+        // leaf = instance[0]
+        // merkle_root = instance[1]
         let instance = meta.instance_column();
         meta.enable_equality(instance);
-        MerkleTreeConfig::<F>::configure(meta, instance)
+
+        MerkleTreeConfig::<S, F, T, R>::configure(meta, instance)
     }
 
     fn synthesize(
         &self,
-        config: Self::Config,
+        config: MerkleTreeConfig<S, F, T, R>,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        assert_eq!(self.indices.len(), self.elements.len());
-        let mut v = vec![self.leaf];
+        // pre-check to ensure the lengths are consistent
+        assert_eq!(self.indices.len(), self.lefts.len());
+        assert_eq!(self.indices.len(), self.rights.len());
+        assert_eq!(self.indices.len(), self.outputs.len());
 
-        layouter.assign_region(
-            || "Merkle proof",
-            |mut region| {
-                for i in 0..self.indices.len() {
-                    let digest = self.assign(v[i], &mut region, config, i);
-                    v.push(digest.expect("cannot get digest"));
-                }
-                Ok(())
-            },
-        )?;
+        // create the poseidon chip, we will use it to create the sub-circuits of the Poseidon hash
+        let chip: PoseidonChip<F, T, R> = PoseidonChip::new(config.poseidon_config.clone());
 
-        let leaf_cell = layouter.assign_region(
-            || "assign leaf",
-            |mut region| {
-                region.assign_advice(
-                    || "assign leaf",
-                    config.advice[0],
-                    0,
-                    || Value::known(self.leaf),
-                )
-            },
-        )?;
+        // assign the lefts, rights, outputs values to the corresponding columns
+        let (left_cells, right_cells, out_cells) = layouter.assign_region(
+                || "Merkle Proof",
+                |mut region| {
+                    // enable the leaf selector at the first row
+                    config.leaf_selector.enable(&mut region, 0)?;
 
-        let digest = layouter.assign_region(
-            || "assign root",
-            |mut region| {
-                region.assign_advice(
-                    || "assign root",
-                    config.advice[0],
-                    0,
-                    || Value::known(v[self.indices.len()]),
-                )
-            },
-        )?;
+                    let mut left_cells = vec![];
+                    let mut right_cells = vec![];
+                    let mut output_cells = vec![];
+                    for i in 0..self.indices.len() {
+                        // enable the indices selector at every row
+                        config.indices_selector.enable(&mut region, i)?;
+                        if i != 0 {
+                            // enable the linking selector at every row except the first row
+                            config.linking_selector.enable(&mut region, i)?;
+                        }
 
-        layouter.constrain_instance(leaf_cell.cell(), config.instance, 0)?;
-        layouter.constrain_instance(digest.cell(), config.instance, 1)?;
+                        // assign the left input of the hash at row i
+                        let left = region.assign_advice(
+                            || format!("left input {}", i),
+                            config.left_input,
+                            i,
+                            || Value::known(self.lefts[i]),
+                        )?;
+                        left_cells.push(left);
+
+                        // assign the right input of the hash at row i
+                        let right = region.assign_advice(
+                            || format!("right input {}", i),
+                            config.right_input,
+                            i,
+                            || Value::known(self.rights[i]),
+                        )?;
+                        right_cells.push(right);
+
+                        // assign the output of the hash at row i
+                        let out = region.assign_advice(
+                            || format!("output {}", i),
+                            config.output,
+                            i,
+                            || Value::known(self.outputs[i]),
+                        )?;
+                        output_cells.push(out);
+
+                        // assign the index (0 or 1) at row i
+                        region.assign_advice(
+                            || format!("indices {}", i),
+                            config.indices,
+                            i,
+                            || Value::known(self.indices[i]),
+                        )?;
+                    }
+
+                    // collect the cells we have assigned and return them
+                    Ok((left_cells, right_cells, output_cells))
+                },
+            )?;
+
+        // for each level in the path, we create a Poseidon hash sub-circuit
+        // and then constrain that the output of the hash is equal to the output cell at that level
+        for i in 0..self.indices.len() {
+            // the input to the hash is [left_cells[i], right_cells[i]]
+            let message = [left_cells[i].clone(), right_cells[i].clone()];
+            
+            // initialize the hasher
+            let hasher = Hash::<F, S, ConstantLength<2>, T, R>::init(
+                chip.clone(),
+                layouter.namespace(|| "init"),
+            )?;
+            // compute the hash
+            let output = hasher.hash(layouter.namespace(|| "hash"), message)?;
+
+            // create a dummy region to constraint that output = out_cells[i]
+            layouter.assign_region(
+                || "constrain output",
+                |mut region| {
+                    region.constrain_equal(output.cell(), out_cells[i].cell())
+                },
+            )?;
+
+            // at the last level, we also constrain that the output is equal to the merkle root
+            // which is stored in the second instance column
+            if i == self.indices.len() - 1 {
+                layouter.constrain_instance(output.cell(), config.instance, 1)?;
+            }
+        }
+
         Ok(())
-    }
-}
-
-impl<S: Spec<F, W, R> + Clone, F: Field + PrimeField, const W: usize, const R: usize>
-    MerkleTreeCircuit<S, F, W, R>
-{
-    // Assign the elements in the path into the witness table
-    fn assign(
-        &self,
-        digest: F,
-        region: &mut Region<'_, F>,
-        config: MerkleTreeConfig<F>,
-        offset: usize,
-    ) -> Result<F, Error> {
-        if offset != 0 {
-            region.assign_fixed(
-                || "selector",
-                config.selector,
-                offset,
-                || Value::known(F::ONE),
-            )?;
-            config.selector_zero.enable(region, offset)?;
-        }
-        let hash: F;
-        region.assign_advice(
-            || "indices",
-            config.indices,
-            offset,
-            || Value::known(self.indices[offset]),
-        )?;
-
-        // assign the left input of the hash
-        if self.indices[offset] == F::ZERO {
-            region.assign_advice(
-                || "left input",
-                config.advice[0],
-                offset,
-                || Value::known(digest),
-            )?;
-            // assign the right input of the hash
-            region.assign_advice(
-                || "right input",
-                config.advice[1],
-                offset,
-                || Value::known(self.elements[offset]),
-            )?;
-            // assign the output of the hash
-            hash =
-                Hash::<F, S, ConstantLength<2>, W, R>::init().hash([digest, self.elements[offset]]);
-
-            region.assign_advice(|| "output", config.advice[2], offset, || Value::known(hash))?;
-        } else {
-            region.assign_advice(
-                || "left input",
-                config.advice[0],
-                offset,
-                || Value::known(self.elements[offset]),
-            )?;
-            region.assign_advice(
-                || "right input",
-                config.advice[1],
-                offset,
-                || Value::known(digest),
-            )?;
-            hash =
-                Hash::<F, S, ConstantLength<2>, W, R>::init().hash([self.elements[offset], digest]);
-            region.assign_advice(|| "output", config.advice[2], offset, || Value::known(hash))?;
-        }
-        Ok(hash)
     }
 }
 
@@ -278,57 +347,94 @@ impl MerkleWitness {
         }
     }
 
-    /// Convert to circuit-compatible format
-    pub fn to_circuit_format<F: PrimeField>(&self) -> (F, Vec<F>, Vec<F>) {
+    /// Convert to circuit-compatible format (using pasta Fp so OrchardNullifier fits the Spec impl)
+    pub fn to_circuit_format(&self) -> (Vec<Fp>, Vec<Fp>, Vec<Fp>, Vec<Fp>) {
+        assert_eq!(self.elements.len(), self.indices.len());
+        let leaf = Fp::from(self.leaf);
+        let mut lefts = vec![];
+        let mut rights = vec![];
+        let mut outputs = vec![];
+
+        let mut current = leaf;
+        for (i, &element) in self.elements.iter().enumerate() {
+            let element_fp = Fp::from(element);
+            if self.indices[i] == 0 {
+                lefts.push(current);
+                rights.push(element_fp);
+            } else {
+                lefts.push(element_fp);
+                rights.push(current);
+            }
+            let output = PoseidonHash::<Fp, OrchardNullifier, ConstantLength<2>, 3, 2>::init().hash([lefts[i], rights[i]]);
+            outputs.push(output);
+            current = output;
+        }
         (
-            F::from(self.leaf),
-            self.elements.iter().map(|&x| F::from(x)).collect(),
-            self.indices.iter().map(|&x| F::from(x)).collect(),
+            lefts,
+            rights,
+            outputs,
+            self.indices.iter().map(|&x| Fp::from(x)).collect(),
         )
     }
 }
 
-/// Prover for the Merkle tree
-pub struct MerkleTreeProver {
+/// Prover for the Merkle tree,
+/// Specified the field is Fp
+pub struct MerkleTreeProver<S, D, const T: usize, const R: usize>
+where
+    S: Spec<Fp, T, R> + Clone,
+    D: Domain<Fp, R> + Clone,
+{
     params: ParamsIPA<EqAffine>,
     pk: ProvingKey<EqAffine>,
-    witness: MerkleWitness,
-    circuit: MerkleTreeCircuit<OrchardNullifier, Fp, 3, 2>,
+    _marker0: PhantomData<S>,
+    _marker1: PhantomData<D>,
 }
 
-impl MerkleTreeProver {
+impl<S, D, const T: usize, const R: usize> MerkleTreeProver<S, D, T, R>
+where
+    S: Spec<Fp, T, R> + Clone,
+    D: Domain<Fp, R> + Clone,
+{
     /// Initialize the parameters for the prover
-    pub fn new(k: u32, witness: MerkleWitness) -> Self {
-        let params = ParamsIPA::<EqAffine>::new(k);
-        let (leaf, elements, indices) = witness.to_circuit_format::<Fp>();
-        let circuit = MerkleTreeCircuit::<OrchardNullifier, Fp, 3, 2> {
-            leaf,
-            elements,
-            indices,
-            _marker: PhantomData,
+    /// `k` is the log_2 of the size of the circuit
+    /// `elements_len` is the length of the Merkle path
+    pub fn new(k: u32, elements_len: usize) -> Self {
+        // create a dummy circuit with zero values
+        let dummy_circuit = MerkleTreeCircuit::<S, Fp, D, T, R> {
+            lefts: vec![Fp::ZERO; elements_len],
+            rights: vec![Fp::ZERO; elements_len],
+            outputs: vec![Fp::ZERO; elements_len],
+            indices: vec![Fp::ZERO; elements_len],
+            _marker0: PhantomData,
+            _marker1: PhantomData,
         };
-        let vk = keygen_vk(&params, &circuit).expect("Cannot initialize verify key");
-        let pk = keygen_pk(&params, vk, &circuit).expect("Cannot initialize proving key");
+        let params = ParamsIPA::<EqAffine>::new(k);
+        let vk = keygen_vk(&params, &dummy_circuit).expect("Cannot initialize verify key");
+        let pk = keygen_pk(&params, vk, &dummy_circuit).expect("Cannot initialize proving key");
         Self {
             params,
             pk,
-            witness,
-            circuit,
+            _marker0: PhantomData,
+            _marker1: PhantomData,
         }
     }
 
-    /// Create proof for the Merkle tree circuit
-    pub fn create_proof(&self) -> Vec<u8> {
+    /// Create proof for the Merkle tree circuit given the real circuit
+    pub fn create_proof(&self, real_circuit: MerkleTreeCircuit<S, Fp, D, T, R>) -> (Vec<u8>, Vec<Fp>) {
         let mut transcript =
             Blake2bWrite::<Vec<u8>, EqAffine, Challenge255<EqAffine>>::init(vec![]);
 
+        let leaf;
+        if real_circuit.indices[0] == Fp::ZERO {
+            leaf = real_circuit.lefts[0];
+        } else {
+            leaf = real_circuit.rights[0];
+        }
+
         let public_inputs = [
-            self.circuit.leaf,
-            merkle_tree_commit_fp(
-                &self.witness.leaf,
-                &self.witness.elements,
-                &self.witness.indices,
-            ),
+            leaf,
+            real_circuit.outputs[real_circuit.outputs.len() - 1],
         ];
 
         create_proof::<
@@ -337,18 +443,18 @@ impl MerkleTreeProver {
             Challenge255<EqAffine>,
             OsRng,
             Blake2bWrite<Vec<u8>, EqAffine, Challenge255<EqAffine>>,
-            MerkleTreeCircuit<OrchardNullifier, Fp, 3, 2>,
+            MerkleTreeCircuit<S, Fp, D, T, R>,
         >(
             &self.params,
             &self.pk,
-            &[self.circuit.clone()],
+            &[real_circuit.clone()],
             &[&[&public_inputs[..]]],
             OsRng,
             &mut transcript,
         )
         .expect("Failed to create proof");
 
-        transcript.finalize()
+        (transcript.finalize(), public_inputs.to_vec())
     }
 
     /// Verify the proof
@@ -385,53 +491,17 @@ pub fn merkle_tree_commit_fp(leaf: &u64, elements: &[u64], indices: &[u64]) -> F
         } else {
             message = [Fp::from(elements[i]), digest];
         }
-        digest = Hash::<Fp, OrchardNullifier, ConstantLength<2>, 3, 2>::init().hash(message);
+        digest =
+            PoseidonHash::<Fp, OrchardNullifier, ConstantLength<2>, 3, 2>::init().hash(message);
     }
     digest
-}
-
-impl<S: Spec<Fp, W, R> + Clone, const W: usize, const R: usize> CommitmentScheme<Fp>
-    for MerkleTreeCircuit<S, Fp, W, R>
-{
-    type Commitment = Fp;
-    type Opening = Vec<u64>;
-    type Witness = MerkleWitness;
-    type PublicParams = ();
-
-    fn setup(_k: Option<u32>) -> Self {
-        Self {
-            leaf: Fp::ZERO,
-            elements: vec![Fp::ZERO],
-            indices: vec![Fp::ZERO],
-            _marker: PhantomData,
-        }
-    }
-
-    fn commit(&self, witness: Self::Witness) -> Self::Commitment {
-        merkle_tree_commit_fp(&witness.leaf, &witness.elements, &witness.indices)
-    }
-
-    fn open(&self, witness: Self::Witness) -> Self::Opening {
-        witness.elements
-    }
-
-    fn verify(
-        &self,
-        commitment: Self::Commitment,
-        opening: Self::Opening,
-        witness: Self::Witness,
-    ) -> bool {
-        opening == witness.elements
-            && commitment == merkle_tree_commit_fp(&witness.leaf, &opening, &witness.indices)
-    }
 }
 
 #[cfg(test)]
 mod tests {
     extern crate alloc;
     use super::MerkleTreeCircuit;
-    use crate::commitment::commitment_scheme::CommitmentScheme;
-    use crate::commitment::merkle_tree::{merkle_tree_commit_fp, MerkleTreeProver, MerkleWitness};
+    use crate::commitment::merkle_tree::{MerkleTreeProver, MerkleWitness};
     use alloc::vec;
     use core::marker::PhantomData;
     use halo2_proofs::{dev::MockProver, halo2curves::pasta::Fp};
@@ -445,17 +515,18 @@ mod tests {
         let k = 10;
         let indices = [0u64, 0u64, 1u64, 1u64];
         let elements = [3u64, 4u64, 5u64, 6u64];
-        let root = merkle_tree_commit_fp(&leaf, &elements, &indices);
-        let leaf_fp = Fp::from(leaf);
-        let indices = indices.iter().map(|x| Fp::from(*x)).collect();
-        let elements = elements.iter().map(|x| Fp::from(*x)).collect();
-        let circuit = MerkleTreeCircuit::<OrchardNullifier, Fp, 3, 2> {
-            leaf: leaf_fp,
+        let witness = MerkleWitness::new(leaf, elements, indices);
+        let (lefts, rights, outputs, indices) = witness.to_circuit_format();
+        let public_inputs = vec![Fp::from(leaf), outputs[outputs.len() - 1]];
+        let circuit = MerkleTreeCircuit::<OrchardNullifier, Fp, ConstantLength<2>, 3, 2> {
             indices,
-            elements,
-            _marker: PhantomData,
+            lefts,
+            rights,
+            outputs,
+            _marker0: PhantomData,
+            _marker1: PhantomData,
         };
-        let prover = MockProver::run(k, &circuit, vec![vec![Fp::from(leaf), root]])
+        let prover = MockProver::run(k, &circuit, vec![public_inputs.clone()])
             .expect("Cannot run the circuit");
         assert_eq!(prover.verify(), Ok(()));
     }
@@ -479,133 +550,158 @@ mod tests {
             rng.next_u64(),
             rng.next_u64(),
         ];
-        let root = merkle_tree_commit_fp(&leaf, &elements, &indices);
-        let leaf_fp = Fp::from(leaf);
-        let indices = indices.iter().map(|x| Fp::from(*x)).collect();
-        let elements = elements.iter().map(|x| Fp::from(*x)).collect();
-        let circuit = MerkleTreeCircuit::<OrchardNullifier, Fp, 3, 2> {
-            leaf: leaf_fp,
+        
+        let witness = MerkleWitness::new(leaf, elements, indices);
+        let (lefts, rights, outputs, indices) = witness.to_circuit_format();
+        let public_inputs = vec![Fp::from(leaf), outputs[outputs.len() - 1]];
+        let circuit = MerkleTreeCircuit::<OrchardNullifier, Fp, ConstantLength<2>, 3, 2> {
+            lefts,
+            rights,
+            outputs,
             indices,
-            elements,
-            _marker: PhantomData,
+            _marker0: PhantomData,
+            _marker1: PhantomData,
         };
-        let prover = MockProver::run(k, &circuit, vec![vec![Fp::from(leaf), root]])
+        let prover = MockProver::run(k, &circuit, vec![public_inputs])
             .expect("Cannot run the circuit");
         assert_eq!(prover.verify(), Ok(()));
+    }
+
+    #[test]
+    fn test_wrong_merkle_proof_incorrect_instance() {
+        let leaf = 0u64;
+        let k = 10;
+        let indices = [0u64, 0u64, 1u64, 1u64];
+        let elements = [3u64, 4u64, 5u64, 6u64];
+        let root = Fp::from(0); // wrong root
+
+        let witness = MerkleWitness::new(leaf, elements, indices);
+        let (lefts, rights, outputs, indices) = witness.to_circuit_format();
+
+        let circuit = MerkleTreeCircuit::<OrchardNullifier, Fp, ConstantLength<2>, 3, 2> {
+            lefts,
+            rights,
+            outputs,
+            indices,
+            _marker0: PhantomData,
+            _marker1: PhantomData,
+        };
+
+        let prover = MockProver::run(k, &circuit, vec![vec![Fp::from(leaf), root]])
+            .expect("Cannot run the circuit");
+        assert_ne!(prover.verify(), Ok(()));
+    }
+
+    #[test]
+    fn test_wrong_merkle_proof_incorrect_merkle_path() {
+        let leaf = 0u64;
+        let k = 10;
+        
+        let indices = [0u64, 0u64, 1u64, 1u64];
+        let elements = [3u64, 4u64, 5u64, 6u64];
+        
+        let witness = MerkleWitness::new(leaf, elements, indices);
+        let (mut lefts, rights, outputs, indices) = witness.to_circuit_format();
+        lefts[2] = Fp::from(0); // tamper the left input at the second level
+
+        let circuit = MerkleTreeCircuit::<OrchardNullifier, Fp, ConstantLength<2>, 3, 2> {
+            lefts,
+            rights,
+            outputs: outputs.clone(),
+            indices,
+            _marker0: PhantomData,
+            _marker1: PhantomData,
+        };
+
+        let prover = MockProver::run(k, &circuit, vec![vec![Fp::from(leaf), outputs[outputs.len() - 1]]])
+            .expect("Cannot run the circuit");
+        assert_ne!(prover.verify(), Ok(()));
+    }
+
+    #[test]
+    fn test_wrong_merkle_proof_incorrect_indices() {
+        let leaf = 0u64;
+        let k = 10;
+        
+        let indices = [0u64, 0u64, 1u64, 1u64];
+        let elements = [3u64, 4u64, 5u64, 6u64];
+        
+        let witness = MerkleWitness::new(leaf, elements, indices);
+        let (lefts, rights, outputs, mut indices) = witness.to_circuit_format();
+        indices[2] = Fp::from(0); // tamper the index at the second level
+        
+        let circuit = MerkleTreeCircuit::<OrchardNullifier, Fp, ConstantLength<2>, 3, 2> {
+            lefts,
+            rights,
+            outputs: outputs.clone(),
+            indices,
+            _marker0: PhantomData,
+            _marker1: PhantomData,
+        };
+
+        let prover = MockProver::run(k, &circuit, vec![vec![Fp::from(leaf), outputs[outputs.len() - 1]]])
+            .expect("Cannot run the circuit");
+        assert_ne!(prover.verify(), Ok(()));
+    }        
+    
+    #[test]
+    fn test_wrong_merkle_proof_dummy_output() {
+        let leaf = 0u64;
+        let k = 10;
+        
+        let indices = [0u64, 0u64, 1u64, 1u64];
+        let elements = [3u64, 4u64, 5u64, 6u64];
+        
+        let witness = MerkleWitness::new(leaf, elements, indices);
+        let (lefts, rights, mut outputs, indices) = witness.to_circuit_format();
+        
+        // create dummy outputs 
+        // related to issue 93
+        outputs[0] = Fp::from(1);
+        outputs[1] = Fp::from(2);
+        outputs[2] = Fp::from(3);
+        outputs[3] = Fp::from(4);
+
+        let circuit = MerkleTreeCircuit::<OrchardNullifier, Fp, ConstantLength<2>, 3, 2> {
+            lefts,
+            rights,
+            outputs: outputs.clone(),
+            indices,
+            _marker0: PhantomData,
+            _marker1: PhantomData,
+        };
+
+        let prover = MockProver::run(k, &circuit, vec![vec![Fp::from(leaf), outputs[outputs.len() - 1]]])
+            .expect("Cannot run the circuit");
+        assert_ne!(prover.verify(), Ok(()));
     }
 
     #[test]
     fn test_merkle_proof_real_prover() {
         let leaf = 0u64;
         let k = 10;
-        let indices = [0u64, 0u64, 1u64, 1u64];
+        let indices = [0u64, 0u64, 0u64, 0u64];
         let elements = [3u64, 4u64, 5u64, 6u64];
+
         let witness = MerkleWitness::new(leaf, elements, indices);
-        let prover = MerkleTreeProver::new(k, witness.clone());
-        let proof = prover.create_proof();
-        let root = prover.circuit.commit(witness.clone());
-        let public_inputs = vec![Fp::from(leaf), root];
+        let (lefts, rights, outputs, indices) = witness.to_circuit_format();
+        
+        let circuit = MerkleTreeCircuit::<OrchardNullifier, Fp, ConstantLength<2>, 3, 2> {
+            lefts: lefts,
+            rights: rights,
+            outputs: outputs,
+            indices: indices,
+            _marker0: PhantomData,
+            _marker1: PhantomData,
+        };
+
+        let prover = MerkleTreeProver::new(k, elements.len());
+        
+        let (proof, public_inputs) = prover.create_proof(circuit.clone());
+
         let is_valid = prover.verify(proof, public_inputs);
+        
         assert!(is_valid, "Merkle proof verification failed");
     }
 
-    #[test]
-    fn test_wrong_merkle_proof() {
-        let leaf = 0u64;
-        let k = 10;
-        let indices = [0u64, 0u64, 1u64, 1u64];
-        let elements = [3u64, 4u64, 5u64, 6u64];
-        let root = Fp::from(0);
-        let leaf_fp = Fp::from(leaf);
-        let indices = indices.iter().map(|x| Fp::from(*x)).collect();
-        let elements = elements.iter().map(|x| Fp::from(*x)).collect();
-        let circuit = MerkleTreeCircuit::<OrchardNullifier, Fp, 3, 2> {
-            leaf: leaf_fp,
-            indices,
-            elements,
-            _marker: PhantomData,
-        };
-        let prover = MockProver::run(k, &circuit, vec![vec![Fp::from(leaf), root]])
-            .expect("Cannot run the circuit");
-        assert_ne!(prover.verify(), Ok(()));
-    }
-
-    #[test]
-    fn test_wrong_merkle_part2() {
-        let leaf = 0u64;
-        let k = 10;
-        let indices = [0u64, 0u64, 1u64, 1u64];
-        let elements = [3u64, 4u64, 5u64, 6u64];
-        let root = merkle_tree_commit_fp(&leaf, &elements, &indices);
-        let false_indices = [1u64, 0u64, 1u64, 1u64];
-        let leaf_fp = Fp::from(leaf);
-        let false_indices = false_indices.iter().map(|x| Fp::from(*x)).collect();
-        let elements = elements.iter().map(|x| Fp::from(*x)).collect();
-        let circuit = MerkleTreeCircuit::<OrchardNullifier, Fp, 3, 2> {
-            leaf: leaf_fp,
-            indices: false_indices,
-            elements,
-            _marker: PhantomData,
-        };
-        let prover = MockProver::run(k, &circuit, vec![vec![Fp::from(leaf), root]])
-            .expect("Cannot run the circuit");
-        assert_ne!(prover.verify(), Ok(()));
-    }
-
-    #[test]
-    fn test_invalid_indices() {
-        let leaf = 0u64;
-        let k = 10;
-        let indices = [0u64, 0u64, 2u64, 1u64];
-        let elements = [3u64, 4u64, 5u64, 6u64];
-        let root = Fp::from(0);
-        let leaf_fp = Fp::from(leaf);
-        let indices = indices.iter().map(|x| Fp::from(*x)).collect();
-        let elements = elements.iter().map(|x| Fp::from(*x)).collect();
-        let circuit = MerkleTreeCircuit::<OrchardNullifier, Fp, 3, 2> {
-            leaf: leaf_fp,
-            indices,
-            elements,
-            _marker: PhantomData,
-        };
-        let prover = MockProver::run(k, &circuit, vec![vec![Fp::from(leaf), root]])
-            .expect("Cannot run the circuit");
-        assert_ne!(prover.verify(), Ok(()));
-    }
-
-    #[test]
-    fn test_invalid_indices_part2() {
-        let leaf = 0u64;
-        let k = 10;
-        let indices = [2u64, 1u64, 3u64, 4u64];
-        let elements = [3u64, 4u64, 5u64, 6u64];
-        let root = Fp::from(0);
-        let leaf_fp = Fp::from(leaf);
-        let indices = indices.iter().map(|x| Fp::from(*x)).collect();
-        let elements = elements.iter().map(|x| Fp::from(*x)).collect();
-        let circuit = MerkleTreeCircuit::<OrchardNullifier, Fp, 3, 2> {
-            leaf: leaf_fp,
-            indices,
-            elements,
-            _marker: PhantomData,
-        };
-        let prover = MockProver::run(k, &circuit, vec![vec![Fp::from(leaf), root]])
-            .expect("Cannot run the circuit");
-        assert_ne!(prover.verify(), Ok(()));
-    }
-
-    #[test]
-    fn test_correct_merkle_proof_commitment_scheme_trait() {
-        let leaf = 0u64;
-        let indices = [0u64, 0u64, 1u64, 1u64];
-        let elements = [3u64, 4u64, 5u64, 6u64];
-        let witness = MerkleWitness::new(leaf, elements, indices);
-
-        let circuit = MerkleTreeCircuit::<OrchardNullifier, Fp, 3, 2>::setup(None);
-        let commitment = circuit.commit(witness.clone());
-        let opening = circuit.open(witness.clone());
-        let is_valid = circuit.verify(commitment, opening, witness);
-
-        assert!(is_valid, "Verification should succeed for valid opening");
-    }
 }
