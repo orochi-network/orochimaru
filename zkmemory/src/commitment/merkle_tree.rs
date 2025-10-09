@@ -185,8 +185,8 @@ pub struct MerkleTreeCircuit<
     /// the indices of the path, 0 for left, 1 for right
     pub(crate) indices: Vec<F>,
 
-    _marker0: PhantomData<S>,
-    _marker1: PhantomData<D>,
+    pub(crate) _marker0: PhantomData<S>,
+    pub(crate) _marker1: PhantomData<D>,
 }
 
 impl<
