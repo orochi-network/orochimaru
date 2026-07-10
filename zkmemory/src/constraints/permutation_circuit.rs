@@ -276,24 +276,40 @@ impl<F: Field + PrimeField> PermutationCircuit<F> {
         V: Base<T>,
         F: Field + PrimeField + From<K> + From<V>,
     {
+        let mut rng = rand::thread_rng();
+        let mut seeds = [0u64; 5];
+        rng.fill(&mut seeds);
+        Self::new_with_seeds(input_trace, shuffle_trace, seeds)
+    }
+
+    /// Like [`Self::new`] but with caller-provided compression `seeds` instead
+    /// of freshly sampled ones. Fixing the seeds makes construction
+    /// deterministic, which the composed `MemoryConsistencyCircuit` needs so
+    /// that its fixed `input` column (committed at key generation) and its
+    /// `shuffle` advice column (assigned at proving time) compress under the
+    /// *same* seeds and the shuffle argument still matches under a real prover.
+    pub(crate) fn new_with_seeds<K, V, const S: usize, const T: usize>(
+        input_trace: Vec<TraceRecord<K, V, S, T>>,
+        shuffle_trace: Vec<TraceRecord<K, V, S, T>>,
+        seeds: [u64; 5],
+    ) -> Self
+    where
+        K: Base<S>,
+        V: Base<T>,
+        F: Field + PrimeField + From<K> + From<V>,
+    {
         assert_eq!(
             input_trace.len(),
             shuffle_trace.len(),
             "Two input traces are not equal in length."
         );
 
-        let mut rng = rand::thread_rng();
-        let mut seeds = [0u64; 5];
-        rng.fill(&mut seeds);
-
         Self {
             input: input_trace
-                .clone()
                 .into_iter()
                 .map(|mut x| x.compress(seeds))
                 .collect(),
             shuffle: shuffle_trace
-                .clone()
                 .into_iter()
                 .map(|mut x| Value::known(x.compress(seeds)))
                 .collect(),

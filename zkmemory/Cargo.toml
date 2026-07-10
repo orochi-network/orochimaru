@@ -48,6 +48,10 @@ zinc = [
 name = "zincplus-memory-consistency"
 required-features = ["zinc"]
 
+[[example]]
+name = "backend-benchmark"
+required-features = ["zinc"]
+
 [dependencies]
 halo2_proofs = { workspace = true }
 halo2curves = { workspace = true }
