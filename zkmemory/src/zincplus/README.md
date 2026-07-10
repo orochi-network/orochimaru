@@ -145,10 +145,12 @@ per layer), so the committed trace has `~42v + 2` binary columns instead of
 the ~20 of the consistency-only v1 backend. Linear-code commitments have
 large constants, so proofs are far bigger than pairing-based SNARK proofs,
 and the verifier additionally pays `O(2^{v-1})` field operations per
-large-stride shifted column when evaluating Zinc+'s shift predicates — which
-is why [`MAX_NUM_VARS`](uair.rs) is 16 (`≤ 65 535` records): beyond that,
-verification time becomes impractical and the permutation argument should
-instead migrate to upstream's lookup layer once it lands (see below).
+large-stride shifted column when evaluating Zinc+'s shift predicates.
+
+[`MAX_NUM_VARS`](uair.rs) is declared as 16 (`≤ 65 535` records), but that is
+an over-optimistic upper bound: with the current parameters the backend can
+only *prove* up to `num_vars = 12` (`≤ 4 095` records) before the Zip+ code
+fails — see [Scaling limits](#scaling-limits--where-zinc-stops) below.
 
 ### Zinc+ vs. Halo2 on the same trace
 
@@ -158,36 +160,69 @@ head-to-head — with **two real, transferable proofs**. The
 Zinc+ SNARK against a transparent inner-product-argument (IPA) proof of the
 composed `MemoryConsistencyCircuit`, produced by
 [`MemoryConsistencyProver`](../constraints/consistency_check_circuit.rs)
-(this is a genuine prover, distinct from `Halo2Backend`, which only runs
+(a genuine prover, distinct from `Halo2Backend`, which only runs
 `MockProver`). Neither side uses a trusted setup. Release mode,
-single-threaded, Apple-silicon laptop, best of three runs:
+single-threaded, Apple-silicon laptop; best of three runs up to 900 records,
+a single run above:
 
-| records | backend | setup¹ | prove | verify | proof |
-|--------:|---------|-------:|------:|-------:|------:|
-| 200 | Zinc+ (`num_vars = 8`)  | —      | 1.3 s | 118 ms | 8.69 MiB |
-| 200 | Halo2-IPA (`k = 10`)    | 313 ms | 1.8 s |  16 ms | 35.4 KiB |
-| 900 | Zinc+ (`num_vars = 10`) | —      | 5.8 s | 199 ms | 10.92 MiB |
-| 900 | Halo2-IPA (`k = 11`)    | 676 ms | 3.2 s |  18 ms | 35.5 KiB |
+| records (`v` / `k`)    | Zinc+ prove | Zinc+ verify | Zinc+ proof | Halo2 prove | Halo2 verify | Halo2 proof |
+|-----------------------:|------------:|-------------:|------------:|------------:|-------------:|------------:|
+| 200 (`v8` / `k10`)     |      1.2 s  |      119 ms  |   8.69 MiB  |      1.7 s  |       15 ms  |   35.4 KiB  |
+| 900 (`v10` / `k11`)    |      5.8 s  |      200 ms  |  10.92 MiB  |      3.1 s  |       19 ms  |   35.5 KiB  |
+| 2 000 (`v11` / `k12`)  |     17.9 s  |      344 ms  |  12.12 MiB  |      5.7 s  |       25 ms  |   35.6 KiB  |
+| 4 000 (`v12` / `k13`)  |     54.6 s  |      743 ms  |  13.44 MiB  |     10.7 s  |       36 ms  |   35.6 KiB  |
+| 8 000 (`v13` / `k14`)  |  **fails**  |          —   |         —   |     20.4 s  |       50 ms  |   35.7 KiB  |
+| 16 000 (`v14` / `k15`) |  **fails**  |          —   |         —   |     40.8 s  |       81 ms  |   35.8 KiB  |
 
-¹ One-time key/parameter generation, amortized across all proofs. Zinc+
-derives its parameters transparently inside `prove`, so it has no separate
-setup step.
+Halo2's one-time key/parameter setup — amortized across all proofs, with no
+Zinc+ equivalent (Zinc+ derives its parameters transparently inside `prove`) —
+grows from 0.3 s at 200 records to 13 s at 16 000.
 
 ```text
-cargo run -p zkmemory --example backend-benchmark --features zinc --release
+cargo run -p zkmemory --example backend-benchmark --features zinc --release \
+    -- 200 900 2000 4000 8000 16000
 ```
 
 Reading the numbers:
 
-- **Proof size** is Halo2-IPA's decisive win: ~35 KiB versus Zinc+'s 9–11 MiB
-  (~250–300×). The Halo2 proof barely grows with the trace (it is dominated by
-  one commitment per circuit column, which is fixed, plus a logarithmic
-  opening), whereas Zip+'s Brakedown-style linear-code commitments have large
+- **Proof size** is Halo2-IPA's decisive win: a near-constant ~35 KiB versus
+  Zinc+'s 9–13 MiB and climbing. The Halo2 proof is dominated by one
+  commitment per circuit column (a fixed count) plus a logarithmic opening, so
+  it barely grows; Zip+'s Brakedown-style linear-code commitments have large
   constants.
-- **Verification** also favours Halo2-IPA (~16–18 ms vs ~120–200 ms).
-- **Proving** crosses over: at 200 records Zinc+ is slightly faster (1.3 s vs
-  1.8 s), but its prover grows faster (the `~42v` network columns), so by 900
-  records Halo2-IPA (3.2 s) has overtaken it (5.8 s).
+- **Verification** always favours Halo2-IPA (15–81 ms vs 119–743 ms), and the
+  gap widens — Zinc+'s verifier pays `O(2^{v-1})` per shifted column.
+- **Proving crosses over almost immediately.** Zinc+ is faster only at 200
+  records; its prover then grows ~3× per doubling of the trace (1.2 → 5.8 →
+  17.9 → 54.6 s) — the `~42v` network columns over a super-linear code — while
+  Halo2-IPA grows ~linearly (1.7 → 3.1 → 5.7 → 10.7 → 20.4 → 40.8 s). By 4 000
+  records Zinc+ is already ~5× slower.
+
+<a name="scaling-limits--where-zinc-stops"></a>
+
+#### Scaling limits — where Zinc+ stops
+
+Zinc+ does not just get slow; it **hits a hard wall well below the declared
+`MAX_NUM_VARS = 16`**. Its Zip+ commitment uses an IPRS code over the small
+field **`F_65537`** ([`types.rs`](types.rs)), whose NTT has only `2^16` usable
+points, and two failures follow as the trace grows:
+
+- **`num_vars = 13` (~8 000 records): the prover panics** — the radix-8 NTT
+  butterfly overflows while encoding the folded, `~42v`-column trace.
+- **`num_vars ≥ 14` (~16 000+ records): the parameters cannot even be built** —
+  the codeword length exceeds the number of field elements (`InvalidPcsParam:
+  "Codeword length is more than the number of elements in the field"`).
+
+So the **largest trace this backend can actually prove is `num_vars = 12`
+(≤ 4 095 records)**, not the 65 535 the constant advertises; the code
+arithmetic — not verification time — is the binding constraint. (The example
+catches these failures and reports `fails` rather than aborting the sweep, but
+`prove_memory_consistency` itself still panics on an oversized trace instead of
+returning a clean error.) Halo2-IPA proves every one of these sizes and keeps
+going, with smooth cost and a small proof. Lifting Zinc+'s ceiling needs a
+larger code field or the upstream lookup layer that would retire the `~42v`
+network columns (see the migration plan below); until then this backend is
+best suited to small traces.
 
 What Zinc+ buys with the larger proofs and slower verification is **plausible
 post-quantum security** — its Zip+ commitments rest on hashes and linear
