@@ -142,16 +142,66 @@ transition slacks.
 The deterministic permutation argument is paid for in trace width: the
 network adds `2v` states of 21 binary columns each (plus one switch column
 per layer), so the committed trace has `~42v + 2` binary columns instead of
-the ~20 of the consistency-only v1 backend. Measured on commodity hardware
-(release mode, single-threaded): 200 records (`v = 8`) prove in ~1.3 s and
-verify in ~0.12 s with a ~9 MiB proof; 900 records (`v = 10`) prove in
-~6.4 s and verify in ~0.2 s with a ~11.5 MiB proof. Linear-code commitments
-have large constants, so proofs are far bigger than pairing-based SNARK
-proofs. The verifier additionally pays `O(2^{v-1})` field operations per
-large-stride shifted column when evaluating Zinc+'s shift predicates, which
+the ~20 of the consistency-only v1 backend. Linear-code commitments have
+large constants, so proofs are far bigger than pairing-based SNARK proofs,
+and the verifier additionally pays `O(2^{v-1})` field operations per
+large-stride shifted column when evaluating Zinc+'s shift predicates — which
 is why [`MAX_NUM_VARS`](uair.rs) is 16 (`≤ 65 535` records): beyond that,
 verification time becomes impractical and the permutation argument should
 instead migrate to upstream's lookup layer once it lands (see below).
+
+### Zinc+ vs. Halo2 on the same trace
+
+Both backends prove the *same* composed statement, so they can be timed
+head-to-head — with **two real, transferable proofs**. The
+[`backend-benchmark`](../../examples/backend-benchmark.rs) example pairs the
+Zinc+ SNARK against a transparent inner-product-argument (IPA) proof of the
+composed `MemoryConsistencyCircuit`, produced by
+[`MemoryConsistencyProver`](../constraints/consistency_check_circuit.rs)
+(this is a genuine prover, distinct from `Halo2Backend`, which only runs
+`MockProver`). Neither side uses a trusted setup. Release mode,
+single-threaded, Apple-silicon laptop, best of three runs:
+
+| records | backend | setup¹ | prove | verify | proof |
+|--------:|---------|-------:|------:|-------:|------:|
+| 200 | Zinc+ (`num_vars = 8`)  | —      | 1.3 s | 118 ms | 8.69 MiB |
+| 200 | Halo2-IPA (`k = 10`)    | 313 ms | 1.8 s |  16 ms | 35.4 KiB |
+| 900 | Zinc+ (`num_vars = 10`) | —      | 5.8 s | 199 ms | 10.92 MiB |
+| 900 | Halo2-IPA (`k = 11`)    | 676 ms | 3.2 s |  18 ms | 35.5 KiB |
+
+¹ One-time key/parameter generation, amortized across all proofs. Zinc+
+derives its parameters transparently inside `prove`, so it has no separate
+setup step.
+
+```text
+cargo run -p zkmemory --example backend-benchmark --features zinc --release
+```
+
+Reading the numbers:
+
+- **Proof size** is Halo2-IPA's decisive win: ~35 KiB versus Zinc+'s 9–11 MiB
+  (~250–300×). The Halo2 proof barely grows with the trace (it is dominated by
+  one commitment per circuit column, which is fixed, plus a logarithmic
+  opening), whereas Zip+'s Brakedown-style linear-code commitments have large
+  constants.
+- **Verification** also favours Halo2-IPA (~16–18 ms vs ~120–200 ms).
+- **Proving** crosses over: at 200 records Zinc+ is slightly faster (1.3 s vs
+  1.8 s), but its prover grows faster (the `~42v` network columns), so by 900
+  records Halo2-IPA (3.2 s) has overtaken it (5.8 s).
+
+What Zinc+ buys with the larger proofs and slower verification is **plausible
+post-quantum security** — its Zip+ commitments rest on hashes and linear
+codes, whereas this Halo2 proof is an IPA over the Pasta curves and is **not**
+post-quantum (its security is discrete-log). Two caveats stop even this from
+being a production verdict: Zinc+ is **not zero-knowledge** (above), while
+Halo2 proofs are; and the Halo2 side proves the *reference* circuit, which
+uses **compile-time-constant challenges** for its shuffle and
+random-linear-combination gates rather than Fiat–Shamir ones (see
+[`consistency_check_circuit.rs`](../constraints/consistency_check_circuit.rs)
+`RLC_CHALLENGE`). That is faithful for measuring proof-system *cost* — the
+circuit dimensions are identical — but is not a production-sound proof; a
+hardened prover with real challenge phases would keep essentially the same
+cost profile.
 
 The upstream `parallel` (rayon) and `simd` features can be forwarded later
 if throughput becomes a concern.
@@ -171,8 +221,12 @@ progress can be adopted incrementally:
   unchanged.
 - **When upstream publishes audited parameters**: update `types.rs`
   accordingly (`REP_FACTOR`, `NUM_COLUMN_OPENINGS`, field size).
-- **Halo2 parity work in the other direction**: the Halo2 backend currently
-  checks the composed circuit with `MockProver` only (the crate has a real
-  prover just for the permutation sub-circuit); giving it a real
-  transferable proof artifact would make the two backends fully
-  interchangeable behind the trait.
+- **Halo2 parity work in the other direction**: the
+  [`MemoryConsistencyProver`](../constraints/consistency_check_circuit.rs) now
+  produces a real, transferable IPA proof of the composed circuit (used by the
+  benchmark above), but `Halo2Backend` still checks it with `MockProver` — the
+  backend keeps the reject-at-prove-time semantics its tests rely on. Wiring
+  the real prover behind the trait (and replacing the reference circuit's
+  compile-time-constant challenges with real Fiat–Shamir challenge phases)
+  would make the two backends fully interchangeable and the Halo2 proof
+  production-sound.
