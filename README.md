@@ -12,7 +12,7 @@ At [Orochi Network](https://orochi.network), we believe that Verifiable Computat
 
 - **The limits of computation:** EVM can not guarantee semi-native performance, in addition to the extremely high cost and latency to perform computation. dApps nowadays are unfriendly to the mass, unstable, expensive and slow. In other words, they are currently unusable and we can not replace an ordinary application by a dApp yet.
 - **Data correctness:** There is no way to prove the correctness of data since all data pipelines are stored in a blackbox. We have no idea how data are processed.
-- **Data availability:** Smart contract executor and application executor are isolated from the internet that prevent data to be accessible from the run-time environment. It always requires a third party service to feed necessary data. This approach is broken since we can not verify the data. Moreover, the latency from the third parties is unacceptable.
+- **Data availability:** Smart contract executor and application executor are isolated from the internet which prevents data from being accessible from the run-time environment. It always requires a third party service to feed necessary data. This approach is broken since we can not verify the data. Moreover, the latency from the third parties is unacceptable.
 
 ```text
 ┌─────────────────────────────┐
@@ -87,7 +87,7 @@ Allowed verifiable randomness to be generated and fed to any smart contracts on 
 
 - **Cheap and secure randomness:** For the free tier, randomnesses will be given freely for the first 20,000 randomnesses every month.
 
-- **Fault Proof:** If the game server tries to delay the feeding process to manipulate the result, a fault proof will be committed so sue the game server.
+- **Fault Proof:** If the game server tries to delay the feeding process to manipulate the result, a fault proof will be committed to sue the game server.
 
 - **Multi-chain:** All EVM compatible blockchains can be supported
 
@@ -208,6 +208,6 @@ Copy the `hmac_secret` and `username` so we can use it in `sdk`.
 
 ## License
 
-Orochi Network's source code licensed under [Apache License 2.0](./LICENSE)
+Orochi Network's source code is licensed under [Apache License 2.0](./LICENSE)
 
 _built with ❤️_
