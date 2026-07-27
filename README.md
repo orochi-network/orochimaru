@@ -1,5 +1,5 @@
 <p align="center">
-    <img src="./assets/orochimaru.png" alter="Orochimaru desu?">
+    <img src="./assets/orochimaru.png" alt="Orochimaru desu?">
 </p>
 
 ## Orochimaru
